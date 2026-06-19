@@ -1,0 +1,8 @@
+{
+  "name": "@lntt/listener",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Event-consumer dialect for @lntt/wire (Redis, SQS, ... as swappable engines). Status: planned.",
+  "license": "MIT",
+  "type": "module"
+}

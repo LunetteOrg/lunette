@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question, idea, or "have you considered…"
+    url: https://github.com/LunetteOrg/lunette/discussions
+    about: Open-ended discussion lives in Discussions, not issues. Start here for anything that is not a specific decision challenge or API proposal. Use a blank issue only for a reproducible engine/dialect bug.

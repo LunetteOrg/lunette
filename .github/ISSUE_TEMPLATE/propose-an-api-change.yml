@@ -1,0 +1,39 @@
+name: Propose an API change
+description: Ask for a new verb, helper, or changed signature.
+title: "[api] "
+labels: ["rfc", "design-discussion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The design follows YAGNI: new surface is added only with a real
+        case in hand, and conventions are preferred over features. Bring
+        the case, not the abstraction.
+  - type: textarea
+    id: case
+    attributes:
+      label: The real case
+      description: The concrete problem you hit. What were you wiring, and where did the current API fall short?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API
+      description: The signature/shape you have in mind, ideally as a small code sketch using it.
+    validations:
+      required: true
+  - type: textarea
+    id: existing
+    attributes:
+      label: Why a convention does not already cover it
+      description: Can a namespace (patch shape), an alias (a provide), a mock (the seed), or a dialect (pipe) already do this? If not, why not?
+    validations:
+      required: true
+  - type: checkboxes
+    id: read
+    attributes:
+      label: Groundwork
+      options:
+        - label: I checked docs/decisions.md and this is not a withdrawn API (`grep Superseded`) or one with an existing verdict.
+          required: true

@@ -1,0 +1,19 @@
+{
+  "name": "@lntt/wire",
+  "version": "0.0.0",
+  "description": "Typed dependency wiring as a chain of layers — Effect-grade composition with plain functions: no monads, no decorators, no reflection.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.0"
+  }
+}

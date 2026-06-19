@@ -1,0 +1,38 @@
+{
+  "name": "@lntt/http",
+  "version": "0.0.0",
+  "description": "Engine-agnostic HTTP dialect for @lntt/wire: routes as data, swappable engines (Hono, Express), per-request middleware onion, serve/worker lifecycles.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./hono": "./src/hono.ts",
+    "./express": "./src/express.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lntt/wire": "workspace:*"
+  },
+  "peerDependencies": {
+    "express": ">=5",
+    "hono": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "express": {
+      "optional": true
+    },
+    "hono": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "express": "^5.2.1",
+    "hono": "^4.12.25",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.0"
+  }
+}

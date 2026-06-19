@@ -1,0 +1,40 @@
+name: Challenge a decision
+description: Disagree with a recorded design decision and argue the alternative.
+title: "[decision] "
+labels: ["rfc", "decision-challenge"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The design record is `docs/decisions.md` — 25 numbered decisions,
+        each with the alternatives already considered and why they were
+        discarded. Engage the recorded reasoning; do not restart from zero.
+  - type: input
+    id: decision
+    attributes:
+      label: Which decision
+      description: Number and title from docs/decisions.md (e.g. "14. Errors: returned = domain, thrown = infrastructure").
+      placeholder: "N. <title>"
+    validations:
+      required: true
+  - type: textarea
+    id: case
+    attributes:
+      label: The case it does not cover
+      description: A concrete situation where this decision produces a bad outcome. Be specific — code or a real scenario, not a preference.
+    validations:
+      required: true
+  - type: textarea
+    id: alternative
+    attributes:
+      label: The alternative you propose
+      description: What should it be instead, and what does the new "why not" look like for the current choice?
+    validations:
+      required: true
+  - type: checkboxes
+    id: read
+    attributes:
+      label: Groundwork
+      options:
+        - label: I read this decision's recorded reasoning (and its "Superseded" note, if any) and my objection engages it.
+          required: true
