@@ -7,7 +7,7 @@ expected value. Design-stage stories require a discussion before any code.
 
 ## 1. Prove the design on a real application bootstrap
 
-**Status:** ready to start · **Type:** validation
+**Status:** delivered, pending owner review · **Type:** validation
 
 **Context.** The whole API was designed against a real-world reference: a
 React Router 7 + Drizzle app whose composition root wires ~25 use cases by
@@ -43,6 +43,28 @@ committed artifact. The replica doubles as the lead adoption example
 **Done when:** the replica boots and serves through wire, route loaders
 only see the public surface, tests are green, and checker time is recorded
 against the real-size chain.
+
+**Delivered** in [`research/bootstrap-replica/`](./research/bootstrap-replica/)
+(see its README). Source mapped: `discentis/pelion/apps/community` (4 areas,
+6 repos, 1 disposable, 3 feature-flagged services, 2 signed cookies, ~19
+leaves, 1 transaction window). Anonymized to a render/threads/access/profile
+domain preserving form and cardinality.
+
+- `createApp` dissolved into one chain (`app/bootstrap/chain.ts`): the disposable
+  `db` is the only raw `use` onion; everything else is point-free keyed
+  `provide`; `render` is a private mounted fragment whose Pub feeds the
+  `threads` fragment's Seed; `access`/`profile`/`threads` are public modules.
+- RR7 `build()` + `getLoadContext` with the HMR promise-memo, plus a raw Express
+  boundary that serves the same chain over HTTP (host-agnosticism, no dialect).
+- Tests green (runtime + `*.test-d.ts`): seed-as-mock-boundary, bare-leaf, and
+  the transaction window proven both ways (return → commit, throw → rollback)
+  against real Postgres (PGlite).
+- **Checker time recorded:** real-size chain `tsc` Check time **0.28s**
+  (Total 0.54s, 129,883 instantiations) — on par with the 20-step stress (~0.3s).
+- Findings fed back to the design (in the README): `make*` ritual disappears
+  (dec. 13); the sugar dominates, raw onion needed once (dec. 26); `layer()` is
+  patch-only (no keyed helper — evidence-gated); the error convention dissolves
+  the manual rollback dance.
 
 ---
 
