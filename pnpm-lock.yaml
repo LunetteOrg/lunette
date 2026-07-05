@@ -76,6 +76,19 @@ importers:
         specifier: ^3.2.0
         version: 3.2.6(@types/node@24.13.2)
 
+  research/module-shapes:
+    dependencies:
+      '@lntt/wire':
+        specifier: workspace:*
+        version: link:../../packages/wire
+    devDependencies:
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.6(@types/node@25.9.3)
+
   research/order-free-layers:
     devDependencies:
       typescript:
