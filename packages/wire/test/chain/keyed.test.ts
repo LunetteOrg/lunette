@@ -4,8 +4,8 @@
 // is never executed at all when the key is substituted.
 
 import { describe, expect, it } from 'vitest'
-import { lunette } from './index.ts'
-import { fake, test } from './testing.ts'
+import { lunette } from '../../src/index.ts'
+import { fake, test } from '../../src/testing.ts'
 
 type Db = { query: (sql: string) => Promise<string[]> }
 

@@ -4,7 +4,7 @@
 // explicit mapper (which doubles as an adapter/renamer). One lifecycle.
 
 import { describe, expect, it } from 'vitest'
-import { bind, lunette } from './index.ts'
+import { bind, lunette } from '../../src/index.ts'
 
 type Env = { DATABASE_URL: string }
 

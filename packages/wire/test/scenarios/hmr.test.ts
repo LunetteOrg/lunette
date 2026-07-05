@@ -13,7 +13,7 @@
 // included): import.meta.hot?.dispose(() => dispose()) and no memo.
 
 import { describe, expect, it } from 'vitest'
-import { lunette } from './index.ts'
+import { lunette } from '../../src/index.ts'
 
 describe('the HMR recipe: memoizing the build promise', () => {
   it('three "module evaluations" (even concurrent), a single boot', async () => {

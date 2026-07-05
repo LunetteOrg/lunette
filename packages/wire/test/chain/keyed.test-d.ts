@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { lunette } from './index.ts'
+import { lunette } from '../../src/index.ts'
 
 describe('keyed form (types)', () => {
   it('the key and the value end up in the context and on the surface', async () => {

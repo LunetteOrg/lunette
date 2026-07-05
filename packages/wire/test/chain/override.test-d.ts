@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { lunette } from './index.ts'
+import { lunette } from '../../src/index.ts'
 
 describe('override (types)', () => {
   it('may change the type of the replaced key, visibility preserved', async () => {

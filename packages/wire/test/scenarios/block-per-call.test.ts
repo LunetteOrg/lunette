@@ -11,7 +11,7 @@
 // by the seed mapper at the mount: use(block, ctx => ({ db: ctx.replica })).
 
 import { describe, expect, it } from 'vitest'
-import { lunette } from './index.ts'
+import { lunette } from '../../src/index.ts'
 
 type FakeDb = {
   kind: 'db' | 'tx'

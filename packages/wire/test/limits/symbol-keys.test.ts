@@ -5,7 +5,7 @@
 // main road), but supported.
 
 import { describe, expect, it } from 'vitest'
-import { lunette, type Lunette } from './index.ts'
+import { lunette, type Lunette } from '../../src/index.ts'
 
 const DB = Symbol('db')
 const AUTH = Symbol('auth')

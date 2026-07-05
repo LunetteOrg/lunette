@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lunette, type Lunette } from './index.ts'
+import { lunette, type Lunette } from '../../src/index.ts'
 
 type Db = { url: string; fake: boolean }
 

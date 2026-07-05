@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { lunette } from './index.ts'
+import { lunette } from '../../src/index.ts'
 
 describe('the verb model (types)', () => {
   it('expose(fn, destroy): value is public, destroy param is inferred', async () => {

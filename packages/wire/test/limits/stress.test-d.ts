@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { layer, lunette } from './index.ts'
+import { layer, lunette } from '../../src/index.ts'
 
 describe('type-level stress', () => {
   it('inference and the type checker hold up over a 20-step chain', async () => {

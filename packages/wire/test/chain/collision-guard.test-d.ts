@@ -4,7 +4,7 @@
 // and the error names the offending key.
 
 import { describe, expectTypeOf, it } from 'vitest'
-import { lunette } from './index.ts'
+import { lunette } from '../../src/index.ts'
 
 describe('compile-time collision guard', () => {
   it('a collision blocks the chain and names the key', () => {
