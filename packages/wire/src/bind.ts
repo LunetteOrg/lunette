@@ -48,24 +48,23 @@ type DepsOf<M> = UnionToIntersection<
   }[keyof M]
 >
 
+// The leaf's own args and return, past the deps: the one extraction every
+// bound shape below needs.
+type LeafArgs<L> = L extends (deps: any, ...args: infer A) => unknown ? A : never
+type LeafReturn<L> = L extends (deps: any, ...args: any[]) => infer R ? R : never
+
 type Bound<M> = {
-  [K in keyof M]: M[K] extends (deps: any, ...args: infer A) => infer R
-    ? (...args: A) => R
-    : never
+  [K in keyof M]: (...args: LeafArgs<M[K]>) => LeafReturn<M[K]>
 }
 
 type BoundPerCall<M> = {
-  [K in keyof M]: M[K] extends (deps: any, ...args: infer A) => infer R
-    ? (...args: A) => Promise<Awaited<R>>
-    : never
+  [K in keyof M]: (...args: LeafArgs<M[K]>) => Promise<Awaited<LeafReturn<M[K]>>>
 }
 
 // The bound record of the derived-window form: every leaf gains one
 // leading KEY argument; the leaf itself receives only its own args.
 type BoundByKey<M, Key> = {
-  [K in keyof M]: M[K] extends (deps: any, ...args: infer A) => infer R
-    ? (key: Key, ...args: A) => Promise<Awaited<R>>
-    : never
+  [K in keyof M]: (key: Key, ...args: LeafArgs<M[K]>) => Promise<Awaited<LeafReturn<M[K]>>>
 }
 
 // The binder is a plain function carrying the two per-call cadences as
@@ -78,29 +77,28 @@ export type Binder<M> = ((deps: DepsOf<M>) => Bound<M>) & {
 
 export const bind = <M extends Record<string, Leaf>>(record: M): Binder<M> => {
   const entries = Object.entries(record)
+  // The three cadences share the same "one wrapper per leaf" shape; only
+  // how each leaf's deps get produced varies.
+  const mapEntries = <T>(project: (uc: Leaf) => T): Record<string, T> =>
+    Object.fromEntries(entries.map(([name, uc]) => [name, project(uc)]))
   // The two casts are engine-internal (decision 23): with M generic the
   // checker cannot relate the runtime mapping to the mapped types.
   const binder = ((deps: object) =>
-    Object.fromEntries(
-      entries.map(([name, uc]) => [
-        name,
-        (...args: unknown[]) => uc(deps, ...args),
-      ]),
+    mapEntries(
+      (uc) =>
+        (...args: unknown[]) =>
+          uc(deps, ...args),
     )) as unknown as Binder<M>
   binder.with = (w) =>
-    Object.fromEntries(
-      entries.map(([name, uc]) => [
-        name,
-        (...args: unknown[]) => w(async (deps) => uc(deps, ...args)),
-      ]),
+    mapEntries(
+      (uc) =>
+        (...args: unknown[]) =>
+          w(async (deps) => uc(deps, ...args)),
     ) as BoundPerCall<M>
   binder.by = ((toWindow: (key: unknown) => With<object>) =>
-    Object.fromEntries(
-      entries.map(([name, uc]) => [
-        name,
-        (key: unknown, ...args: unknown[]) =>
-          toWindow(key)(async (deps) => uc(deps, ...args)),
-      ]),
+    mapEntries(
+      (uc) => (key: unknown, ...args: unknown[]) =>
+        toWindow(key)(async (deps) => uc(deps, ...args)),
     )) as unknown as Binder<M>['by']
   return binder
 }

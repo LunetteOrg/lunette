@@ -195,36 +195,7 @@ export class Lunette<
     extra?: ((ctx: any) => unknown) | ((value: any) => unknown),
     destroy?: (value: any) => unknown,
   ): any {
-    if (typeof arg === 'function') {
-      const fn = arg
-      const teardown = extra as ((value: any) => unknown) | undefined
-      const wrapped: Layer<any, any, any> = async (ctx, next) => {
-        const value = await fn(ctx)
-        try {
-          return await next(value as Patch)
-        } finally {
-          if (teardown) await teardown(value)
-        }
-      }
-      return new Lunette([
-        ...this.entries,
-        { kind: 'layer', layer: wrapped, mode: 'extend', public: false, key: undefined },
-      ])
-    }
-    const key = arg
-    const fn = extra as (ctx: any) => unknown
-    const wrapped: Layer<any, any, any> = async (ctx, next) => {
-      const value = await fn(ctx)
-      try {
-        return await next({ [key]: value })
-      } finally {
-        if (destroy) await destroy(value)
-      }
-    }
-    return new Lunette([
-      ...this.entries,
-      { kind: 'layer', layer: wrapped, mode: 'extend', public: false, key },
-    ])
+    return this.sugar(false, arg, extra, destroy)
   }
 
   // Sugar over `use`: a public value, with an optional acquire/release
@@ -263,20 +234,34 @@ export class Lunette<
         },
       ])
     }
+    return this.sugar(true, arg, extra, destroy)
+  }
+
+  // Shared body of `provide`/`expose`'s non-mount overloads: same wiring,
+  // differing only in whether `next` also publishes (the second argument)
+  // and the entry's `public` flag.
+  private sugar(
+    isPublic: boolean,
+    arg: ((ctx: any) => unknown) | PropertyKey,
+    extra: ((ctx: any) => unknown) | ((value: any) => unknown) | undefined,
+    destroy: ((value: any) => unknown) | undefined,
+  ): Lunette<any, any, any> {
     if (typeof arg === 'function') {
       const fn = arg
       const teardown = extra as ((value: any) => unknown) | undefined
       const wrapped: Layer<any, any, any> = async (ctx, next) => {
         const value = await fn(ctx)
         try {
-          return await next({}, value as Patch)
+          return isPublic
+            ? await next({}, value as Patch)
+            : await next(value as Patch)
         } finally {
           if (teardown) await teardown(value)
         }
       }
       return new Lunette([
         ...this.entries,
-        { kind: 'layer', layer: wrapped, mode: 'extend', public: true, key: undefined },
+        { kind: 'layer', layer: wrapped, mode: 'extend', public: isPublic, key: undefined },
       ])
     }
     const key = arg
@@ -284,14 +269,16 @@ export class Lunette<
     const wrapped: Layer<any, any, any> = async (ctx, next) => {
       const value = await fn(ctx)
       try {
-        return await next({}, { [key]: value })
+        return isPublic
+          ? await next({}, { [key]: value })
+          : await next({ [key]: value })
       } finally {
         if (destroy) await destroy(value)
       }
     }
     return new Lunette([
       ...this.entries,
-      { kind: 'layer', layer: wrapped, mode: 'extend', public: true, key },
+      { kind: 'layer', layer: wrapped, mode: 'extend', public: isPublic, key },
     ])
   }
 
