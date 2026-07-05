@@ -75,10 +75,11 @@ the `errore` library (errors as values) applied to DI.
 
 ## Status and next steps
 
-Open work lives in **`TODO.md`** (monorepo root), written as stories with
-the full reasoning — start there. At the top: rewriting the real
-bootstrap (the proving ground for everything). Extended pattern
-documentation lives in **`docs/`**.
+Open work lives in **GitHub issues** (label `roadmap`), each story
+carrying its full reasoning — start there:
+<https://github.com/LunetteOrg/lunette/issues>. The lead item is rewriting
+the real bootstrap (the proving ground for everything, issue #1). Extended
+pattern documentation lives in **`docs/`**.
 
 The decision record (discarded alternatives and why) is
 **`docs/decisions.md`** — consult it BEFORE proposing API changes: many
