@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseEnv } from '../config/env.ts'
 import { blobs } from './blobs/index.ts'
 import { pendingCookie, sessionCookie } from './cookies.ts'
-import { mailer } from './mailer/index.ts'
+import { loggingTransport } from './mailer/logging.ts'
 import { renderer } from './renderer/index.ts'
 
 const env = parseEnv({})
@@ -22,8 +22,10 @@ describe('feature-flagged services default to the fakes', () => {
     await b.remove('k1')
   })
 
-  it('mailer fake send resolves', async () => {
-    await expect(mailer({ env }).send({ to: 'a@b.c', subject: 's', body: 'b' })).resolves.toBeUndefined()
+  it('logging transport (the mail default branch) delivery resolves', async () => {
+    await expect(
+      loggingTransport()({ to: 'a@b.c', subject: 's', body: 'b' }),
+    ).resolves.toBeUndefined()
   })
 })
 

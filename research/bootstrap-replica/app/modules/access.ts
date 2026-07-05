@@ -8,7 +8,7 @@ import type {
   SessionRepository,
   UserRepository,
 } from '../domain/access.ts'
-import type { Mailer } from '../lib/mailer/index.ts'
+import type { SendMail } from '../lib/mailer/index.ts'
 import type { Tx } from '../lib/tx.ts'
 import { findUserByEmail } from '../use-cases/access/find-user-by-email.ts'
 import { getUserById } from '../use-cases/access/get-user-by-id.ts'
@@ -17,7 +17,8 @@ import { verifyCode, type VerifyCodeDeps } from '../use-cases/access/verify-code
 
 // The access feature module, written as a CHAIN OF EXPOSES (see
 // docs/patterns/feature-modules.md). It REQUIRES its infrastructure via the
-// Seed (db + repos + mailer + generateId); the host provides it once. The
+// Seed (db + repos + the bound sendMail leaf + generateId); the host
+// provides it once. The
 // transaction window is a NAMED PRIVATE STEP (`verifyTx`): a fresh tx per
 // call, the bridge rebuilds the three repos against the tx handle and
 // produces the `Tx<…>` brand (the single cast). The leaf throws infra → the
@@ -27,7 +28,7 @@ export const accessModule = lunette<{
   otpRepo: OtpRepository
   userRepo: UserRepository
   sessionRepo: SessionRepository
-  mailer: Mailer
+  sendMail: SendMail
   generateId: () => string
 }>()
   // ── the window, private, next to the publics: visibility is a per-step dial
@@ -43,7 +44,7 @@ export const accessModule = lunette<{
         }) as Tx<VerifyCodeDeps>,
     ),
   )
-  .expose((ctx) => bind({ requestCode })({ otpRepo: ctx.otpRepo, mailer: ctx.mailer }))
+  .expose((ctx) => bind({ requestCode })({ otpRepo: ctx.otpRepo, sendMail: ctx.sendMail }))
   .expose((ctx) => bind({ findUserByEmail, getUserById })({ userRepo: ctx.userRepo }))
   .expose((ctx) => bind({ verifyCode }).with(ctx.verifyTx))
   .as('access')

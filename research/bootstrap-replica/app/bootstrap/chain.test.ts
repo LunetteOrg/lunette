@@ -2,7 +2,7 @@ import { test } from '@lntt/wire/testing'
 import { describe, expect, it } from 'vitest'
 import { parseEnv } from '../config/env.ts'
 import { isError, OtpInvalid, OtpMaxAttemptsExceeded } from '../lib/errors.ts'
-import type { Mail, Mailer } from '../lib/mailer/index.ts'
+import type { Mail, Transport } from '../lib/mailer/index.ts'
 import { chain } from './chain.ts'
 
 const env = parseEnv({})
@@ -31,12 +31,16 @@ describe('the chain delivers only the public surface', () => {
   })
 })
 
-describe('end-to-end through the real chain (only the mailer faked)', () => {
+describe('end-to-end through the real chain (only the transport faked)', () => {
+  // the transport is a KEYED resource: substituted here, its layer is
+  // SKIPPED — the feature-flag conditional never even runs
   it('OTP window commits attempts on the domain path (return = commit)', async () => {
     const sent: Mail[] = []
-    const fakeMailer: Mailer = { async send(mail) { sent.push(mail) } }
+    const fakeTransport: Transport = async (mail) => {
+      sent.push(mail)
+    }
 
-    await test(chain).run({ env, mailer: fakeMailer }, async (app) => {
+    await test(chain).run({ env, transport: fakeTransport }, async (app) => {
       await app.access.requestCode('a@b.c', 'n1')
       const wrong = () => app.access.verifyCode('a@b.c', '000000', 'n1', { termsAccepted: true })
       expect(await wrong()).toBeInstanceOf(OtpInvalid)
@@ -52,9 +56,11 @@ describe('end-to-end through the real chain (only the mailer faked)', () => {
 
   it('content flow: sign in, publish, see it rendered in the feed', async () => {
     const sent: Mail[] = []
-    const fakeMailer: Mailer = { async send(mail) { sent.push(mail) } }
+    const fakeTransport: Transport = async (mail) => {
+      sent.push(mail)
+    }
 
-    await test(chain).run({ env, mailer: fakeMailer }, async (app) => {
+    await test(chain).run({ env, transport: fakeTransport }, async (app) => {
       await app.access.requestCode('writer@b.c', 'n2')
       const signin = await app.access.verifyCode('writer@b.c', codeOf(sent[0]), 'n2', {
         displayName: 'Writer',

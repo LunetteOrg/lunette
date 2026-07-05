@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { lunette } from '@lntt/wire'
+import { bind, lunette } from '@lntt/wire'
 import type { Env } from '../config/env.ts'
 import { withDb } from '../db/layer.ts'
 import { commentRepo } from '../db/repos/comment.repo.ts'
@@ -10,7 +10,9 @@ import { sessionRepo } from '../db/repos/session.repo.ts'
 import { userRepo } from '../db/repos/user.repo.ts'
 import { blobs } from '../lib/blobs/index.ts'
 import { pendingCookie, sessionCookie } from '../lib/cookies.ts'
-import { mailer } from '../lib/mailer/index.ts'
+import { httpTransport } from '../lib/mailer/http.ts'
+import { sendMail } from '../lib/mailer/index.ts'
+import { loggingTransport } from '../lib/mailer/logging.ts'
 import { renderer } from '../lib/renderer/index.ts'
 import { validateEmail } from '../lib/validate-email.ts'
 import { accessModule } from '../modules/access.ts'
@@ -34,7 +36,15 @@ export const chain = lunette<{ env: Env }>()
   .provide('renderCache', renderCacheRepo)
   .provide('postRepo', postRepo)
   .provide('commentRepo', commentRepo)
-  .provide('mailer', mailer)
+  // the mail split: adapters are one file each behind the Transport port;
+  // the SELECTION POLICY lives here — the composition root is the file
+  // whose job is choosing implementations (decision 29). The transport is
+  // the KEYED resource (conditional birth, skippable: substituted in tests,
+  // neither branch runs); the sending behaviour a bound leaf, private wiring.
+  .provide('transport', ({ env }) =>
+    env.MAILER_API_KEY ? httpTransport(env.MAILER_API_KEY) : loggingTransport(),
+  )
+  .provide(bind({ sendMail }))
   .provide('renderer', renderer)
   .provide('blobs', blobs)
   .provide('sessionCookie', sessionCookie)

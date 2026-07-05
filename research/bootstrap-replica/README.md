@@ -80,3 +80,14 @@ blow up the checker.
   `if (result instanceof InfrastructureError) throw result` inside the tx
   disappears: the leaf throws infra / returns domain, and `db.transaction`
   reacts on its own.
+- **The mailer splits along the keyed/patch line** (a DELIBERATE deviation
+  from the source's `mailer.send` service object, the only one): the
+  transport is a keyed resource — the feature-flag conditional never runs
+  when substituted — while the sending behaviour is a bound leaf
+  (`bind({ sendMail })`), the seam where a retry window would attach. The
+  split follows the three rates of change: the PORT in `lib/mailer/`,
+  the ADAPTERS one per file (`http.ts`, `logging.ts`), the SELECTION
+  POLICY at the composition root — swapping vendors touches `chain.ts`,
+  never the port's module (decision 29). The taxonomy of the
+  feature-modules pattern ("keyed for what costs, patch for wiring")
+  proven on a real flagged service.
