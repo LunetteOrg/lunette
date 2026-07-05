@@ -55,9 +55,10 @@ the `errore` library (errors as values) applied to DI.
   test names, runtime error messages, READMEs) and must contain no
   references to the playground or to the design's history. Conversation
   with the owner stays in Italian.
-- **Vocabulary**: chain · layer · bare/bound leaf · window · opener
-  (within arg 1) · bridge (within arg 2) · bag · guard · seed · fragment ·
-  dialect.
+- **Vocabulary**: chain · layer · bare/bound leaf · binder (`bind(record)`,
+  apply = fixed deps, `.with` = per call, `.by` = per call keyed) · window
+  · opener (window arg 1) · bridge (window arg 2) · bag · guard · seed ·
+  fragment · dialect.
 - **Tests**: vitest with typecheck (`*.test-d.ts` included via the
   `typecheck` block in each `vitest.config.ts`; `pnpm typecheck` runs
   `tsc --noEmit` and is the separate gate). Always verify by running:

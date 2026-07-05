@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lazy, lunette } from './index.ts'
+import { bind, lazy, lunette } from './index.ts'
 import { fake, test } from './testing.ts'
 
 type Db = {
@@ -129,6 +129,40 @@ describe('test(chain) — mocking a provide in the middle of the chain', () => {
       { env: { url: 'pg://never-used' }, db: { query: async () => ['fake'] } },
       async (app) => {
         expect(await app.probe.first()).toBe('fake')
+      },
+    )
+  })
+})
+
+// ── bound leaves are substitutable like any ctx key ──────────────────────
+// The record braces do not cost the REPLACE: substitution works on every
+// top-level key, patch form included (drop at birth). What the keyed form
+// adds is only the SKIP — worth it for layers that create resources; a
+// binder only creates closures, so there is nothing to skip.
+
+describe('test(chain) — substituting a bound leaf (point-free expose)', () => {
+  type Db2 = { query: (sql: string) => Promise<string[]> }
+
+  const getAuthor = async (deps: { db: Db2 }, id: string): Promise<string> =>
+    `real:${(await deps.db.query('select'))[0] ?? id}`
+
+  // the composition edge: greet consumes the BOUND getAuthor from the ctx
+  const greet = async (
+    deps: { getAuthor: (id: string) => Promise<string> },
+    id: string,
+  ) => `hello ${await deps.getAuthor(id)}`
+
+  it('the fake reaches both the composers and the delivered app', async () => {
+    const chain = lunette()
+      .provide(() => ({ db: { query: async () => [] } as Db2 }))
+      .expose(bind({ getAuthor }))
+      .expose(bind({ greet }))
+
+    await test(chain).run(
+      { getAuthor: async (id: string) => `fake:${id}` },
+      async (app) => {
+        expect(await app.getAuthor('u1')).toBe('fake:u1') // the pub delivers the fake
+        expect(await app.greet('u1')).toBe('hello fake:u1') // the composer wired to it
       },
     )
   })

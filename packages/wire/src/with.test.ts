@@ -1,14 +1,14 @@
-// The WINDOW (With) and the BINDING (bind) in its variants — a guided
+// The WINDOW (With) and the per-call BINDING (binder.with) — a guided
 // progression:
 //   step 0: the manual line
-//   step 1: the named window + bind(window, record)
-//   a further step: within(opener, bridge)
-//   bindBy: the window derived from the arguments
+//   step 1: the named window + bind(record).with(window)
+//   a further step: window(opener, bridge)
+//   .by: the window derived from a key argument
 //   a facility in the deps: intra-function windows (lock)
 //   0/1/N semantics: retry that does not fire on error values
 
 import { describe, expect, it } from 'vitest'
-import { bind, bindBy, lunette, within, type With } from './index.ts'
+import { bind, lunette, window, type With } from './index.ts'
 
 // ── the brand: "these deps live in a transaction" (a test pattern, not
 //    core API) ─────────────────────────────────────────────────────────────
@@ -80,14 +80,14 @@ describe('step 0 — the manual line', () => {
   })
 })
 
-describe('step 1 — the named window + bind', () => {
-  it('bind(window, record): every call opens its own transaction', async () => {
+describe('step 1 — the named window + binder.with', () => {
+  it('bind(record).with(window): every call opens its own transaction', async () => {
     const db = createDb()
     const inTx: With<{ db: Tx<DbHandle> }> = (use) =>
       db.transaction((tx) => use({ db: tx as Tx<DbHandle> }))
 
-    const commands = bind(inTx, { verifyOtp })
-    const queries = bind({ db }, { whereAmI }) // the fixed-deps form
+    const commands = bind({ verifyOtp }).with(inTx)
+    const queries = bind({ whereAmI })({ db }) // the applied form: fixed deps
 
     expect(await queries.whereAmI()).toBe('live')
 
@@ -102,14 +102,13 @@ describe('step 1 — the named window + bind', () => {
   })
 })
 
-describe('a further step — within(opener, bridge)', () => {
+describe('a further step — window(opener, bridge)', () => {
   it('identical to the hand-written window', async () => {
     const db = createDb()
 
-    const commands = bind(
-      within(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle> })),
+    const commands = bind({ verifyOtp }).with(
+      window(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle> })),
       //     └── opener ──┘  └────────── bridge ─────────┘
-      { verifyOtp },
     )
 
     expect(await commands.verifyOtp('a@b.c', '1234')).toEqual({
@@ -133,10 +132,9 @@ describe('a further step — within(opener, bridge)', () => {
       return 'sent'
     }
 
-    const commands = bind(
-      within(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle>, email })),
+    const commands = bind({ welcome }).with(
+      window(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle>, email })),
       //                          from the window ↑    from the boot ↑ (closure)
-      { welcome },
     )
 
     expect(await commands.welcome('a@b.c')).toBe('sent')
@@ -151,9 +149,8 @@ describe('one window, three leaves — the window is PER CALL', () => {
     const b = async ({ db: h }: { db: Tx<DbHandle> }) => `b:${h.mode}`
     const c = async ({ db: h }: { db: Tx<DbHandle> }) => `c:${h.mode}`
 
-    const ops = bind(
-      within(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle> })),
-      { a, b, c },
+    const ops = bind({ a, b, c }).with(
+      window(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle> })),
     )
 
     expect(db.txCount).toBe(0) // binding opens NOTHING
@@ -173,7 +170,7 @@ describe('one window, three leaves — the window is PER CALL', () => {
 })
 
 describe('one record, HETEROGENEOUS deps — each leaf asks for its subset', () => {
-  it('the window serves the union; contravariance trims per entry', async () => {
+  it('the window serves the intersection; each leaf destructures its part', async () => {
     const db = createDb()
     const sent: string[] = []
     const email = { send: async (to: string) => void sent.push(to) }
@@ -187,9 +184,8 @@ describe('one record, HETEROGENEOUS deps — each leaf asks for its subset', () 
       return h.mode
     }
 
-    const ops = bind(
-      within(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle>, email })),
-      { onlyDb, both },
+    const ops = bind({ onlyDb, both }).with(
+      window(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle>, email })),
     )
 
     expect(await ops.onlyDb()).toBe('tx')
@@ -198,34 +194,59 @@ describe('one record, HETEROGENEOUS deps — each leaf asks for its subset', () 
   })
 })
 
-describe('bindBy — the window derived from the arguments', () => {
-  it('the tenant comes from the first argument of the call', async () => {
-    const opened: string[] = []
-    const pool = {
-      withConnection: async <T>(
-        tenant: string,
-        fn: (conn: { tenant: string }) => Promise<T>,
-      ) => {
-        opened.push(tenant)
-        return fn({ tenant })
-      },
-    }
+describe('.by — the window derived from a key argument', () => {
+  const opened: string[] = []
+  const pool = {
+    withConnection: async <T>(
+      tenant: string,
+      fn: (conn: { tenant: string }) => Promise<T>,
+    ) => {
+      opened.push(tenant)
+      return fn({ tenant })
+    },
+  }
 
-    // the leaf receives ALL the args, key included
+  it('the key selects the window; the leaf never sees it', async () => {
+    opened.length = 0
+
+    // pure domain signature: period only. The tenant is WIRING — and when
+    // the domain needs it, the bridge hands it in through the DEPS.
     const report = async (
       { conn }: { conn: { tenant: string } },
-      _tenantId: string,
       period: string,
     ) => `report:${conn.tenant}:${period}`
 
-    const monthly = bindBy(
-      (tenantId: string, _period: string) =>
-        within((fn) => pool.withConnection(tenantId, fn), (conn: { tenant: string }) => ({ conn })),
-      report,
+    const { report: monthly } = bind({ report }).by((tenantId: string) =>
+      window(
+        (fn) => pool.withConnection(tenantId, fn),
+        (conn: { tenant: string }) => ({ conn }),
+      ),
     )
 
     expect(await monthly('acme', '2026-06')).toBe('report:acme:2026-06')
     expect(await monthly('globex', '2026-06')).toBe('report:globex:2026-06')
+    expect(opened).toEqual(['acme', 'globex'])
+  })
+
+  it('record form: ONE key recipe serves leaves with different args', async () => {
+    opened.length = 0
+
+    // this is what taking the key OUT of the leaf signature unlocks: the
+    // old args-mirroring form could never type a record.
+    const count = async ({ conn }: { conn: { tenant: string } }) =>
+      `count:${conn.tenant}`
+    const find = async ({ conn }: { conn: { tenant: string } }, id: string) =>
+      `find:${conn.tenant}:${id}`
+
+    const queries = bind({ count, find }).by((tenant: string) =>
+      window(
+        (fn) => pool.withConnection(tenant, fn),
+        (conn: { tenant: string }) => ({ conn }),
+      ),
+    )
+
+    expect(await queries.count('acme')).toBe('count:acme')
+    expect(await queries.find('globex', 'x1')).toBe('find:globex:x1')
     expect(opened).toEqual(['acme', 'globex'])
   })
 })
@@ -251,7 +272,7 @@ describe('intra-function windows — the facility in the deps', () => {
       return deps.withLock(`account:${from}`, async () => `moved:${amount}`)
     }
 
-    const ops = bind({ withLock }, { transfer })
+    const ops = bind({ transfer })({ withLock })
 
     expect(await ops.transfer('a', 0)).toBeInstanceOf(Error)
     expect(events).toEqual([]) // validation serializes nothing
@@ -281,7 +302,7 @@ describe('0/1/N semantics — the window may re-execute', () => {
       return 'ok'
     }
 
-    const ops = bind(retry3, { flaky })
+    const ops = bind({ flaky }).with(retry3)
     expect(await ops.flaky()).toBe('ok')
     expect(calls).toBe(3)
   })
@@ -293,7 +314,7 @@ describe('0/1/N semantics — the window may re-execute', () => {
       return new OtpInvalid() // a value, not an exception
     }
 
-    const ops = bind(retry3, { rejects })
+    const ops = bind({ rejects }).with(retry3)
     expect(await ops.rejects()).toBeInstanceOf(OtpInvalid)
     expect(calls).toBe(1)
   })
@@ -303,11 +324,10 @@ describe('in the chain — separate provide/expose, no umbrella', () => {
   it('queries and commands as distinct surfaces, db private', async () => {
     await lunette()
       .provide('db', () => createDb())
-      .expose('queries', ({ db }) => bind({ db }, { whereAmI }))
+      .expose('queries', ({ db }) => bind({ whereAmI })({ db }))
       .expose('commands', ({ db }) =>
-        bind(
-          within(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle> })),
-          { verifyOtp },
+        bind({ verifyOtp }).with(
+          window(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle> })),
         ),
       )
       .run(async (pub) => {

@@ -7,8 +7,8 @@ import { setPreference } from '../use-cases/profile/set-preference.ts'
 export const profileModule = lunette<{ userRepo: UserRepository }>().expose(
   'profile',
   (ctx) => ({
-    ...bind({ userRepo: ctx.userRepo }, { getIdentity, setPreference }),
+    ...bind({ getIdentity, setPreference })({ userRepo: ctx.userRepo }),
     // The empty-deps case: a pure leaf bound with no dependencies.
-    ...bind({}, { resolveSurface }),
+    ...bind({ resolveSurface })({}),
   }),
 )

@@ -203,7 +203,7 @@ describe('mount — a complete auth fragment', () => {
     .provide(({ env }) => ({
       otpRepo: { consume: async (_c: string) => env.DATABASE_URL !== '' },
     }))
-    .expose((ctx) => ({ auth: bind(ctx, { requestOtp }) }))
+    .expose((ctx) => ({ auth: bind({ requestOtp })(ctx) }))
 
   it('mounts, inherits env from the host, exposes only auth', async () => {
     const app = await lunette()

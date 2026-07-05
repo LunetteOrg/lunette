@@ -33,12 +33,12 @@ export const renderModule = lunette<{
     sanitize: identity,
   }
   return {
-    ...bind(body, { renderUpfront, getRendered, getRenderedMany }),
-    ...bind(title, {
+    ...bind({ renderUpfront, getRendered, getRenderedMany })(body),
+    ...bind({
       renderUpfrontTitle: renderUpfront,
       getRenderedTitle: getRendered,
       getRenderedManyTitle: getRenderedMany,
-    }),
-    ...bind({ renderer: ctx.renderer }, { detectFormat }),
+    })(title),
+    ...bind({ detectFormat })({ renderer: ctx.renderer }),
   }
 })

@@ -9,7 +9,9 @@
 //     layers (private / public) with an optional acquire/release teardown.
 //   use/expose also accept a CHAIN (mount): only its Pub crosses the boundary
 //   override (explicit replacement) · run/build (deliver Pub) · seed (private)
-//   bind (one-word leaf registration) · layer (helper for reusable layers)
+//   bind(record) → the binder: apply = fixed deps · .with(window) = per
+//     call · .by(key ⇒ window) = per call, window derived from the key
+//   layer (helper for reusable layers)
 //
 // 1. A real onion: the chain stays open for the app's whole lifetime; the
 //    code after `await next(...)` is the teardown, in reverse order. The
@@ -642,16 +644,51 @@ export const circular = <T>(): [get: () => T, resolve: (value: T) => T] => {
 // window react (rollback, retry).
 export type With<Deps> = <T>(use: (deps: Deps) => Promise<T>) => Promise<T>
 
-// THE BINDING: ties deps to every BARE LEAF in the record (a bare leaf is
-// a flat use case `(deps, ...args) => error | result` that declares its
-// deps in the signature but does not own them). Two forms:
-// - bind(deps, record): FIXED deps — a value, bound once
-// - bind(window, record): deps PER CALL — every call opens the window,
-//   builds the deps inside it, closes. Transactionality is declared at
-//   the wiring; the call site stays a plain function call.
-// Contravariance checks EVERY record entry. Composition rule: decorate
-// the exposed leaves, compose the bare ones (a composite calls the bare
-// leaf with its own deps → same window by construction).
+// THE BINDING: bind(record) takes the BARE LEAVES (flat use cases
+// `(deps, ...args) => error | result` that declare their deps in the
+// signature but do not own them) and returns THE BINDER — the record's
+// partial application, waiting for the deps:
+//
+//   bind(record)(deps)         FIXED deps — a value, bound once
+//   bind(record).with(window)  deps PER CALL — every call opens the
+//                              window, builds the deps inside it, closes.
+//                              Transactionality is declared at the wiring;
+//                              the call site stays a plain function call.
+//   bind(record).by(toWindow)  deps PER CALL, window DERIVED — every bound
+//                              leaf gains ONE leading KEY argument
+//                              (monthly('acme', period)); toWindow(key)
+//                              picks the window (tenant pool, idempotency
+//                              guard, shard). The leaf NEVER sees the key:
+//                              the key is wiring, not domain — when the
+//                              domain needs it, the bridge closes over it
+//                              and hands it in through the deps.
+//
+// One arity, one meaning: there is no second argument to forget, and the
+// binder is shaped like a provider — `.expose(bind({ getAuthor }))` wires
+// a record point-free (the ctx arrives as the deps). The binder's
+// parameter is the INTERSECTION of every leaf's declared deps: an unmet
+// requirement names the missing keys at the application. Composition rule
+// unchanged: decorate the exposed leaves, compose the bare ones (a
+// composite calls the bare leaf with its own deps → same window by
+// construction).
+type Leaf = (deps: any, ...args: any[]) => unknown
+
+type UnionToIntersection<U> = (
+  U extends unknown ? (u: U) => void : never
+) extends (i: infer I) => void
+  ? I
+  : never
+
+// Everything the record's leaves ask for, as one object: the binder's
+// parameter and the window's lending contract.
+type DepsOf<M> = UnionToIntersection<
+  {
+    [K in keyof M]: M[K] extends (deps: infer D, ...args: any[]) => unknown
+      ? D
+      : never
+  }[keyof M]
+>
+
 type Bound<M> = {
   [K in keyof M]: M[K] extends (deps: any, ...args: infer A) => infer R
     ? (...args: A) => R
@@ -664,53 +701,65 @@ type BoundPerCall<M> = {
     : never
 }
 
-export function bind<
-  Deps extends object,
-  M extends Record<string, (deps: any, ...args: any[]) => unknown>,
->(
-  window: With<Deps>,
-  // The intersection gives TS a second inference source for Deps (the
-  // leaves' signatures), so windows built inline (within(...)) type
-  // without call-site annotations.
-  useCases: M & Record<string, (deps: Deps, ...args: any[]) => unknown>,
-): BoundPerCall<M>
-export function bind<
-  Deps extends object,
-  M extends Record<string, (deps: Deps, ...args: any[]) => unknown>,
->(deps: Deps, useCases: M): Bound<M>
-export function bind(
-  first: object | With<object>,
-  useCases: Record<string, (deps: any, ...args: any[]) => unknown>,
-): any {
-  if (typeof first === 'function') {
-    const window = first as With<object>
-    return Object.fromEntries(
-      Object.entries(useCases).map(([name, uc]) => [
-        name,
-        (...args: unknown[]) => window(async (deps) => uc(deps, ...args)),
-      ]),
-    )
-  }
-  return Object.fromEntries(
-    Object.entries(useCases).map(([name, uc]) => [
-      name,
-      (...args: unknown[]) => uc(first, ...args),
-    ]),
-  )
+// The bound record of the derived-window form: every leaf gains one
+// leading KEY argument; the leaf itself receives only its own args.
+type BoundByKey<M, Key> = {
+  [K in keyof M]: M[K] extends (deps: any, ...args: infer A) => infer R
+    ? (key: Key, ...args: A) => Promise<Awaited<R>>
+    : never
 }
 
-// A further step on top of With: builds the window from its two parts.
-// `open` is THE OPENER, already callback-shaped (db.transaction is):
-// lends a raw resource and lets the result pass through. `toDeps` is THE
-// BRIDGE: from the raw resource to the deps shape the leaves declare
-// ({ db: tx }, whole repos, a mix with boot pieces captured by closure) —
-// executed INSIDE the window, on every call.
+// The binder is a plain function carrying the two per-call cadences as
+// properties — the same house shape as Lazy<T> (a callable with
+// `created`). It must stay this stupid: no fluent surface beyond these.
+export type Binder<M> = ((deps: DepsOf<M>) => Bound<M>) & {
+  with: (window: With<DepsOf<M>>) => BoundPerCall<M>
+  by: <Key>(toWindow: (key: Key) => With<DepsOf<M>>) => BoundByKey<M, Key>
+}
+
+export const bind = <M extends Record<string, Leaf>>(record: M): Binder<M> => {
+  const entries = Object.entries(record)
+  // The two casts are engine-internal (decision 23): with M generic the
+  // checker cannot relate the runtime mapping to the mapped types.
+  const binder = ((deps: object) =>
+    Object.fromEntries(
+      entries.map(([name, uc]) => [
+        name,
+        (...args: unknown[]) => uc(deps, ...args),
+      ]),
+    )) as unknown as Binder<M>
+  binder.with = (w) =>
+    Object.fromEntries(
+      entries.map(([name, uc]) => [
+        name,
+        (...args: unknown[]) => w(async (deps) => uc(deps, ...args)),
+      ]),
+    ) as BoundPerCall<M>
+  binder.by = ((toWindow: (key: unknown) => With<object>) =>
+    Object.fromEntries(
+      entries.map(([name, uc]) => [
+        name,
+        (key: unknown, ...args: unknown[]) =>
+          toWindow(key)(async (deps) => uc(deps, ...args)),
+      ]),
+    )) as unknown as Binder<M>['by']
+  return binder
+}
+
+// A window built from its two parts. `open` is THE OPENER, already
+// callback-shaped (db.transaction is): lends a raw resource and lets the
+// result pass through. `toDeps` is THE BRIDGE: from the raw resource to
+// the deps shape the leaves declare ({ db: tx }, whole repos, a mix with
+// boot pieces captured by closure) — executed INSIDE the window, on every
+// call.
 //
-//   within(db.transaction, (tx) => ({ db: tx }))
+//   bind({ verifyCode }).with(window(db.transaction, (tx) => ({ db: tx })))
 //
 // Note: if `transaction` is a method that uses `this`, passing it
 // detached breaks it — use `db.transaction.bind(db)` in that case.
-export const within =
+// Note: the export deliberately claims the name `window` — composition
+// roots are server code; the DOM global is not a neighbour there.
+export const window =
   <Raw, Deps>(
     open: <T>(fn: (raw: Raw) => Promise<T>) => Promise<T>,
     toDeps: (raw: Raw) => Deps,
@@ -718,14 +767,3 @@ export const within =
   (use) =>
     open((raw) => use(toDeps(raw)))
 
-// The window derived from the call ARGUMENTS (tenant picked from the
-// input, idempotency key, sharding). Single-leaf, not record-based: how
-// the key derives from the args differs per leaf. The leaf still
-// receives ALL the args, key included.
-export const bindBy =
-  <Deps, Args extends unknown[], R>(
-    toWindow: (...args: Args) => With<Deps>,
-    leaf: (deps: Deps, ...args: Args) => R,
-  ) =>
-  (...args: Args): Promise<Awaited<R>> =>
-    toWindow(...args)(async (deps) => leaf(deps, ...args)) as Promise<Awaited<R>>

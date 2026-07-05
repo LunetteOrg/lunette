@@ -20,7 +20,7 @@ const chain = lunette<{ env: Env }>()      // requirements arrive at build time
     try { return await next(pool) } finally { await pool.end() }
   })
   .provide('repos', ({ db }) => makeRepos(db))            // private
-  .expose('auth', (ctx) => bind(ctx.repos, { requestOtp, verifyOtp })) // public
+  .expose('auth', (ctx) => bind({ requestOtp, verifyOtp })(ctx.repos)) // public
 
 const { app, dispose } = await chain.build({ env: parseEnv(process.env) })
 await app.auth.requestOtp({ email: 'a@b.c' })   // consumers see ONLY what you exposed
@@ -115,13 +115,17 @@ It declares its deps in the signature but does not own them — which makes
 it composable (a composite calls the bare leaf with its *own* deps) and
 trivially testable (`verifyOtp(fakeDeps, ...)`).
 
-`bind` ties deps to every leaf in a record — registration costs one word
-per use case:
+`bind(record)` takes the leaves and returns **the binder** — the record's
+partial application, waiting for the deps. Apply it for fixed deps, or
+pass it point-free where a provider is expected (the binder is shaped
+like one):
 
 ```ts
-.expose('auth', (ctx) => bind(ctx.repos, { requestOtp, verifyOtp, findUser }))
-// app.auth.verifyOtp(email, code) — deps stitched in, contravariance
-// checked on every entry separately
+.expose('auth', (ctx) => bind({ requestOtp, verifyOtp, findUser })(ctx.repos))
+// app.auth.verifyOtp(email, code) — deps stitched in; the binder's
+// parameter is the INTERSECTION of the leaves' declared deps
+
+.expose(bind({ requestOtp, verifyOtp }))  // point-free: the ctx IS the deps
 ```
 
 Errors follow the value convention: domain errors are **returned**
@@ -137,28 +141,38 @@ type With<Deps> = <T>(use: (deps: Deps) => Promise<T>) => Promise<T>
 ```
 
 Database transactions, tracing spans, locks, per-tenant connections — all
-the same shape. `bind` accepts a window instead of fixed deps: every call
-opens the window, builds the deps inside it, closes:
+the same shape. The binder's `.with` ties deps per call: every call opens
+the window, builds the deps inside it, closes:
 
 ```ts
 const inTx: With<Repos> = (use) => db.transaction((tx) => use(makeRepos(tx)))
 
-.expose('commands', ({ db }) => bind(inTx, { verifyOtp }))
+.expose('commands', ({ db }) => bind({ verifyOtp }).with(inTx))
 // each call = one transaction, invisible at the call site
 ```
 
-`within(opener, bridge)` builds a window from its two parts — the
+`window(opener, bridge)` builds a window from its two parts — the
 **opener** (callback-shaped; `db.transaction` already is) and the
 **bridge** (raw resource → the deps shape your leaves declare, mixing in
 boot values by closure):
 
 ```ts
-bind(within(db.transaction, (tx) => ({ db: tx, email, clock })), { welcome })
+bind({ welcome }).with(window(db.transaction, (tx) => ({ db: tx, email, clock })))
 ```
 
-`bindBy(toWindow, leaf)` derives the window from the call arguments
-(per-tenant connections, idempotency keys) — single-leaf, because how the
-key derives from the args differs per leaf.
+`.by(toWindow)` derives the window from a **key**: every bound leaf gains
+one leading key argument (`monthly('acme', period)`), `toWindow(key)`
+picks the window (per-tenant connection, idempotency guard, shard), and
+the leaf runs with its **own** arguments only — the key is wiring, not
+domain. When the domain does need it (the id in the query), the bridge
+closes over the key and hands it in through the deps:
+
+```ts
+const { report: monthly } = bind({ report }).by((tenant: string) =>
+  window((fn) => pool.withConnection(tenant, fn), (conn) => ({ conn, tenant })),
+)
+await monthly('acme', '2026-06')   // opens acme's connection; report(deps, period)
+```
 
 Semantics worth knowing:
 
@@ -189,8 +203,8 @@ const verifyOtp = async (deps: Tx<Repos>, email: string, code: string) => { ... 
 const inTx: With<Tx<Repos>> = (use) =>
   db.transaction((tx) => use(makeRepos(tx) as Tx<Repos>))  // the one cast, here
 
-bind(makeRepos(db), { verifyOtp })   // ❌ does not compile
-bind(inTx, { verifyOtp })            // ✅ the only way in
+bind({ verifyOtp })(makeRepos(db))   // ❌ does not compile
+bind({ verifyOtp }).with(inTx)       // ✅ the only way in
 ```
 
 ## Helpers
@@ -268,7 +282,7 @@ gives subscribe/unsubscribe lifecycle); a consumer is a separate chain
 processing each message in a per-call window — where the error convention
 maps directly onto ack/nack: returned domain error → ack (dead-letter with
 a reason), thrown infrastructure error → nack (redelivery). The
-transactional outbox is just a bridge: `within(db.transaction, (tx) =>
+transactional outbox is just a bridge: `window(db.transaction, (tx) =>
 ({ db: tx, events: outboxEmitter(tx) }))` — commit makes the event
 durable, rollback evaporates it with the writes.
 

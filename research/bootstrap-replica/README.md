@@ -15,7 +15,7 @@ design the way the real bootstrap would.
   and the render leaves never reach a route — verified at runtime
   (`app/bootstrap/chain.test.ts`) and at compile time
   (`app/bootstrap/chain.test-d.ts`).
-- The **transaction window** (`within(db.transaction, bridge)`) realizes the
+- The **transaction window** (`window(db.transaction, bridge)`) realizes the
   error convention against real Postgres (PGlite): a returned domain error
   **commits** (OTP `attempts++` persists), a thrown infra error **rolls back**
   (a half-created user vanishes).

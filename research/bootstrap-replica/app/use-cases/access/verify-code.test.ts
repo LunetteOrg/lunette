@@ -1,4 +1,4 @@
-import { bind, within } from '@lntt/wire'
+import { bind, window } from '@lntt/wire'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { connect, type Db } from '../../db/client.ts'
 import { migrate } from '../../db/migrate.ts'
@@ -186,7 +186,7 @@ describe('verifyCode inside a real transaction window — throw rolls back', () 
       async delete() {},
     }
 
-    const window = within(
+    const txWindow = window(
       db.transaction.bind(db),
       (tx): Tx<VerifyCodeDeps> =>
         ({
@@ -196,7 +196,7 @@ describe('verifyCode inside a real transaction window — throw rolls back', () 
           generateId: () => 'rolled-back-user',
         }) as Tx<VerifyCodeDeps>,
     )
-    const run = bind(window, { verifyCode }).verifyCode
+    const run = bind({ verifyCode }).with(txWindow).verifyCode
 
     await expect(
       run('rollback@b.c', '123456', 'n', { termsAccepted: true }),

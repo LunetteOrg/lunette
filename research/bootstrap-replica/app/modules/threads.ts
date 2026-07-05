@@ -34,58 +34,43 @@ export const threadsModule = lunette<{
   getRenderedMany: RenderMany
   getRenderedManyTitle: RenderMany
 }>().expose('threads', (ctx) => {
-  const authors = bind({ userRepo: ctx.userRepo }, { getAuthor, getAuthors })
+  const authors = bind({ getAuthor, getAuthors })({ userRepo: ctx.userRepo })
   return {
     ...authors,
-    ...bind(
-      {
-        detectFormat: ctx.detectFormat,
-        createPost: ctx.postRepo.create,
-        blobs: ctx.blobs,
-        generateId: ctx.generateId,
-        renderUpfront: ctx.renderUpfront,
-        renderUpfrontTitle: ctx.renderUpfrontTitle,
-      },
-      { publishPost },
-    ),
-    ...bind(
-      {
-        getPost: ctx.postRepo.findById,
-        getComment: ctx.commentRepo.findById,
-        detectFormat: ctx.detectFormat,
-        createComment: ctx.commentRepo.create,
-        blobs: ctx.blobs,
-        generateId: ctx.generateId,
-        renderUpfront: ctx.renderUpfront,
-      },
-      { composeComment },
-    ),
-    ...bind(
-      {
-        getPost: ctx.postRepo.findById,
-        getRendered: ctx.getRendered,
-        getRenderedTitle: ctx.getRenderedTitle,
-        getAuthor: authors.getAuthor,
-      },
-      { getPostForReading },
-    ),
-    ...bind(
-      {
-        postRepo: ctx.postRepo,
-        getAuthors: authors.getAuthors,
-        getRenderedMany: ctx.getRenderedMany,
-        getRenderedManyTitle: ctx.getRenderedManyTitle,
-        getCommentCounts: ctx.commentRepo.countByPosts,
-      },
-      { listFeed },
-    ),
-    ...bind(
-      {
-        listComments: ctx.commentRepo.listByPost,
-        getRenderedMany: ctx.getRenderedMany,
-        getAuthors: authors.getAuthors,
-      },
-      { listCommentsForReading },
-    ),
+    ...bind({ publishPost })({
+      detectFormat: ctx.detectFormat,
+      createPost: ctx.postRepo.create,
+      blobs: ctx.blobs,
+      generateId: ctx.generateId,
+      renderUpfront: ctx.renderUpfront,
+      renderUpfrontTitle: ctx.renderUpfrontTitle,
+    }),
+    ...bind({ composeComment })({
+      getPost: ctx.postRepo.findById,
+      getComment: ctx.commentRepo.findById,
+      detectFormat: ctx.detectFormat,
+      createComment: ctx.commentRepo.create,
+      blobs: ctx.blobs,
+      generateId: ctx.generateId,
+      renderUpfront: ctx.renderUpfront,
+    }),
+    ...bind({ getPostForReading })({
+      getPost: ctx.postRepo.findById,
+      getRendered: ctx.getRendered,
+      getRenderedTitle: ctx.getRenderedTitle,
+      getAuthor: authors.getAuthor,
+    }),
+    ...bind({ listFeed })({
+      postRepo: ctx.postRepo,
+      getAuthors: authors.getAuthors,
+      getRenderedMany: ctx.getRenderedMany,
+      getRenderedManyTitle: ctx.getRenderedManyTitle,
+      getCommentCounts: ctx.commentRepo.countByPosts,
+    }),
+    ...bind({ listCommentsForReading })({
+      listComments: ctx.commentRepo.listByPost,
+      getRenderedMany: ctx.getRenderedMany,
+      getAuthors: authors.getAuthors,
+    }),
   }
 })

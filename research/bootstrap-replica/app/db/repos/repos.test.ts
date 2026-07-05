@@ -59,7 +59,7 @@ describe('repos (real Drizzle against PGlite)', () => {
 
   it('the SAME repo factory runs against a tx handle (the window swap)', async () => {
     await otpRepo({ db }).upsert({ email: 't@x.z', codeHash: 'h', nonce: 'n', expiresAt: new Date(Date.now() + 60_000) })
-    // Rebuild the repo bound to tx — exactly what within(db.transaction, …) does.
+    // Rebuild the repo bound to tx — exactly what window(db.transaction, …) does.
     await db.transaction(async (tx) => {
       await otpRepo({ db: tx }).incrementAttempts('t@x.z')
     })

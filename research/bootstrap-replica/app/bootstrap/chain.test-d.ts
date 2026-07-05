@@ -29,4 +29,4 @@ void chain.build()
 // un-branded deps — only a window produces Tx<…>.
 declare const plainDeps: VerifyCodeDeps
 // @ts-expect-error — VerifyCodeDeps is not Tx<VerifyCodeDeps>: a window is required
-void bind(plainDeps, { verifyCode })
+void bind({ verifyCode })(plainDeps)

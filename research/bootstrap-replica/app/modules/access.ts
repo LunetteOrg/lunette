@@ -1,4 +1,4 @@
-import { bind, lunette, within } from '@lntt/wire'
+import { bind, lunette, window } from '@lntt/wire'
 import type { Db } from '../db/client.ts'
 import { otpRepo } from '../db/repos/otp.repo.ts'
 import { sessionRepo } from '../db/repos/session.repo.ts'
@@ -17,7 +17,7 @@ import { verifyCode, type VerifyCodeDeps } from '../use-cases/access/verify-code
 
 // The access feature module. It REQUIRES its infrastructure via the Seed
 // (db + repos + mailer + generateId); the host provides it once. verifyCode is
-// the one transactional leaf: `within(db.transaction, bridge)` opens a fresh tx
+// the one transactional leaf: `window(db.transaction, bridge)` opens a fresh tx
 // per call, the bridge rebuilds the three repos against the tx handle and
 // produces the `Tx<…>` brand (the single cast). The leaf throws infra → the tx
 // rolls back; it returns domain → the tx commits.
@@ -29,10 +29,10 @@ export const accessModule = lunette<{
   mailer: Mailer
   generateId: () => string
 }>().expose('access', (ctx) => ({
-  ...bind({ otpRepo: ctx.otpRepo, mailer: ctx.mailer }, { requestCode }),
-  ...bind({ userRepo: ctx.userRepo }, { findUserByEmail, getUserById }),
-  ...bind(
-    within(
+  ...bind({ requestCode })({ otpRepo: ctx.otpRepo, mailer: ctx.mailer }),
+  ...bind({ findUserByEmail, getUserById })({ userRepo: ctx.userRepo }),
+  ...bind({ verifyCode }).with(
+    window(
       ctx.db.transaction.bind(ctx.db),
       (tx): Tx<VerifyCodeDeps> =>
         ({
@@ -42,6 +42,5 @@ export const accessModule = lunette<{
           generateId: ctx.generateId,
         }) as Tx<VerifyCodeDeps>,
     ),
-    { verifyCode },
   ),
 }))

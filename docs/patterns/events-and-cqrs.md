@@ -17,9 +17,8 @@ live exactly as long as the app:
 
 ```ts
 .use('subscriptions', async ({ events, db }, next) => {
-  const handlers = bind(
-    within(db.transaction, (tx) => makeRepos(tx)),
-    { onUserRegistered, onOrderPlaced },
+  const handlers = bind({ onUserRegistered, onOrderPlaced }).with(
+    window(db.transaction, (tx) => makeRepos(tx)),
   )
   const offs = [
     events.on('user.registered', handlers.onUserRegistered),
@@ -50,12 +49,11 @@ const outboxEmitter = (tx: DbHandle) => ({
 })
 
 .expose('commands', ({ db }) =>
-  bind(
-    within(db.transaction, (tx) => ({
+  bind({ registerUser }).with(
+    window(db.transaction, (tx) => ({
       db: tx,
       events: outboxEmitter(tx),   // emits BY WRITING into the tx
     })),
-    { registerUser },
   ))
 ```
 
