@@ -15,12 +15,13 @@ import { getUserById } from '../use-cases/access/get-user-by-id.ts'
 import { requestCode } from '../use-cases/access/request-code.ts'
 import { verifyCode, type VerifyCodeDeps } from '../use-cases/access/verify-code.ts'
 
-// The access feature module. It REQUIRES its infrastructure via the Seed
-// (db + repos + mailer + generateId); the host provides it once. verifyCode is
-// the one transactional leaf: `window(db.transaction, bridge)` opens a fresh tx
-// per call, the bridge rebuilds the three repos against the tx handle and
-// produces the `Tx<…>` brand (the single cast). The leaf throws infra → the tx
-// rolls back; it returns domain → the tx commits.
+// The access feature module, written as a CHAIN OF EXPOSES (see
+// docs/patterns/feature-modules.md). It REQUIRES its infrastructure via the
+// Seed (db + repos + mailer + generateId); the host provides it once. The
+// transaction window is a NAMED PRIVATE STEP (`verifyTx`): a fresh tx per
+// call, the bridge rebuilds the three repos against the tx handle and
+// produces the `Tx<…>` brand (the single cast). The leaf throws infra → the
+// tx rolls back; it returns domain → the tx commits.
 export const accessModule = lunette<{
   db: Db
   otpRepo: OtpRepository
@@ -28,10 +29,9 @@ export const accessModule = lunette<{
   sessionRepo: SessionRepository
   mailer: Mailer
   generateId: () => string
-}>().expose('access', (ctx) => ({
-  ...bind({ requestCode })({ otpRepo: ctx.otpRepo, mailer: ctx.mailer }),
-  ...bind({ findUserByEmail, getUserById })({ userRepo: ctx.userRepo }),
-  ...bind({ verifyCode }).with(
+}>()
+  // ── the window, private, next to the publics: visibility is a per-step dial
+  .provide('verifyTx', (ctx) =>
     window(
       ctx.db.transaction.bind(ctx.db),
       (tx): Tx<VerifyCodeDeps> =>
@@ -42,5 +42,8 @@ export const accessModule = lunette<{
           generateId: ctx.generateId,
         }) as Tx<VerifyCodeDeps>,
     ),
-  ),
-}))
+  )
+  .expose((ctx) => bind({ requestCode })({ otpRepo: ctx.otpRepo, mailer: ctx.mailer }))
+  .expose((ctx) => bind({ findUserByEmail, getUserById })({ userRepo: ctx.userRepo }))
+  .expose((ctx) => bind({ verifyCode }).with(ctx.verifyTx))
+  .as('access')

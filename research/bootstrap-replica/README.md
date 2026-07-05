@@ -55,10 +55,10 @@ fragment→fragment Seed), Node 24 / TS 5.9:
 
 | metric | value |
 |---|---|
-| Check time | **0.28s** |
-| Total time | 0.54s |
-| Instantiations | 129,883 |
-| Files / LoC | 647 / 3,782 |
+| Check time | **0.29s** |
+| Total time | 0.56s |
+| Instantiations | 134,614 |
+| Files / LoC | 647 / 3,848 |
 
 On par with the synthetic 20-step stress (~0.3s): the real shape does **not**
 blow up the checker.

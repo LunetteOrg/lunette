@@ -10,35 +10,38 @@ import {
   renderUpfront,
 } from '../use-cases/render/render-cache.ts'
 
-// The render mini-app: a fragment that REQUIRES its infrastructure (renderCache
-// + renderer) via its Seed and wires the cache leaves. The host mounts it
-// privately (use), so its leaves live in Ctx as wiring for threads but stay off
-// the public surface. The DOUBLE-BIND is here: one factory, bound twice — once
-// for the rich body path, once for the plain title path — proving alias = a
-// provide. Its Pub then feeds the threads fragment's Seed.
+// The render mini-app, written as a CHAIN OF EXPOSES (see
+// docs/patterns/feature-modules.md): a fragment that REQUIRES its
+// infrastructure (renderCache + renderer) via its Seed and wires the cache
+// leaves. The host mounts it privately (use), so its leaves live in Ctx as
+// wiring for threads but stay off the public surface — flat, no .as(): the
+// threads fragment consumes these keys by name. The DOUBLE-BIND is two
+// steps: one factory record, bound twice — the rich body path and the plain
+// title path — proving alias = a provide.
 export const renderModule = lunette<{
   renderCache: RenderCacheRepository
   renderer: Renderer
-}>().expose((ctx) => {
-  const body: RenderDeps = {
-    renderer: ctx.renderer,
-    renderCache: ctx.renderCache,
-    format: 'html',
-    sanitize: sanitizeRich,
-  }
-  const title: RenderDeps = {
-    renderer: ctx.renderer,
-    renderCache: ctx.renderCache,
-    format: 'text',
-    sanitize: identity,
-  }
-  return {
-    ...bind({ renderUpfront, getRendered, getRenderedMany })(body),
-    ...bind({
+}>()
+  // ── the body path (rich html)
+  .expose((ctx) =>
+    bind({ renderUpfront, getRendered, getRenderedMany })({
+      renderer: ctx.renderer,
+      renderCache: ctx.renderCache,
+      format: 'html',
+      sanitize: sanitizeRich,
+    } satisfies RenderDeps),
+  )
+  // ── the title path (plain text): the SAME factories, aliased
+  .expose((ctx) =>
+    bind({
       renderUpfrontTitle: renderUpfront,
       getRenderedTitle: getRendered,
       getRenderedManyTitle: getRenderedMany,
-    })(title),
-    ...bind({ detectFormat })({ renderer: ctx.renderer }),
-  }
-})
+    })({
+      renderer: ctx.renderer,
+      renderCache: ctx.renderCache,
+      format: 'text',
+      sanitize: identity,
+    } satisfies RenderDeps),
+  )
+  .expose((ctx) => bind({ detectFormat })({ renderer: ctx.renderer }))
