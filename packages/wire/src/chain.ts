@@ -75,8 +75,8 @@ type MountGuard<Ctx, FSeed, Result> = [Ctx] extends [FSeed]
 
 type Entry =
   | {
-      kind: 'mw'
-      mw: Layer<any, any, any>
+      kind: 'layer'
+      layer: Layer<any, any, any>
       mode: 'extend' | 'override'
       public: boolean
       // present only in the keyed form: makes the layer skippable in tests
@@ -137,7 +137,7 @@ export class Lunette<
   }
 
   use<All extends Patch, P extends Patch>(
-    mw: Layer<Expand<Ctx>, All, P>,
+    layer: Layer<Expand<Ctx>, All, P>,
   ): Guard<Ctx, All, Lunette<Ctx & All, Pub & P, Seed>>
   use<K extends PropertyKey, V>(
     key: K,
@@ -169,12 +169,12 @@ export class Lunette<
     if (typeof arg === 'function') {
       return new Lunette([
         ...this.entries,
-        { kind: 'mw', mw: arg, mode: 'extend', public: false, key: undefined },
+        { kind: 'layer', layer: arg, mode: 'extend', public: false, key: undefined },
       ])
     }
     return new Lunette([
       ...this.entries,
-      { kind: 'mw', mw: keyedToLayer(arg, extra as ValueLayer<any, any>), mode: 'extend', public: false, key: arg },
+      { kind: 'layer', layer: keyedToLayer(arg, extra as ValueLayer<any, any>), mode: 'extend', public: false, key: arg },
     ])
   }
 
@@ -198,7 +198,7 @@ export class Lunette<
     if (typeof arg === 'function') {
       const fn = arg
       const teardown = extra as ((value: any) => unknown) | undefined
-      const mw: Layer<any, any, any> = async (ctx, next) => {
+      const wrapped: Layer<any, any, any> = async (ctx, next) => {
         const value = await fn(ctx)
         try {
           return await next(value as Patch)
@@ -208,12 +208,12 @@ export class Lunette<
       }
       return new Lunette([
         ...this.entries,
-        { kind: 'mw', mw, mode: 'extend', public: false, key: undefined },
+        { kind: 'layer', layer: wrapped, mode: 'extend', public: false, key: undefined },
       ])
     }
     const key = arg
     const fn = extra as (ctx: any) => unknown
-    const mw: Layer<any, any, any> = async (ctx, next) => {
+    const wrapped: Layer<any, any, any> = async (ctx, next) => {
       const value = await fn(ctx)
       try {
         return await next({ [key]: value })
@@ -223,7 +223,7 @@ export class Lunette<
     }
     return new Lunette([
       ...this.entries,
-      { kind: 'mw', mw, mode: 'extend', public: false, key },
+      { kind: 'layer', layer: wrapped, mode: 'extend', public: false, key },
     ])
   }
 
@@ -266,7 +266,7 @@ export class Lunette<
     if (typeof arg === 'function') {
       const fn = arg
       const teardown = extra as ((value: any) => unknown) | undefined
-      const mw: Layer<any, any, any> = async (ctx, next) => {
+      const wrapped: Layer<any, any, any> = async (ctx, next) => {
         const value = await fn(ctx)
         try {
           return await next({}, value as Patch)
@@ -276,12 +276,12 @@ export class Lunette<
       }
       return new Lunette([
         ...this.entries,
-        { kind: 'mw', mw, mode: 'extend', public: true, key: undefined },
+        { kind: 'layer', layer: wrapped, mode: 'extend', public: true, key: undefined },
       ])
     }
     const key = arg
     const fn = extra as (ctx: any) => unknown
-    const mw: Layer<any, any, any> = async (ctx, next) => {
+    const wrapped: Layer<any, any, any> = async (ctx, next) => {
       const value = await fn(ctx)
       try {
         return await next({}, { [key]: value })
@@ -291,7 +291,7 @@ export class Lunette<
     }
     return new Lunette([
       ...this.entries,
-      { kind: 'mw', mw, mode: 'extend', public: true, key },
+      { kind: 'layer', layer: wrapped, mode: 'extend', public: true, key },
     ])
   }
 
@@ -313,10 +313,10 @@ export class Lunette<
     P,
     Lunette<Omit<Ctx, keyof P> & P, OverriddenPub<Pub, P>, Seed>
   > {
-    const mw: Layer<any, any> = async (ctx, next) => next(await fn(ctx))
+    const wrapped: Layer<any, any> = async (ctx, next) => next(await fn(ctx))
     return new Lunette([
       ...this.entries,
-      { kind: 'mw', mw, mode: 'override', public: false, key: undefined },
+      { kind: 'layer', layer: wrapped, mode: 'override', public: false, key: undefined },
     ]) as OverrideGuard<
       Ctx,
       P,
@@ -444,7 +444,7 @@ export class Lunette<
           }
           return step(i + 1, merge(ctx, patch))
         }) as Next
-        return entry.mw(ctx, next)
+        return entry.layer(ctx, next)
       }
       return step(0, bag)
     }
