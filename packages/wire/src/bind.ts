@@ -63,8 +63,12 @@ type BoundPerCall<M> = {
 
 // The bound record of the derived-window form: every leaf gains one
 // leading KEY argument; the leaf itself receives only its own args.
+// Derived from BoundPerCall, not restated, so the two stay in lockstep.
 type BoundByKey<M, Key> = {
-  [K in keyof M]: (key: Key, ...args: LeafArgs<M[K]>) => Promise<Awaited<LeafReturn<M[K]>>>
+  [K in keyof M]: (
+    key: Key,
+    ...args: Parameters<BoundPerCall<M>[K]>
+  ) => ReturnType<BoundPerCall<M>[K]>
 }
 
 // The binder is a plain function carrying the two per-call cadences as
@@ -81,6 +85,9 @@ export const bind = <M extends Record<string, Leaf>>(record: M): Binder<M> => {
   // how each leaf's deps get produced varies.
   const mapEntries = <T>(project: (uc: Leaf) => T): Record<string, T> =>
     Object.fromEntries(entries.map(([name, uc]) => [name, project(uc)]))
+  // The bridge every per-call cadence opens a window with: close the
+  // leaf's own args over it, so the window only ever sees the deps.
+  const bridge = (uc: Leaf, args: unknown[]) => async (deps: any) => uc(deps, ...args)
   // The two casts are engine-internal (decision 23): with M generic the
   // checker cannot relate the runtime mapping to the mapped types.
   const binder = ((deps: object) =>
@@ -93,12 +100,12 @@ export const bind = <M extends Record<string, Leaf>>(record: M): Binder<M> => {
     mapEntries(
       (uc) =>
         (...args: unknown[]) =>
-          w(async (deps) => uc(deps, ...args)),
+          w(bridge(uc, args)),
     ) as BoundPerCall<M>
   binder.by = ((toWindow: (key: unknown) => With<object>) =>
     mapEntries(
       (uc) => (key: unknown, ...args: unknown[]) =>
-        toWindow(key)(async (deps) => uc(deps, ...args)),
+        toWindow(key)(bridge(uc, args)),
     )) as unknown as Binder<M>['by']
   return binder
 }
