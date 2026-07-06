@@ -40,10 +40,17 @@ type UnionToIntersection<U> = (
 
 // Everything the record's leaves ask for, as one object: the binder's
 // parameter and the window's lending contract.
+// `unknown extends D` is true only when D is `any` or `unknown` itself —
+// the two top-like types that would otherwise swallow the whole union
+// (any | X = any, unknown | X = unknown) and erase every other leaf's
+// requirement the moment ONE leaf is loosely typed. A loose leaf must
+// contribute NO requirement, not disable everyone else's.
 type DepsOf<M> = UnionToIntersection<
   {
     [K in keyof M]: M[K] extends (deps: infer D, ...args: any[]) => unknown
-      ? D
+      ? unknown extends D
+        ? {}
+        : D
       : never
   }[keyof M]
 >

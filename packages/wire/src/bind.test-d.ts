@@ -12,6 +12,7 @@ const requestOtp = async (
 }
 
 const needsGhost = (_deps: { ghost: { boo: () => void } }, _x: number) => true
+const needsGhost2 = (_deps: { ghost2: { boo: () => void } }, _x: number) => true
 
 describe('bind (types)', () => {
   it('the applied binder removes the deps parameter, keeps the rest', () => {
@@ -26,14 +27,39 @@ describe('bind (types)', () => {
   it("the binder's parameter is the INTERSECTION of the leaves' deps", () => {
     const ctx = { otpRepo: { consume: async () => true } }
 
-    // ghost is missing from ctx: the APPLICATION does not compile. The
-    // blame is aggregate (the missing KEY is named, not which leaf wants
-    // it) — the accepted trade of single-arity bind.
+    // ghost AND ghost2 are both missing from ctx: the APPLICATION does not
+    // compile. The blame is aggregate (the missing KEY is named, not which
+    // leaf wants it) — the accepted trade of single-arity bind (decision 27).
     // @ts-expect-error — ctx does not provide 'ghost'
-    bind({ requestOtp, needsGhost })(ctx)
+    bind({ requestOtp, needsGhost, needsGhost2 })(ctx)
 
-    // without the demanding entry, the same ctx applies fine
+    // supplying 'ghost' alone isn't enough: the error MOVES to 'ghost2'
+    // rather than naming both at once — missing deps surface ONE AT A
+    // TIME, not as a batch.
+    // @ts-expect-error — ctx now provides 'ghost' but still not 'ghost2'
+    bind({ requestOtp, needsGhost, needsGhost2 })({
+      ...ctx,
+      ghost: { boo: () => {} },
+    })
+
+    // without the demanding entries, the same ctx applies fine
     bind({ requestOtp })(ctx)
+  })
+
+  it('a loosely-typed leaf (any/unknown) contributes NO requirement — it does not erase its siblings\'', () => {
+    // `any` and `unknown` are absorptive in unions (any | X = any, unknown
+    // | X = unknown): naively folding a leaf's declared deps straight into
+    // DepsOf's union would let ONE loosely-typed leaf collapse the WHOLE
+    // record's requirement, silently accepting any ctx — including one
+    // that fails strictLeaf's very real 'special' requirement.
+    const looseLeaf = (_deps: any, y: number) => y
+    const unknownLeaf = (_deps: unknown, y: number) => y
+    const strictLeaf = (_deps: { special: number }, z: number) => z
+    const mixed = bind({ looseLeaf, unknownLeaf, strictLeaf })
+
+    // @ts-expect-error — strictLeaf's 'special' still must be provided
+    mixed({})
+    mixed({ special: 5 })
   })
 
   it('one arity only: there is no second argument to forget', () => {
