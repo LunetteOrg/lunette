@@ -64,8 +64,11 @@ type Bound<M> = {
   [K in keyof M]: (...args: LeafArgs<M[K]>) => LeafReturn<M[K]>
 }
 
+// Derived from Bound, not restated, so the two stay in lockstep.
 type BoundPerCall<M> = {
-  [K in keyof M]: (...args: LeafArgs<M[K]>) => Promise<Awaited<LeafReturn<M[K]>>>
+  [K in keyof M]: (
+    ...args: Parameters<Bound<M>[K]>
+  ) => Promise<Awaited<ReturnType<Bound<M>[K]>>>
 }
 
 // The bound record of the derived-window form: every leaf gains one
