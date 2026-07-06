@@ -56,7 +56,7 @@
 //    callback (e.g. React Router's getLoadContext).
 
 export { Lunette, lunette, layer } from './chain.ts'
-export type { Provided, Next, Layer, NextValue, ValueLayer } from './chain.ts'
+export type { Provided, Next, Layer, NextValue, ValueLayer, Expand } from './chain.ts'
 
 export { lazy, lazyAsync, circular } from './lazy.ts'
 export type { Lazy } from './lazy.ts'

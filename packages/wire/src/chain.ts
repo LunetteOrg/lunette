@@ -46,17 +46,27 @@ const doneToken = {} as Provided<any>
 // shallow merge would betray the intersection type: the chain stops here.
 type Clash<Ctx, P> = Extract<keyof P, keyof Ctx>
 
-type Guard<Ctx, P, Result> = Clash<Ctx, P> extends never
+// Shared guard shape: a passing check (never) yields the Result; a failing
+// one yields a single-key error object naming the offending keys.
+type KeyGuard<Check, Message extends string, Result> = [Check] extends [never]
   ? Result
-  : { '⛔ keys already present in the context': Clash<Ctx, P> }
+  : Record<Message, Check>
+
+type Guard<Ctx, P, Result> = KeyGuard<
+  Clash<Ctx, P>,
+  '⛔ keys already present in the context',
+  Result
+>
 
 // Mirror guard for override: only keys that already exist can be
 // replaced (a typo in the name does not go unnoticed).
 type UnknownKeys<Ctx, P> = Exclude<keyof P, keyof Ctx>
 
-type OverrideGuard<Ctx, P, Result> = UnknownKeys<Ctx, P> extends never
-  ? Result
-  : { '⛔ overriding keys missing from the context': UnknownKeys<Ctx, P> }
+type OverrideGuard<Ctx, P, Result> = KeyGuard<
+  UnknownKeys<Ctx, P>,
+  '⛔ overriding keys missing from the context',
+  Result
+>
 
 // After an override the replaced keys keep their visibility: the ones
 // that were public stay in Pub, with the new type.
@@ -95,9 +105,9 @@ type Entry =
 // Flattens the accumulated intersections ({} & {db} & {auth} → a flat
 // object) at the points of consumption: readable tooltips and exact type
 // comparisons in tests.
-type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never
+export type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never
 
-type Scope<Pub, T> = (app: Expand<Pub>) => T | Promise<T>
+export type Scope<Pub, T> = (app: Expand<Pub>) => T | Promise<T>
 
 // If the chain has no external requirements ({} satisfies them), run only
 // wants the scope; otherwise the seed is the first, mandatory argument.
@@ -155,16 +165,7 @@ export class Lunette<
     extra?: ((ctx: any) => object) | ValueLayer<any, any>,
   ): any {
     if (arg instanceof Lunette) {
-      return new Lunette([
-        ...this.entries,
-        {
-          kind: 'mount',
-          entries: arg.entries,
-          seedFn: extra as ((ctx: object) => object) | undefined,
-          public: false,
-          at: undefined,
-        },
-      ])
+      return this.mount(arg.entries, extra as ((ctx: object) => object) | undefined, false)
     }
     if (typeof arg === 'function') {
       return new Lunette([
@@ -223,18 +224,23 @@ export class Lunette<
     destroy?: (value: any) => unknown,
   ): any {
     if (arg instanceof Lunette) {
-      return new Lunette([
-        ...this.entries,
-        {
-          kind: 'mount',
-          entries: arg.entries,
-          seedFn: extra as ((ctx: object) => object) | undefined,
-          public: true,
-          at: undefined,
-        },
-      ])
+      return this.mount(arg.entries, extra as ((ctx: object) => object) | undefined, true)
     }
     return this.sugar(true, arg, extra, destroy)
+  }
+
+  // Shared body of `use`/`expose`'s mount overloads: appends a mount entry
+  // carrying the fragment's entries, the optional seed mapper, and the
+  // visibility the host verb chose (use = private, expose = public).
+  private mount(
+    entries: readonly Entry[],
+    seedFn: ((ctx: object) => object) | undefined,
+    isPublic: boolean,
+  ): Lunette<any, any, any> {
+    return new Lunette([
+      ...this.entries,
+      { kind: 'mount', entries, seedFn, public: isPublic, at: undefined },
+    ])
   }
 
   // Shared body of `provide`/`expose`'s non-mount overloads: same wiring,
@@ -246,34 +252,22 @@ export class Lunette<
     extra: ((ctx: any) => unknown) | ((value: any) => unknown) | undefined,
     destroy: ((value: any) => unknown) | undefined,
   ): Lunette<any, any, any> {
-    if (typeof arg === 'function') {
-      const fn = arg
-      const teardown = extra as ((value: any) => unknown) | undefined
-      const wrapped: Layer<any, any, any> = async (ctx, next) => {
-        const value = await fn(ctx)
-        try {
-          return isPublic
-            ? await next({}, value as Patch)
-            : await next(value as Patch)
-        } finally {
-          if (teardown) await teardown(value)
-        }
-      }
-      return new Lunette([
-        ...this.entries,
-        { kind: 'layer', layer: wrapped, mode: 'extend', public: isPublic, key: undefined },
-      ])
-    }
-    const key = arg
-    const fn = extra as (ctx: any) => unknown
+    const keyed = typeof arg !== 'function'
+    // Function form: `arg` is the worker, `extra` the teardown, no key.
+    // Keyed form: `arg` is the key, `extra` the worker, `destroy` the teardown.
+    const key = keyed ? arg : undefined
+    const fn = (keyed ? extra : arg) as (ctx: any) => unknown
+    const teardown = (keyed ? destroy : extra) as
+      | ((value: any) => unknown)
+      | undefined
     const wrapped: Layer<any, any, any> = async (ctx, next) => {
       const value = await fn(ctx)
+      // Patch shape: the bare value (function form) or { [key]: value }.
+      const patch = (keyed ? { [key!]: value } : value) as Patch
       try {
-        return isPublic
-          ? await next({}, { [key]: value })
-          : await next({ [key]: value })
+        return isPublic ? await next({}, patch) : await next(patch)
       } finally {
-        if (destroy) await destroy(value)
+        if (teardown) await teardown(value)
       }
     }
     return new Lunette([
@@ -336,6 +330,18 @@ export class Lunette<
     subst: ReadonlySet<PropertyKey>,
     scope: Scope<Pub, T>,
   ): Promise<T> {
+    // Shared clash check: keys of `patch` that are already OWN keys of
+    // `ctx` cannot be shallow-merged; each caller supplies its own message.
+    const assertNoClash = (
+      ctx: Bag,
+      patch: Bag,
+      message: (clashes: PropertyKey[]) => string,
+    ): void => {
+      const clashes = Reflect.ownKeys(patch).filter((key) =>
+        Object.hasOwn(ctx, key),
+      )
+      if (clashes.length > 0) throw new Error(message(clashes))
+    }
     // Walks a chain (or a mounted fragment). Every level has its own bag
     // and its own set of public keys; `done` is the continuation: for the
     // top level it is the app scope, for a fragment it is "resume the
@@ -373,14 +379,12 @@ export class Lunette<
             for (const key of childPub) pub[key] = childBag[key]
             const full: Bag = entry.at !== undefined ? { [entry.at]: pub } : pub
             const patch = dropSubstituted(full)
-            const clashes = Reflect.ownKeys(patch).filter((key) =>
-              Object.hasOwn(ctx, key),
-            )
-            if (clashes.length > 0) {
-              throw new Error(
+            assertNoClash(
+              ctx,
+              patch,
+              (clashes) =>
                 `The fragment's public surface collides with host context keys: ${clashes.map(String).join(', ')}.`,
-              )
-            }
+            )
             if (entry.public)
               for (const key of Reflect.ownKeys(full)) publicKeys.add(key)
             return step(i + 1, merge(ctx, patch))
@@ -398,21 +402,18 @@ export class Lunette<
           const full = (
             pub === undefined ? priv : { ...priv, ...pub }
           ) as Bag
-          const keys = Reflect.ownKeys(full)
           const patch = dropSubstituted(full)
           if (entry.mode === 'extend') {
             // hasOwn, not `in`: host keys (on the prototype) may be
             // shadowed, keys of THIS level may not.
-            const clashes = Reflect.ownKeys(patch).filter((key) =>
-              Object.hasOwn(ctx, key),
-            )
-            if (clashes.length > 0) {
-              throw new Error(
+            assertNoClash(
+              ctx,
+              patch,
+              (clashes) =>
                 `Keys already present in the context: ${clashes.map(String).join(', ')}. ` +
-                  'Merging is shallow: use one top-level key per area, ' +
-                  'or override to replace intentionally.',
-              )
-            }
+                'Merging is shallow: use one top-level key per area, ' +
+                'or override to replace intentionally.',
+            )
             // Visibility comes from the SECOND argument: the public subset.
             // The sugar verbs route their public patch there (expose →
             // next({}, patch)); the keyed-skip fast path uses entry.public
@@ -422,6 +423,7 @@ export class Lunette<
           } else {
             // For override `in` is right: a seed key (on the prototype)
             // is legitimately replaceable too.
+            const keys = Reflect.ownKeys(full)
             const unknowns = keys.filter((key) => !(key in ctx))
             if (unknowns.length > 0) {
               throw new Error(
