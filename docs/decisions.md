@@ -222,6 +222,10 @@ own deps) and test without machinery.
 implemented, then removed (one-word `bind` registration made it
 redundant; the direct call `useCase(deps, args)` stays free).
 
+**Updated by 27.** `bind` is now single-arity: `bind(record)` returns the
+binder; applying it ties fixed deps, `.with(window)` ties them per call.
+The bare-leaf shape is untouched — only the registration spelling moved.
+
 ### 14. Errors: returned = domain, thrown = infrastructure
 
 **Decision.** Domain errors are returned as values; infrastructure errors
@@ -267,6 +271,14 @@ already are.
 **Superseded:** the per-call runner `wrap` (implemented, compared side by
 side, removed) and the separate `bindWith` name (merged into `bind` as an
 overload).
+
+**Updated by 27.** The "one unified name, two overloads" packaging is
+reversed now that the family has three forms: the per-call form lives on
+the binder (`bind(record).with(window)`) and `within` is renamed
+`window`. The semantics fixed by tests here are unchanged.
+
+**Updated by 28.** `bindBy` is superseded by `.by` on the binder — and
+the derivation key is no longer one of the leaf's arguments.
 
 ### 16. "Needs a transaction" can live in the type (brand pattern)
 
@@ -389,7 +401,7 @@ question is deliberately deferred to publication.
 bare leaf `(deps, event)`; a subscription is a layer (the onion provides
 unsubscribe); a consumer is a separate chain with a per-call window per
 message; the transactional outbox is a bridge
-(`within(db.transaction, (tx) => ({ db: tx, events: outboxEmitter(tx) }))`).
+(`window(db.transaction, (tx) => ({ db: tx, events: outboxEmitter(tx) }))`).
 Delivery semantics fall out of decision 14 (ack/nack). A dedicated
 `listener` dialect is planned for the engine-swap ergonomics, not for new
 semantics.
@@ -464,3 +476,166 @@ prior art: Effect's `Layer.scoped` + `acquireRelease` and `provide` vs
   argument is the acquire/release **sugar** over that try/finally; the raw
   `use` onion stays the full-control mechanism. It is sugar, not a new
   mechanism.
+
+### 27. `bind` is single-arity: the binder is the unit
+
+**Decision.** `bind(record)` takes the bare leaves and returns **the
+binder** — the record's partial application, a plain function with one
+property (the house shape of `Lazy<T>`). Applying it ties FIXED deps
+(`bind({ requestOtp })(ctx)`); `.with(window)` ties deps PER CALL
+(`bind({ verifyCode }).with(window(db.transaction, bridge))`). The
+binder's parameter is the intersection of every leaf's declared deps; the
+binder is shaped like a provider, so `.expose(bind({ getAuthor }))` wires
+a record point-free, and it is a first-class kit (one record, many
+worlds). `within` is renamed **`window`** — the noun the vocabulary
+already used; the old name stuttered against `.with` in the inline form.
+`bindBy` was initially left unchanged here; decision 28 then absorbed it
+into the binder as `.by`.
+
+**Alternatives.**
+- (a) A curried 1-arity overload NEXT TO the two-arity forms: rejected by
+  the **arity theorem** — while the naked verb has both the curried
+  (1-arity) and the immediate (2-arity) form, "forgot the second
+  argument" stays type-valid in an irreducible case (a deps bag whose
+  values are all functions, or a bound record whose leaves take object
+  first arguments), surfacing late with a misdirected message. That
+  contradicts principle 1.
+- (b) The curried form behind a dot (`bind.later(record)`), two-arity
+  forms untouched: safe, zero breakage, but taxes the hot path with the
+  longer name.
+- (c) Naked curried + naked immediate, window moved to a dot
+  (`bind.with(window, record)`): the best ergonomics, but keeps the arity
+  hole of (a) — rejected on principle 1.
+- (d) A separate helper (`leaves`/`bound`/`wired`, proved userland-viable
+  in `research/module-shapes/`): a new verb to teach what `bind` already
+  means.
+- Naming: `.with` kept for the per-call property (Python's `with`
+  statement, Effect's `with*` combinators, the HOF `withX` convention; the
+  JS "copy-with-changes" `.with` lives on instances, not verbs). The
+  stutter was `within`'s fault, so the HELPER was renamed, not the
+  property; `bind.per` / `bind.via` were the runners-up. `window` shadows
+  the DOM global — accepted: composition roots are server code.
+
+**Why.** One arity, one meaning, NO dispatch — the terminal point of the
+until-now implicit principle "dispatch by KIND of the first argument,
+never by arity or shape" (PropertyKey vs function vs chain vs plain
+object everywhere else in the API; a record and a deps bag are the same
+kind, so no naked two-form spelling can be made safe). And the
+binder-as-provider click: bind's deferred form and the verbs' patch form
+compose with zero new concepts, which is what lets a fluent module read
+as one statement per wiring step. The migration was paid pre-publication
+(no external consumers; decision 24).
+
+**Consequences.**
+- The dot marks the CADENCE: an applied binder is the value cadence
+  (sync passthrough); `.with` and `bindBy` are per-invocation (always
+  `Promise`, fresh window per call). Grepping `.with(` approximates the
+  map of the codebase's transactional boundaries.
+- Requirement errors carry AGGREGATE blame: the missing keys are named at
+  the application, but not which leaf wants them (the old two-arity form
+  blamed the entry). Accepted trade.
+- Forgetting to APPLY the binder is kind-visible (spreading a binder
+  contributes no leaves, so the Pub never lies) but surfaces where the
+  record is demanded, not at the spread.
+- The window-Deps inference crutch (the intersection giving TS a second
+  source) is no longer needed: `.with`'s parameter is fully determined by
+  the record, so inline bridges get contextual typing.
+
+### 28. `.by` on the binder: the derivation key is not a leaf argument
+
+**Decision.** `bind(record).by(toWindow)` covers windows DERIVED per call
+(per-tenant connection, idempotency guard, shard): every bound leaf gains
+ONE leading KEY argument — `monthly('acme', period)` — the binder passes
+it to `toWindow(key)`, opens the derived window, and calls the leaf with
+its OWN arguments only. The leaf never sees the key: the key is wiring
+(WHICH world to open), not domain. When the domain needs it (the id in
+the query), the bridge closes over the key and hands it in through the
+deps (`(tenant) => window(opener(tenant), (conn) => ({ conn, tenant }))`).
+The key is a single parameter by design — a composite key is one object —
+so the runtime split is positional (first argument), with no
+`Function.length` inspection. `.with(w)` remains the degenerate fixed
+case (`.by` with a derivation that ignores the key).
+
+**Alternatives.**
+- (a) The old standalone `bindBy(toWindow, leaf)` (superseded):
+  `toWindow` mirrored the leaf's FULL argument list and the leaf received
+  the key too. That polluted the domain signature with a wiring concern
+  (a composite would thread the tenant through every call), and it forced
+  single-leaf — a record was untypeable, because one `toWindow` cannot
+  mirror heterogeneous argument lists.
+- (b) Variadic keys (bound args `[...Keys, ...Args]`): the runtime split
+  would need `toWindow.length` — a silent footgun with default and rest
+  parameters. One key, positional, explicit.
+- (c) A curried bound form (`monthly('acme')('2026-06')`): split-free and
+  more general, but a double call at every route call site.
+- (d) A single-leaf binder (`bind(leaf)`, no braces): rejected. A
+  function's NAME does not exist in the type system (`fn.name` is
+  runtime-only), so `bind(leaf)` alone cannot produce a typed `{ leaf: … }`
+  record — and the name is load-bearing (it is the Pub key the routes
+  call). The keyed verbs COULD lend the name
+  (`.expose('composeComment', bind(composeComment))` would type), but
+  that spelling writes the name twice (string + identifier) and the two
+  can drift silently: renaming the leaf updates the identifier, never the
+  string, and the Pub keeps publishing the old key with no error —
+  against principle 1. The shorthand record `{ leaf }` writes the name
+  once, is refactor-safe (a rename breaks/updates the shorthand), and
+  scales to plural, aliases and spreads. Division of labour: key literals
+  name VALUES and namespaces (which have no name of their own); record
+  braces name LEAVES (whose identifier already is the name). Separating
+  the key from the leaf's arguments is also what made the RECORD form
+  typeable for `.by`, so no second entry form exists.
+
+**Why.** Taking the key out of the leaf's signature is what unlocked
+everything: leaves stay pure domain (`report(deps, period)`; use-case
+files keep ZERO wire imports; composites compose without threading
+tenancy), and `bindBy`'s single-leaf limitation dissolves. Prior art for
+the shape: cats-effect `Resource.use` / Haskell `managed` built from the
+call's input, Rails `Apartment::Tenant.switch`, Autofac.Multitenant
+(scope keyed by tenant id). The mainstream alternative puts the key in an
+ambient channel (Spring `AbstractRoutingDataSource` + ThreadLocal,
+Hibernate tenant resolvers, AsyncLocalStorage tenancy) — rejected by
+principle 7: the arguments are the only per-call channel the design
+admits, typed and visible.
+
+**Superseded:** the standalone `bindBy` export — implemented with
+key-mirrors-args semantics, replaced before any real usage existed.
+
+### 29. Conditional providers are ternaries, not combinators
+
+**Decision.** A feature-flagged resource is a plain conditional at its
+keyed birth — `provide('transport', ({ env }) => env.MAILER_API_KEY ?
+httpTransport(env.MAILER_API_KEY) : loggingTransport())` — and wire adds
+no conditional vocabulary around it. PLACEMENT is part of the decision:
+the conditional lives at the COMPOSITION ROOT, never inside the port's
+module — adapters are one file each behind the port type, and the port
+module knows no implementations (choosing implementations is the root's
+job; the port/adapter split separates the three rates of change: port ≪
+adapters ≪ policy). Growth path, still combinator-free: at the third
+implementation the selection becomes DATA — a discriminated provider
+union parsed in the env plus an exhaustive record
+(`satisfies Record<Provider, (env: Env) => Transport>`): adding an
+adapter is a file, a union member and a record line, and the checker
+lists every touchpoint. When the choice is per-DEPLOYMENT rather than
+per-flag, it leaves the code entirely: the chain requires the transport
+and each entry point seeds its own (decision 7).
+
+**Alternatives.** Hono-style combinators (`some`/`every`/`except` from
+`hono/combine`) were considered. They are the right call THERE because
+Hono middleware are opaque units composed by the engine: conditionality
+must be the composer's vocabulary. A wire provider is a plain function
+returning a value, so the language's own control flow works inside it —
+with a decisive typing bonus the helper would lose: the ternary NARROWS
+the flag (`env.MAILER_API_KEY` is `string` in the true branch, no `!`).
+Any `when(pred, then, else)` either degrades to non-null assertions or
+becomes a generic Option fold — FP vocabulary, not wire's. The one
+transferable semantic, `some()` as try-the-real-fall-back-to-the-fake,
+is an ANTI-pattern at resource birth: silent infrastructure degradation
+(prod logging mails to the console because the provider was down at
+boot). Resources fail loud at boot.
+
+**Why.** The absence of combinators is not a gap — it is the design's
+founding bet paying off: providers are plain functions precisely so that
+plain JavaScript is the composition language (principle 7, decision 9).
+Open question, evidence-gated: boot OBSERVABILITY of flag choices
+("booted with logging transport") — a diagnostics convention, not a
+combinator; revisit with the real bootstrap.

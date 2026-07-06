@@ -12,7 +12,10 @@ the `errore` library (errors as values) applied to DI.
   packages/wire         @lntt/wire   the core (runtime + type tests)
   packages/http         @lntt/http   http dialects ("." agnostic, "./hono", "./express")
   packages/{cli,listener,flow}       "planned" scaffolds, design to be discussed
-  research/             live research prototypes (prior art, not products)
+  research/             live research prototypes (prior art, not products) —
+                        PoC code proving out @lntt/wire's behaviour and DX,
+                        OUT OF SCOPE for code review (correctness/security/
+                        style); only whether it demonstrates its point matters
 ../playground/          the original design lab (in Italian) —
                         DESTINED FOR DELETION (TODO story 13): its value has
                         already been brought inside; never cite it in packages
@@ -55,9 +58,10 @@ the `errore` library (errors as values) applied to DI.
   test names, runtime error messages, READMEs) and must contain no
   references to the playground or to the design's history. Conversation
   with the owner stays in Italian.
-- **Vocabulary**: chain · layer · bare/bound leaf · window · opener
-  (within arg 1) · bridge (within arg 2) · bag · guard · seed · fragment ·
-  dialect.
+- **Vocabulary**: chain · layer · bare/bound leaf · binder (`bind(record)`,
+  apply = fixed deps, `.with` = per call, `.by` = per call keyed) · window
+  · opener (window arg 1) · bridge (window arg 2) · bag · guard · seed ·
+  fragment · dialect.
 - **Tests**: vitest with typecheck (`*.test-d.ts` included via the
   `typecheck` block in each `vitest.config.ts`; `pnpm typecheck` runs
   `tsc --noEmit` and is the separate gate). Always verify by running:
@@ -72,13 +76,19 @@ the `errore` library (errors as values) applied to DI.
   sparring and wants to understand deeply), implement ONLY on an explicit
   go. Present alternatives as choices, never decide silently. API renames
   and additions are proposed in chat before touching files.
+- **Code review scope**: `research/**` is excluded — it's a PoC proving
+  ground, not shipped product. Findings there (bugs, security gaps, style)
+  are not actionable; the only thing worth checking is whether the
+  prototype demonstrates what it set out to. Scope `/review` and
+  `/code-review` to `packages/`, `docs/`, and root config.
 
 ## Status and next steps
 
-Open work lives in **`TODO.md`** (monorepo root), written as stories with
-the full reasoning — start there. At the top: rewriting the real
-bootstrap (the proving ground for everything). Extended pattern
-documentation lives in **`docs/`**.
+Open work lives in **GitHub issues** (label `roadmap`), each story
+carrying its full reasoning — start there:
+<https://github.com/LunetteOrg/lunette/issues>. The lead item is rewriting
+the real bootstrap (the proving ground for everything, issue #1). Extended
+pattern documentation lives in **`docs/`**.
 
 The decision record (discarded alternatives and why) is
 **`docs/decisions.md`** — consult it BEFORE proposing API changes: many

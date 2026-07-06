@@ -12,6 +12,10 @@ state the rules; these documents show them at full length.
 
 ## Patterns
 
+- [Feature modules](./patterns/feature-modules.md) — a chain of exposes
+  instead of one returned object: type-checked composition order,
+  per-step visibility, and two roads to point-free binding (ctx-aligned
+  leaves, or a vocabulary step that adapts the ctx to the leaves).
 - [Singletons and vertical chains](./patterns/singletons-and-verticals.md) —
   who owns shared infrastructure when an app splits into feature blocks,
   in one process or across many.
@@ -19,6 +23,6 @@ state the rules; these documents show them at full length.
   handlers as leaves, subscriptions as layers, the transactional outbox
   as a bridge, ack/nack from the error convention.
 
-Planned (see [TODO.md](../TODO.md)): a windows deep-dive (0/1/N
-semantics, retry/breaker composition), the testing cookbook, a migration
-guide from a hand-written composition root.
+Planned (tracked in the GitHub issues): a windows deep-dive (0/1/N
+semantics, retry/breaker composition), the testing manual (issue #22),
+a migration guide from a hand-written composition root.

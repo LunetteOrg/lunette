@@ -25,7 +25,7 @@ export const posts = lunette<{ db: Db }>()
 // verticals/auth.ts — same shape
 export const auth = lunette<{ db: Db }>()
   .provide('repos', ({ db }) => makeAuthRepos(db))
-  .expose('auth', (ctx) => bind(ctx.repos, { requestOtp, verifyOtp }))
+  .expose('auth', (ctx) => bind({ requestOtp, verifyOtp })(ctx.repos))
 
 // bootstrap — the ONLY place where the db exists
 const chain = lunette<{ env: Env }>()

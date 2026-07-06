@@ -28,9 +28,8 @@
 // substitutable keys are the chain's Ctx keys: privates of mounted
 // fragments stay encapsulated (test the fragment to test those).
 
-import { Lunette } from './index.ts'
-
-type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never
+import { Lunette } from './chain.ts'
+import type { Expand, Scope } from './chain.ts'
 
 export const test = <
   Ctx extends object,
@@ -41,7 +40,7 @@ export const test = <
 ) => ({
   run: <T>(
     input: Seed & Partial<Expand<Ctx>>,
-    scope: (app: Expand<Pub>) => T | Promise<T>,
+    scope: Scope<Pub, T>,
   ): Promise<T> => Lunette.testRun(chain, input, scope),
 })
 
