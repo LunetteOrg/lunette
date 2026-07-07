@@ -3,6 +3,19 @@
 
 type Patch = object
 
+// A BRAND is a phantom property keyed by a private unique symbol: it
+// exists only in the types (`declare const` emits nothing), and since
+// the symbol is not exported, no code outside this module can name it —
+// let alone write it. TypeScript's typing is structural; a brand is the
+// standard trick to carve a nominal island in it. This file uses the
+// trick in two distinct roles:
+//   1. the OPAQUE TOKEN (providedBrand, here): a type nobody can
+//      construct by hand, so the only way to produce a Provided is to
+//      call `next` — forgetting `next` is a compile error, not a
+//      silently broken chain;
+//   2. the GUARDS (`collision`/`requirement` below): a deliberately
+//      unsatisfiable demand whose string VALUE is the error message —
+//      see "How a guard brand works" below.
 declare const providedBrand: unique symbol
 
 // The token carries TWO axes: All (everything the layer contributes, → Ctx)
@@ -43,49 +56,366 @@ export type ValueLayer<Ctx extends object, V> = (
 const doneToken = {} as Provided<any>
 
 // Patch keys already present in the context. If this is not never, the
-// shallow merge would betray the intersection type: the chain stops here.
-type Clash<Ctx, P> = Extract<keyof P, keyof Ctx>
+// shallow merge would betray the intersection type: the check must fail.
+export type Clash<Ctx, P> = Extract<keyof P, keyof Ctx>
 
-// Shared guard shape: a passing check yields the Result; a failing one
-// yields a single-key error object naming the offending payload.
-type Assert<Cond extends boolean, Message extends string, Payload, Result> =
-  Cond extends true ? Result : Record<Message, Payload>
+// How a guard brand works. TypeScript has no custom type errors
+// (decisions §4, "Horizon"), so the guards STAGE one: every guarded
+// argument is intersected with a conditional brand —
+//
+//   provide<P>(fn: (ctx) => P & CollisionBrand<Ctx, P>)
+//
+// which resolves one of two ways:
+//   - no collision → `unknown`, and `P & unknown = P`: the brand
+//     vanishes and the signature reads as if it were not there (the
+//     happy path pays nothing);
+//   - collision → `{ [collision]: '⛔ key already present …: db' }`:
+//     tsc now demands a property only this module can name, so the
+//     argument can never satisfy it — THAT argument on THAT line is
+//     rejected, and the diagnostic prints the missing property with its
+//     string-literal value: the message, offending key included.
+// The diagnostic therefore lives on the verb's ARGUMENT, not on its
+// return type (decision in discussion #21; the evidence record is
+// test/chain/collision-guard-dx.test-d.ts): the exact line goes red and
+// the chain keeps typing downstream — no TS7006 cascade. The message
+// rides a string-literal VALUE under the symbol key: emoji in property
+// NAMES print as \u escapes in diagnostics, emoji in values print raw.
+// The accepted trade: past the red line the accumulated Ctx is
+// transiently wrong (an intersection the runtime would never produce),
+// but the build stays red at the collision, so no green program ever
+// lies.
+// A key's name inside a message: strings verbatim; a symbol has no
+// type-level name (`${symbol}` does not exist), so it is labelled — tsc
+// still names its binding (`typeof theSym`) on the argument side of the
+// same diagnostic, and the runtime nets always String() it.
+type KeyLabel<K extends PropertyKey> = K extends string | number
+  ? `${K}`
+  : '(symbol key)'
 
-type KeyGuard<Check, Message extends string, Result> = Assert<
-  [Check] extends [never] ? true : false,
-  Message,
-  Check,
-  Result
+// The message types are exported for the contract tests only (they are
+// not re-exported by index.ts): the tests assert the exact text, and an
+// import cannot drift the way a hand-written copy can.
+export type DupKeyMsg<K extends PropertyKey> =
+  `⛔ key already present in the context: ${KeyLabel<K>}`
+
+// Numeric keys are rejected outright: the runtime coerces them to their
+// string twin ({ 42: x } owns the key "42"), while the type system keeps
+// 42 and "42" distinct — a green program could throw. Strings name,
+// symbols give identity, numbers are not keys.
+export type NumKeyMsg<K extends number> =
+  `⛔ numeric key not supported (it becomes a string at runtime): ${K}`
+
+export type NumKeys<P> = Extract<keyof P, number>
+
+// The brand properties are unexported unique symbols (same idiom as
+// providedBrand): a string-keyed brand could be satisfied — deliberately,
+// by writing the exact message into the patch, or accidentally disturbed
+// by a domain key with the same name. A symbol nobody can name is
+// unforgeable short of a cast, and can never collide with user keys.
+// Diagnostics print it as '[collision]' / '[requirement]'.
+declare const collision: unique symbol
+declare const requirement: unique symbol
+
+// `any` disables the guard's reasoning: `keyof any` is every key, so
+// without a dedicated branch `Extract` would flag EVERY key as "already
+// present" — red for the wrong reason, a message asserting a falsehood.
+// A guard that cannot check must say so: an any CONTEXT is refused by
+// name. The degradation points themselves cannot go red on their own
+// line — `any` absorbs every brand (`any & Brand = any`) — but an any
+// PATCH turns the context to any and the next wiring line lands here,
+// honestly. (An any KEY instead mints an index-signature context, which
+// stays consistent with what the phantom type claims — the recorded
+// residual in decisions §4; the runtime nets are the floor.)
+// Two-stage detection. The canonical `0 extends 1 & T` idiom goes blind
+// when T is a CONSTRAINED class type parameter instantiated with any
+// (the constraint absorbs the intersection during member
+// instantiation), while re-inferring T through a tuple restores the
+// naked any — but costs more. So the cheap `keyof` test runs first as a
+// pre-filter (only `any` or a context indexed by ALL THREE key kinds
+// claims every PropertyKey, and the guards compute `keyof Ctx` anyway),
+// and the exact tuple-infer confirm runs only when it fires — which is
+// almost never. Without the confirm stage, a fully-indexed CONCRETE
+// context (constructible from the public API: `lunette<Record<string,…>
+// & Record<number,…> & Record<symbol,…>>()`) would be blamed as
+// "degraded to any" — a lie; with it, that context gets the structural
+// verdict its index signatures actually claim. Stays deferred for a
+// still-generic T, so the decision-31 refusal is untouched.
+type IsAny<T> = [string | number | symbol] extends [keyof T]
+  ? 0 extends 1 & ([T] extends [infer U] ? U : never)
+    ? true
+    : false
+  : false
+
+// never is the other degenerate: `keyof never` is ALSO every key, so the
+// keyof-based IsAny would blame a never context as "degraded to any" —
+// factually wrong, and reachable without a cast: `provide(() => { throw
+// new Error('todo') })` (a stub) infers a never patch, green at its own
+// line (never absorbs the brand DOWNWARD, symmetric to any absorbing it
+// upward), and collapses the context to never. The never check must
+// therefore run BEFORE the any check.
+type IsNever<T> = [T] extends [never] ? true : false
+
+export type AnyCtxMsg =
+  '⛔ context degraded to any: the guard cannot check keys — restore a real type'
+
+export type NeverCtxMsg =
+  '⛔ context collapsed to never: an upstream provider returns never — give it a real return type'
+
+// Only override can print these two: its guard sits on the RETURN type,
+// so a degenerate PATCH (any or never) is refusable at its own line —
+// the sibling brands sit on the argument, where any absorbs the brand
+// upward and never absorbs it downward, so honesty must wait for the
+// next wiring line to see the degraded context.
+export type AnyPatchMsg =
+  '⛔ patch degraded to any: the guard cannot check keys — restore a real type'
+
+export type NeverPatchMsg =
+  '⛔ patch type is never: the function never returns — give it a real return type'
+
+export type AnySeedMsg =
+  '⛔ fragment seed degraded to any: the guard cannot check requirements — restore a real type'
+
+export type NeverSeedMsg =
+  '⛔ fragment seed collapsed to never — give it a real type'
+
+// The never→any cascade every guard runs before its real work: never
+// first (the keyof-based any-detection would swallow it), then any,
+// then the guard's own verdict. Shared so the branch ORDER cannot drift
+// between guards.
+type DegeneracyOr<T, OnNever, OnAny, Then> = IsNever<T> extends true
+  ? OnNever
+  : IsAny<T> extends true
+    ? OnAny
+    : Then
+
+// The tuple-wrap that judges a key set as a SET: one bad member is a
+// verdict. A naked conditional would distribute over a union input and
+// let a clean member collapse the whole verdict — the one idiom the two
+// verdict shapes below must never drift apart on, so it lives once.
+type WhenClean<Bad extends PropertyKey, Ok, Fail> = [Bad] extends [never]
+  ? Ok
+  : Fail
+
+// The verdict every collision guard reduces to: a set of banned numeric
+// keys, a set of colliding keys, both reporting TOGETHER as a union of
+// messages (a side with no offender interpolates never and vanishes).
+// Each key set is computed ONCE by the caller and passed in.
+type CollisionVerdict<Num extends number, Dup extends PropertyKey> = WhenClean<
+  Num | Dup,
+  unknown,
+  { [collision]: NumKeyMsg<Num> | DupKeyMsg<Dup> }
 >
 
-type Guard<Ctx, P, Result> = KeyGuard<
-  Clash<Ctx, P>,
-  '⛔ keys already present in the context',
-  Result
+// Keyed form: the brand rejects the key argument itself.
+type KeyBrand<Ctx, K extends PropertyKey> = DegeneracyOr<
+  Ctx,
+  { [collision]: NeverCtxMsg },
+  { [collision]: AnyCtxMsg },
+  CollisionVerdict<Extract<K, number>, Extract<K, keyof Ctx>>
+>
+
+// Patch form, two variants by WHERE the brand lands. In provide/expose
+// it rides the patch VALUE itself: a degenerate P absorbs it (any
+// upward, never downward), so a P-branch would be dead type code on the
+// hottest verbs — honesty waits for the next wiring line, as pinned in
+// the contract.
+export type WidenedPatchMsg =
+  '⛔ patch carries no nameable keys: mount the dynamic bag under a literal key'
+
+// A TOP-LEVEL patch with keys but no NAMEABLE ones (an index-signature
+// or key-pattern annotation — Record<string, …>) has no legitimate
+// form: it would drop the collision check to boot, lie on absent reads,
+// and poison keyof Ctx so every LATER literal provide reads "already
+// present" — failing at the wrong line with the wrong message. Refused
+// at its own line instead, with the cure in the text: mount the bag
+// under ONE literal key, where the index signature lives inside the
+// VALUE and the guard stays active for siblings (decision 32). The
+// EMPTY patch is not widened (keyof never): it flows. Judged
+// member-wise over a union, like every key set.
+type HasNoNames<P> = P extends unknown
+  ? [keyof P] extends [never]
+    ? false
+    : [LiteralOnly<keyof P>] extends [never]
+      ? true
+      : false
+  : never
+
+// The verdict expression both patch brands share — one definition, so a
+// change to the key sets reaches both. The key sets DISTRIBUTE over a
+// union-typed patch (reachable via an explicit `provide<A | B>(…)` type
+// argument; annotated union returns are already refused by inference):
+// `keyof` over a union keeps only the SHARED keys, so an undistributed
+// set would let a colliding or numeric member through silently. Same
+// convention as union seeds (UnmetSeedOf) and union keys (the
+// tuple-wrapped verdict).
+type ClashOf<Ctx, P> = P extends unknown ? Clash<Ctx, P> : never
+type NumKeysOf<P> = P extends unknown ? NumKeys<P> : never
+
+type PatchVerdict<Ctx, P> = true extends HasNoNames<P>
+  ? { [collision]: WidenedPatchMsg }
+  : CollisionVerdict<NumKeysOf<P>, ClashOf<Ctx, P>>
+
+type AbsorbableCollisionBrand<Ctx, P> = DegeneracyOr<
+  Ctx,
+  { [collision]: NeverCtxMsg },
+  { [collision]: AnyCtxMsg },
+  PatchVerdict<Ctx, P>
+>
+
+// In use(layer) and the mount overloads the brand intersects a
+// FUNCTION/CHAIN value, which is not degenerate even when its
+// contribution is — the brand STICKS. Without the P-side branch it
+// would fire with the verdict's artifacts (`NumKeys<any>` is `number` →
+// 'numeric ${number}') instead of the real cause; here the branch is
+// reachable and must be honest.
+export type CollisionBrand<Ctx, P> = DegeneracyOr<
+  Ctx,
+  { [collision]: NeverCtxMsg },
+  { [collision]: AnyCtxMsg },
+  DegeneracyOr<
+    P,
+    { [collision]: NeverPatchMsg },
+    { [collision]: AnyPatchMsg },
+    PatchVerdict<Ctx, P>
+  >
+>
+
+// Mount without a mapper: the host's Ctx must satisfy the fragment's
+// Seed. The gate is the whole-object check; the message names the unmet
+// keys — missing entirely (if required), or present with an
+// incompatible type (a bare key difference would name nothing in the
+// wrong-type case). `-?` de-homomorphizes the mapping: without it an
+// optional seed key kept its `?` and indexing added a phantom
+// `undefined` to the union, which KeyLabel printed as '(symbol key)'.
+// An ABSENT optional key is not unmet (`{} extends Pick<FSeed, K>`
+// spots the optionality) — the gate already accepts that case; the
+// message must not contradict it. Exported for the contract tests only
+// (not re-exported by index.ts).
+export type UnmetSeed<Ctx, FSeed> = {
+  [K in keyof FSeed]-?: K extends keyof Ctx
+    ? Ctx[K] extends FSeed[K]
+      ? never
+      : K
+    : {} extends Pick<FSeed, K>
+      ? never
+      : K
+}[keyof FSeed]
+
+// A UNION Seed means "any ONE of these alternatives": the gate accepts
+// a host satisfying either member, and the unmet-key message must
+// DISTRIBUTE over the members — `keyof` over a union keeps only the
+// shared keys, so an undistributed UnmetSeed collapses to never and the
+// message falls back to the nameless generic, naming nothing. Exported
+// for the contract tests only.
+export type UnmetSeedOf<Ctx, FSeed> = FSeed extends unknown
+  ? UnmetSeed<Ctx, FSeed>
+  : never
+
+// An any seed makes `[Ctx] extends [FSeed]` trivially true: without the
+// degeneracy gate a fragment's real requirements go entirely UNCHECKED
+// — a silent pass, not a wrong message (decisions §4). The fragment
+// chain value is not any even when its Seed parameter is, so the brand
+// sticks and can refuse by name.
+// INVARIANT: this brand checks FSeed's degeneracy only — a degenerate
+// HOST context is CollisionBrand's job, and every overload that carries
+// RequirementBrand also carries CollisionBrand<Ctx, FPub> (pinned:
+// "mount is covered through the collision side"). A future overload
+// using RequirementBrand alone must add the Ctx cascade itself.
+export type RequirementBrand<Ctx, FSeed> = DegeneracyOr<
+  FSeed,
+  { [requirement]: NeverSeedMsg },
+  { [requirement]: AnySeedMsg },
+  [Ctx] extends [FSeed]
+    ? unknown
+    : {
+        [requirement]: [UnmetSeedOf<Ctx, FSeed>] extends [never]
+          ? '⛔ fragment requirements not satisfied'
+          : `⛔ fragment requirement not satisfied: ${KeyLabel<UnmetSeedOf<Ctx, FSeed>>}`
+      }
+>
+
+// The mapper doors to the same hole. A seed mapper returning any
+// satisfies FSeed by plain assignability, so no gate would see it — a
+// JSON.parse(...) mapper could mount a fragment with its requirements
+// unchecked: S captures the mapper's INFERRED return; the brand
+// intersects the mapper's function value (not any — the RETURN is), so
+// it sticks and refuses by name. The mapper overloads' CHAIN argument
+// carries SeedBrand<FSeed> for the symmetric door: with a degenerate
+// DECLARED seed, `S extends FSeed` is vacuous and a clean mapper would
+// smuggle the fragment in unchecked.
+type SeedBrand<S> = DegeneracyOr<
+  S,
+  { [requirement]: NeverSeedMsg },
+  { [requirement]: AnySeedMsg },
+  unknown
 >
 
 // Mirror guard for override: only keys that already exist can be
-// replaced (a typo in the name does not go unnoticed).
-type UnknownKeys<Ctx, P> = Exclude<keyof P, keyof Ctx>
+// replaced (a typo in the name does not go unnoticed), and the numeric
+// ban holds here too — a numeric slot can only pre-exist via a declared
+// Seed or a cast (decision 30's residual), and re-typing a slot whose
+// identity already lies is refused. Same verdict shape as the collision
+// guards (both kinds report as one union, never vanishes), but this one
+// still lives on the RETURN type — moving it onto the argument is a
+// separate decision (#25 scopes the argument-side move to the collision
+// guard) — and its brand is the plain ASCII key 'override'.
+// A WIDENED patch annotation (an index signature or key pattern —
+// Record<string, …>, Record<symbol, …>, Record<`data-${string}`, …>)
+// carries no nameable keys: Exclude does not reduce them away, so
+// without this filter a literal check would read every
+// actually-existing key as "missing" — a false positive. Widened types
+// are the runtime net's territory (decisions §4): the filter drops
+// them MEMBER-WISE — `{}` extends `Record<K, 1>` exactly when K is
+// satisfiable by omission (an index signature / pattern), while
+// literals, numbers and unique symbols demand their property and stay.
+type LiteralOnly<K extends PropertyKey> = K extends unknown
+  ? {} extends Record<K, 1>
+    ? never
+    : K
+  : never
 
-type OverrideGuard<Ctx, P, Result> = KeyGuard<
-  UnknownKeys<Ctx, P>,
-  '⛔ overriding keys missing from the context',
-  Result
+type UnknownKeys<Ctx, P> = LiteralOnly<Exclude<keyof P, keyof Ctx>>
+
+type UnknownKeysOf<Ctx, P> = P extends unknown ? UnknownKeys<Ctx, P> : never
+
+export type MissingKeyMsg<K extends PropertyKey> =
+  `⛔ overriding key missing from the context: ${KeyLabel<K>}`
+
+type OverrideVerdict<
+  Num extends number,
+  Missing extends PropertyKey,
+  Result,
+> = WhenClean<
+  Num | Missing,
+  Result,
+  { override: NumKeyMsg<Num> | MissingKeyMsg<Missing> }
+>
+
+// Override cannot run blind either. A degenerate CONTEXT (never from a
+// throw-only stub upstream, any from an untyped seed) makes "only
+// existing keys" unknowable; a degenerate PATCH falling through to the
+// verdict would report the degraded input's artifacts as real findings
+// ('numeric ${number}' | 'missing ${string}' — factually wrong on both
+// counts). This guard's return position can refuse ALL FOUR at the
+// offending line (no brand to absorb); the context wins the blame when
+// both sides are degenerate, since it degraded first.
+type OverrideGuard<Ctx, P, Result> = DegeneracyOr<
+  Ctx,
+  { override: NeverCtxMsg },
+  { override: AnyCtxMsg },
+  DegeneracyOr<
+    P,
+    { override: NeverPatchMsg },
+    { override: AnyPatchMsg },
+    // key sets distributed over a union-typed patch, like PatchVerdict
+    OverrideVerdict<NumKeysOf<P>, UnknownKeysOf<Ctx, P>, Result>
+  >
 >
 
 // After an override the replaced keys keep their visibility: the ones
 // that were public stay in Pub, with the new type.
 type OverriddenPub<Pub, P> = Omit<Pub, keyof P> &
   Pick<P, Extract<keyof P, keyof Pub>>
-
-// Mount without a mapper: the host's Ctx must satisfy the fragment's Seed.
-type MountGuard<Ctx, FSeed, Result> = Assert<
-  [Ctx] extends [FSeed] ? true : false,
-  '⛔ fragment requirements not satisfied',
-  Pick<FSeed, Exclude<keyof FSeed, keyof Ctx>>,
-  Result
->
 
 type Entry =
   | {
@@ -128,7 +458,9 @@ type BuildArgs<Seed extends object> = SeedArgs<Seed, []>
 
 // PropertyKey: context keys may also be Symbols — identity-based
 // uniqueness for those who want it; the engine treats them like strings
-// (guards, expose and mount included).
+// (guards, expose and mount included). Numeric keys are rejected at the
+// type level (see NumKeyMsg); the runtime nets still catch whatever
+// slips in through casts or numeric-keyed seeds.
 type Bag = Record<PropertyKey, unknown>
 
 // Adapts the keyed form (next receives the value) to the patch machinery.
@@ -163,19 +495,28 @@ export class Lunette<
   }
 
   use<All extends Patch, P extends Patch>(
-    layer: Layer<Expand<Ctx>, All, P>,
-  ): Guard<Ctx, All, Lunette<Ctx & All, Pub & P, Seed>>
+    layer: Layer<Expand<Ctx>, All, P> & CollisionBrand<Ctx, All>,
+  ): Lunette<Ctx & All, Pub & P, Seed>
   use<K extends PropertyKey, V>(
-    key: K,
+    key: K & KeyBrand<Ctx, K>,
     l: ValueLayer<Expand<Ctx>, V>,
-  ): Guard<Ctx, Record<K, V>, Lunette<Ctx & Record<K, V>, Pub, Seed>>
+  ): Lunette<Ctx & Record<K, V>, Pub, Seed>
   use<FCtx extends object, FPub extends object, FSeed extends object>(
-    chain: Lunette<FCtx, FPub, FSeed>,
-  ): MountGuard<Ctx, FSeed, Guard<Ctx, FPub, Lunette<Ctx & FPub, Pub, Seed>>>
-  use<FCtx extends object, FPub extends object, FSeed extends object>(
-    chain: Lunette<FCtx, FPub, FSeed>,
-    seed: (ctx: Expand<Ctx>) => FSeed,
-  ): Guard<Ctx, FPub, Lunette<Ctx & FPub, Pub, Seed>>
+    chain: Lunette<FCtx, FPub, FSeed> &
+      RequirementBrand<Ctx, FSeed> &
+      CollisionBrand<Ctx, FPub>,
+  ): Lunette<Ctx & FPub, Pub, Seed>
+  use<
+    FCtx extends object,
+    FPub extends object,
+    FSeed extends object,
+    S extends FSeed,
+  >(
+    chain: Lunette<FCtx, FPub, FSeed> &
+      CollisionBrand<Ctx, FPub> &
+      SeedBrand<FSeed>,
+    seed: ((ctx: Expand<Ctx>) => S) & SeedBrand<S>,
+  ): Lunette<Ctx & FPub, Pub, Seed>
   use(
     arg: Layer<any, any> | Lunette<any, any, any> | PropertyKey,
     extra?: ((ctx: any) => object) | ValueLayer<any, any>,
@@ -199,14 +540,16 @@ export class Lunette<
   // teardown as the trailing argument (patch form receives the patch, keyed
   // form receives the value).
   provide<P extends Patch>(
-    fn: (ctx: Expand<Ctx>) => P | Promise<P>,
+    fn: (
+      ctx: Expand<Ctx>,
+    ) => (P & AbsorbableCollisionBrand<Ctx, P>) | Promise<P & AbsorbableCollisionBrand<Ctx, P>>,
     destroy?: (value: P) => void | Promise<void>,
-  ): Guard<Ctx, P, Lunette<Ctx & P, Pub, Seed>>
+  ): Lunette<Ctx & P, Pub, Seed>
   provide<K extends PropertyKey, V>(
-    key: K,
+    key: K & KeyBrand<Ctx, K>,
     fn: (ctx: Expand<Ctx>) => V | Promise<V>,
     destroy?: (value: V) => void | Promise<void>,
-  ): Guard<Ctx, Record<K, V>, Lunette<Ctx & Record<K, V>, Pub, Seed>>
+  ): Lunette<Ctx & Record<K, V>, Pub, Seed>
   provide(
     arg: ((ctx: any) => unknown) | PropertyKey,
     extra?: ((ctx: any) => unknown) | ((value: any) => unknown),
@@ -219,21 +562,32 @@ export class Lunette<
   // teardown (same shape as `provide`). Also accepts a CHAIN to mount its
   // whole Pub publicly.
   expose<P extends Patch>(
-    fn: (ctx: Expand<Ctx>) => P | Promise<P>,
+    fn: (
+      ctx: Expand<Ctx>,
+    ) => (P & AbsorbableCollisionBrand<Ctx, P>) | Promise<P & AbsorbableCollisionBrand<Ctx, P>>,
     destroy?: (value: P) => void | Promise<void>,
-  ): Guard<Ctx, P, Lunette<Ctx & P, Pub & P, Seed>>
+  ): Lunette<Ctx & P, Pub & P, Seed>
   expose<K extends PropertyKey, V>(
-    key: K,
+    key: K & KeyBrand<Ctx, K>,
     fn: (ctx: Expand<Ctx>) => V | Promise<V>,
     destroy?: (value: V) => void | Promise<void>,
-  ): Guard<Ctx, Record<K, V>, Lunette<Ctx & Record<K, V>, Pub & Record<K, V>, Seed>>
+  ): Lunette<Ctx & Record<K, V>, Pub & Record<K, V>, Seed>
   expose<FCtx extends object, FPub extends object, FSeed extends object>(
-    chain: Lunette<FCtx, FPub, FSeed>,
-  ): MountGuard<Ctx, FSeed, Guard<Ctx, FPub, Lunette<Ctx & FPub, Pub & FPub, Seed>>>
-  expose<FCtx extends object, FPub extends object, FSeed extends object>(
-    chain: Lunette<FCtx, FPub, FSeed>,
-    seed: (ctx: Expand<Ctx>) => FSeed,
-  ): Guard<Ctx, FPub, Lunette<Ctx & FPub, Pub & FPub, Seed>>
+    chain: Lunette<FCtx, FPub, FSeed> &
+      RequirementBrand<Ctx, FSeed> &
+      CollisionBrand<Ctx, FPub>,
+  ): Lunette<Ctx & FPub, Pub & FPub, Seed>
+  expose<
+    FCtx extends object,
+    FPub extends object,
+    FSeed extends object,
+    S extends FSeed,
+  >(
+    chain: Lunette<FCtx, FPub, FSeed> &
+      CollisionBrand<Ctx, FPub> &
+      SeedBrand<FSeed>,
+    seed: ((ctx: Expand<Ctx>) => S) & SeedBrand<S>,
+  ): Lunette<Ctx & FPub, Pub & FPub, Seed>
   expose(
     arg: ((ctx: any) => unknown) | Lunette<any, any, any> | PropertyKey,
     extra?: ((ctx: any) => unknown) | ((value: any) => unknown),

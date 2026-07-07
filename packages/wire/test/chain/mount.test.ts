@@ -41,6 +41,23 @@ describe('mount — boundary and visibility', () => {
     expect('db' in app).toBe(false)
   })
 
+  it("the mount net: a fragment Pub colliding with a host key throws at boot", async () => {
+    // The third runtime net (after the keyed and override ones): the
+    // compile-time guard is bypassable via a cast, so the boot must
+    // still refuse a fragment whose public surface lands on an existing
+    // host key — naming it.
+    const openFrag = lunette().expose(() => ({ auth: { whoami: () => 'frag' } }))
+
+    const chain = lunette()
+      .provide('auth', () => 'host-own')
+      // @ts-expect-error — compile-time guard; the runtime is the safety net
+      .expose(openFrag)
+
+    await expect(chain.run(() => {})).rejects.toThrow(
+      /The fragment's public surface collides with host context keys: auth/,
+    )
+  })
+
   it("the fragment's privates never enter the host (no collisions)", async () => {
     const fragment = lunette()
       .provide(() => ({ secret: 'fragment-own' }))

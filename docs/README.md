@@ -22,6 +22,10 @@ state the rules; these documents show them at full length.
 - [Events and CQRS](./patterns/events-and-cqrs.md) — the bus as a dep,
   handlers as leaves, subscriptions as layers, the transactional outbox
   as a bridge, ack/nack from the error convention.
+- [Reading the errors](./patterns/reading-errors.md) — the field guide
+  to the compile-time diagnostics: what each red line means and the move
+  it asks for, why the guards recite while the binder's typing works,
+  and the rule for when a future check earns a brand.
 
 Planned (tracked in the GitHub issues): a windows deep-dive (0/1/N
 semantics, retry/breaker composition), the testing manual (issue #22),

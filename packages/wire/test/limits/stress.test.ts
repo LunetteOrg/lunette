@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { lunette, type Lunette } from '../../src/index.ts'
+import { lunette } from '../../src/index.ts'
 
 describe('runtime stress', () => {
   it('rejects at runtime two layers providing the same key', async () => {
     // The collision is already a compile-time error (see collision-guard
-    // .test-d.ts): the cast simulates someone getting here through `any`.
-    // The runtime remains the safety net and fails loudly.
+    // .test-d.ts). The runtime remains the safety net and fails loudly —
+    // and since the guard rejects the ARGUMENT, the chain stays runnable.
     const chain = lunette()
       .provide(() => ({ useCases: { a: 1 } }))
-      .provide(() => ({ useCases: { b: 2 } })) as unknown as Lunette<object>
+      // @ts-expect-error — compile-time guard; this test exercises the runtime net
+      .provide(() => ({ useCases: { b: 2 } }))
 
     await expect(chain.run(async () => {})).rejects.toThrow(
       /Keys already present in the context: useCases/,

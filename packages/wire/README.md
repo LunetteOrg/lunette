@@ -65,10 +65,12 @@ e.g. `expose('db', () => createPool(env), (pool) => pool.end())`. The raw
 `use` onion stays for full control (a layer that wraps `next`, runs it
 0/1/N times, splits visibility with `next(priv, pub)`).
 
-Key collisions are an error on two levels: at compile time the verbs return
-an error type naming the duplicated keys (`'⛔ keys already present in the
-context': 'db'`); at runtime the same collision throws. Convention: **one
-top-level key per area**.
+Key collisions are an error on two levels: at compile time the verb
+rejects the offending argument on its exact line, naming the key in the
+message (`[collision]: '⛔ key already present in the context: db'`; the
+chain keeps typing past the red line); at runtime the same collision
+throws. Convention: **one top-level key per area**. The field guide to
+every diagnostic is `docs/patterns/reading-errors.md` at the repo root.
 
 ### run and build
 
