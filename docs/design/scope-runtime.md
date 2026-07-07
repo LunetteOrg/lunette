@@ -105,6 +105,16 @@ NOT a separate bag — so cadence stays invisible to the leaf, preserving the
 principle that a use case declares deps without knowing or caring when they
 were born (still testable with flat fakes).
 
+**Prototype finding — `guard` is a typed fold, not a wire layer.** Building
+the prototype (below) sharpened this: the return-to-abort **cannot** be a wire
+`use`/`expose` layer, because the onion *requires* calling `next` and an abort
+is a RETURNED value (a throw would be infrastructure). So the scope tier runs
+as a **typed imperative fold** — enrichments accumulate per step (typing like
+the boot chain, fork 1), a returned abort short-circuits. This confirms the
+(a)/(b) verdict from the other direction: `guard` is a dialect over wire that
+needs no core "third slot", and the fold is lighter than a per-request wire
+chain (so the re-seed spike measured the heavier road).
+
 ## `scope` collapses to a namespace — retiring the third slot
 
 The dead end that killed the two-argument handler: *everything can be a
@@ -182,6 +192,20 @@ mechanical — read the built `Pub` from host context, build `scope =
 { request, params, cookies }`, run the scope chain (guards accumulate deps
 or return-to-abort), call the leaf, map the outcome via the HTTP codec
 (`return→200` +Set-Cookie · domain error→redirect/4xx · throw→5xx).
+
+## Prototype: proven across three real hosts
+
+A live prototype (`research/scope-runtime/`) implements this against **three
+real hosts** — React Router 7, Hono, Express — with **one** guard/leaf model
+carried unchanged by per-host adapters (`toLoader`/`toAction`, `toHono`,
+`toExpress`) and a per-host outcome codec. Driven for real: an RR7 loader
+invoked with a `Request`, a Hono `app.request()`, an Express server over a
+socket + `fetch`. The central case is the ownership + prefetch guard
+(`ownedCourse`): authenticate → resolve admin → prefetch the course and check
+ownership, enriching `deps` (reused by the leaf, no refetch) or short-circuiting
+`401/403/404`. It validates: the fluent stack (fork 1), the mutable
+`scope.cookies` sink (fork 2), `guard` as a dialect fold (no core change,
+fork 3), and the leaf seeing enrichments + scope but never the repos.
 
 ## Sub-decisions this opened (deferred)
 
