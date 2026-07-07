@@ -11,18 +11,17 @@ the `errore` library (errors as values) applied to DI.
 .                       THIS monorepo (npm org: lntt) — the product
   packages/wire         @lntt/wire   the core (runtime + type tests)
   packages/http         @lntt/http   http dialects ("." agnostic, "./hono", "./express")
-  packages/{cli,listener,flow}       "planned" scaffolds, design to be discussed
+  packages/{cli,listener,flow}       scaffolds only — no shipped design;
+                        their stories live in the tracker
   research/             live research prototypes (prior art, not products) —
                         PoC code proving out @lntt/wire's behaviour and DX,
                         OUT OF SCOPE for code review (correctness/security/
                         style); only whether it demonstrates its point matters
-../playground/          the original design lab (in Italian) —
-                        DESTINED FOR DELETION (TODO story 13): its value has
-                        already been brought inside; never cite it in packages
-../starter/             reference project (React Router 7 + Drizzle)
-(private app repo,      the real production bootstrap to rewrite with
- owner's machine)        @lntt/wire (the proving ground; not in this repo)
 ```
+
+Everything outside this monorepo (design history, reference apps, the
+production proving ground) lives in its own repo and is referenced from
+the tracker when relevant — never from here.
 
 ## Design principles (non-negotiable without a discussion)
 
@@ -56,8 +55,13 @@ the `errore` library (errors as values) applied to DI.
 
 - **Language**: the `lunette/` monorepo is ALL English (code, comments,
   test names, runtime error messages, READMEs) and must contain no
-  references to the playground or to the design's history. Conversation
+  references to external repos or to the design's history. Conversation
   with the owner stays in Italian.
+- **Citing decisions**: entries in `docs/decisions.md` are cited as
+  `decision N` (prose) or `§N` (compact). NEVER `#N` or `ADR #N`: on
+  GitHub, `#N` autolinks to issue/PR N — a decision citation would point
+  at an unrelated thread. `#N` is reserved for actual issues, PRs and
+  discussions.
 - **Vocabulary**: chain · layer · bare/bound leaf · binder (`bind(record)`,
   apply = fixed deps, `.with` = per call, `.by` = per call keyed) · window
   · opener (window arg 1) · bridge (window arg 2) · bag · guard · seed ·
@@ -85,10 +89,10 @@ the `errore` library (errors as values) applied to DI.
 ## Status and next steps
 
 Open work lives in **GitHub issues** (label `roadmap`), each story
-carrying its full reasoning — start there:
-<https://github.com/LunetteOrg/lunette/issues>. The lead item is rewriting
-the real bootstrap (the proving ground for everything, issue #1). Extended
-pattern documentation lives in **`docs/`**.
+carrying its full reasoning — priorities, status and the lead item live
+THERE, never in this file. Start from
+<https://github.com/LunetteOrg/lunette/issues>. Extended pattern
+documentation lives in **`docs/`**.
 
 The decision record (discarded alternatives and why) is
 **`docs/decisions.md`** — consult it BEFORE proposing API changes: many

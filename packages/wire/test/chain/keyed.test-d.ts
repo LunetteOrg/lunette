@@ -15,14 +15,14 @@ describe('keyed form (types)', () => {
     expectTypeOf(app).toEqualTypeOf<{ api: { where: () => string } }>()
   })
 
-  it('a collision on the keyed key blocks the chain', () => {
+  it('a collision on the keyed key is rejected at the key literal', () => {
     const chain = lunette()
       .provide('db', () => 1)
+      // @ts-expect-error — 'db' is already in the context: the key is rejected
       .provide('db', () => 2)
 
-    expectTypeOf(chain).toEqualTypeOf<{
-      '⛔ keys already present in the context': 'db'
-    }>()
+    // the chain keeps typing past the red line
+    expectTypeOf(chain.run).toBeFunction()
   })
 
   it('keyed use: V is inferred from the value passed to next', async () => {

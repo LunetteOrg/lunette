@@ -43,7 +43,33 @@ describe('keyed form — normal behaviour', () => {
   it('a collision on the declared key is still an error', async () => {
     const chain = lunette()
       .provide('db', () => 1)
-      .provide('db', () => 2) as never as { run: (s: () => void) => Promise<void> }
+      // @ts-expect-error — compile-time guard; the runtime is the safety net
+      .provide('db', () => 2)
+
+    await expect(chain.run(() => {})).rejects.toThrow(
+      /Keys already present in the context: db/,
+    )
+  })
+
+  it('a WIDENED key slips past the types; the net throws at boot', async () => {
+    // `Extract<string, 'db'>` is never: a key typed as plain string is
+    // invisible to the literal-based guard (pre-existing on main,
+    // decisions §4) — this net is what stands under it.
+    const widened: string = 'db'
+    const chain = lunette().provide('db', () => 1).provide(widened, () => 2)
+
+    await expect(chain.run(() => {})).rejects.toThrow(
+      /Keys already present in the context: db/,
+    )
+  })
+
+  it('a WIDENED patch forced past the ban still hits the net', async () => {
+    // The top-level widened patch is refused at compile time (decision
+    // 32); a cast defeats any guard — this net is what stands under it.
+    const chain = lunette()
+      .provide('db', () => 1)
+      // @ts-expect-error — compile-time ban; the runtime is the safety net
+      .provide((): Record<string, unknown> => ({ db: 'clobbered' }))
 
     await expect(chain.run(() => {})).rejects.toThrow(
       /Keys already present in the context: db/,

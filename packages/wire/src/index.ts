@@ -32,9 +32,11 @@
 //    independent axes: private keys satisfy module requirements.
 //
 // 4. Key collisions are an error on two levels: at compile time the verbs
-//    return an error type naming the duplicated keys; at runtime the same
-//    collision throws. `override` is the explicit door: existing keys
-//    only, the type may change, visibility is preserved.
+//    reject the offending ARGUMENT — the diagnostic names the duplicated
+//    key on the exact colliding line and the chain keeps typing past it —
+//    and at runtime the same collision throws. `override` is the explicit
+//    door: existing keys only, the type may change, visibility is
+//    preserved.
 //
 // 5. Two-sided composition: `lunette<{ env: Env }>()` declares
 //    requirements the chain does NOT build; run/build demand them as the
