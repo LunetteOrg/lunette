@@ -195,7 +195,17 @@ or return-to-abort), call the leaf, map the outcome via the HTTP codec
   vs a richer `return { data, cookies }` that keeps `deps` immutable.
 - **`guard` scope.** A core verb usable at BOTH cadences (a boot-time guard
   — "required env var missing" — may also make sense) or scope-tier only.
-- **Perf caveat (gates the strong-typed version).** Feeding the whole app
-  `Pub` as the scope chain's seed, once per route, is untested; the boot
-  chain's 0.28s says nothing about N scope chains re-seeding the full app
-  type. Measure before committing (load-test territory, issue #12).
+- **Perf: measured, gate cleared.** Feeding the whole app `Pub` as the scope
+  chain's seed, once per route, was the one untested assumption. Spike
+  (`test/limits/scope-reseed.spike.*`, a ~15-layer app):
+  - **Type-level is linear at ~650 tsc instantiations per route.** K routes
+    of 0 → 10 → 20 → 40 gave 121.7k → 132.7k → 139.3k → 152.4k instantiations;
+    check time 0.31s → 0.35s. No super-linear blow-up — the cost is
+    O(routes × app-size), not O(routes²).
+  - **Runtime is ~1.2µs per invocation** — 20k build+run cycles of the
+    re-seeded scope chain in 23ms.
+
+  Both clear the gate: the strong-typed version is safe to pursue. The one
+  remaining variable is **app size** — a larger `Pub` raises the per-route
+  constant — so re-measure under a realistic app in the load tests (issue
+  #12) before calling it settled at scale.
