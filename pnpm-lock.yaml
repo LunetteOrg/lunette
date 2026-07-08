@@ -39,8 +39,11 @@ importers:
         specifier: ^3.2.0
         version: 3.2.6(@types/node@24.13.2)
 
-  examples/minimal:
+  examples/hono:
     dependencies:
+      '@lntt/example-app':
+        specifier: workspace:*
+        version: link:../app
       '@lntt/integration':
         specifier: workspace:*
         version: link:../../packages/integration
@@ -54,30 +57,15 @@ importers:
       '@hono/standard-validator':
         specifier: ^0.2.3
         version: 0.2.3(@standard-schema/spec@1.1.0)(hono@4.12.25)
-      '@trpc/server':
-        specifier: ^11.18.0
-        version: 11.18.0(typescript@5.9.3)
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
-      express:
-        specifier: ^5.2.1
-        version: 5.2.1
       hono:
         specifier: ^4.12.25
         version: 4.12.25
-      react-router:
-        specifier: ^7.18.1
-        version: 7.18.1(react@19.2.7)
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
       vitest:
         specifier: ^3.2.0
         version: 3.2.6(@types/node@25.9.3)
-      zod:
-        specifier: ^3.25.76
-        version: 3.25.76
 
   packages/cli: {}
 
@@ -142,19 +130,6 @@ importers:
         version: 3.25.76
 
   packages/wire:
-    devDependencies:
-      typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.0
-        version: 3.2.6(@types/node@25.9.3)
-
-  research/module-shapes:
-    dependencies:
-      '@lntt/wire':
-        specifier: workspace:*
-        version: link:../../packages/wire
     devDependencies:
       typescript:
         specifier: ^5.9.2
