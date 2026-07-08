@@ -10,7 +10,11 @@ the `errore` library (errors as values) applied to DI.
 ```
 .                       THIS monorepo (npm org: lntt) — the product
   packages/wire         @lntt/wire   the core (runtime + type tests)
-  packages/http         @lntt/http   http dialects ("." agnostic, "./hono", "./express")
+  packages/scope        @lntt/scope  the host-agnostic scope runtime (fragment/
+                        guard/leaf, .input, the fold) — framework-free
+  packages/integration  @lntt/integration  host adapters as tree-shakable
+                        subpaths ("./hono", "./express", "./react-router",
+                        "./trpc") — wire as a guest, per-host native routing
   packages/{cli,listener,flow}       scaffolds only — no shipped design;
                         their stories live in the tracker
   research/             live research prototypes (prior art, not products) —
@@ -18,6 +22,11 @@ the `errore` library (errors as values) applied to DI.
                         OUT OF SCOPE for code review (correctness/security/
                         style); only whether it demonstrates its point matters
 ```
+
+The old `@lntt/http` (the `pipe`-based "wire owns the server" posture) was
+superseded by the scope runtime (`@lntt/scope` + `@lntt/integration`, "wire as
+a guest") and removed; if the own-the-loop posture is ever needed it is rebuilt
+fresh on the scope core, not resurrected. Nothing is published to npm yet.
 
 Everything outside this monorepo (design history, reference apps, the
 production proving ground) lives in its own repo and is referenced from

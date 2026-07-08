@@ -12,28 +12,6 @@ importers:
 
   packages/flow: {}
 
-  packages/http:
-    dependencies:
-      '@lntt/wire':
-        specifier: workspace:*
-        version: link:../wire
-    devDependencies:
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
-      express:
-        specifier: ^5.2.1
-        version: 5.2.1
-      hono:
-        specifier: ^4.12.25
-        version: 4.12.25
-      typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.0
-        version: 3.2.6(@types/node@25.9.3)
-
   packages/integration:
     dependencies:
       '@lntt/scope':
