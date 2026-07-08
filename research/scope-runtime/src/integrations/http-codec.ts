@@ -1,4 +1,4 @@
-import type { Outcome, SetCookie } from '../scope/kit.ts'
+import type { Outcome, SetCookie } from '../scope/scope.ts'
 
 // The HTTP outcome codec, shared by the Fetch-based hosts (React Router,
 // Hono). A returned domain result → 200; a returned abort → its intent

@@ -2,9 +2,9 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import express from 'express'
 import { describe, expect, it } from 'vitest'
-import { chain } from '../chain.ts'
-import { makeHandlers } from '../example.ts'
-import { toExpress } from './express.ts'
+import { chain, type Env } from '../chain.ts'
+import { courseHandler, loginHandler } from '../example.ts'
+import { express as expressPack } from './express.ts'
 
 const startServer = async (handler: express.Express) => {
   const server = createServer(handler)
@@ -16,14 +16,17 @@ const startServer = async (handler: express.Express) => {
   }
 }
 
-describe('Express adapter — real HTTP round-trip', () => {
+describe('Express pack — mount middleware + real HTTP round-trip', () => {
   it('runs the same handlers behind a real express server', async () => {
-    const { app: pub, dispose } = await chain.build({ env: { label: 'express' } })
-    const handlers = makeHandlers(pub)
+    const pack = expressPack(chain, () => ({ env: { label: 'express' } satisfies Env }))
 
     const app = express()
-    app.get('/courses/:courseId', toExpress(handlers.course))
-    app.post('/login', toExpress(handlers.login))
+    // mount is registered ONCE; it ensures the build and attaches the app.
+    app.use(pack.mount())
+    pack
+      .route(app)
+      .get('/courses/:courseId', courseHandler)
+      .post('/login', loginHandler)
     const { url, close } = await startServer(app)
 
     const auth = { headers: { authorization: 'Bearer u-admin' } }
@@ -45,6 +48,6 @@ describe('Express adapter — real HTTP round-trip', () => {
     expect(login.headers.get('set-cookie')).toContain('HttpOnly')
 
     await close()
-    await dispose()
+    await pack.dispose()
   })
 })

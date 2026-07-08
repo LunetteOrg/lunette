@@ -1,12 +1,33 @@
-import type { Request as ExReq, Response as ExRes } from 'express'
-import type { ScopeHandler } from '../scope/kit.ts'
+import { Lunette } from '@lntt/wire'
+import type {
+  Express,
+  Request as ExReq,
+  RequestHandler,
+  Response as ExRes,
+} from 'express'
+import type { DepGuard } from '../scope/adapter-guard.ts'
+import { fragment, type Handler } from '../scope/fragment.ts'
+import { runFold } from '../scope/run-fold.ts'
+import type { Outcome, RequestScope } from '../scope/scope.ts'
 import { serializeCookie } from './http-codec.ts'
 
-// Express adapter. Express is NOT Fetch-based, so unlike React Router / Hono
-// there is no Response to hand back: we translate the outcome onto the node
-// `res` directly. The request scope still speaks Fetch — we lift express's
-// `req` into a Web `Request` so the same handlers (which read `request`) run
-// unchanged.
+type PubOf<C> = C extends { build: (...a: never[]) => Promise<{ app: infer A }> } ? A : never
+type SeedOf<C> = C extends Lunette<any, any, infer S> ? S : never
+
+function buildOnce<C extends Lunette<any, any, any>>(chain: C) {
+  type Built = Awaited<ReturnType<C['build']>>
+  let built: Promise<Built> | undefined
+  const build = chain.build.bind(chain) as unknown as (seed: SeedOf<C>) => Promise<Built>
+  const ensure = (seed: SeedOf<C>): Promise<Built> => (built ??= build(seed))
+  const dispose = async (): Promise<void> => {
+    if (built) await (await built).dispose()
+  }
+  return { ensure, dispose }
+}
+
+// Express is NOT Fetch-based, so there is no Response to hand back — we lift its
+// `req` into a Web `Request` (the scope speaks Fetch) and translate the outcome
+// onto the node `res` directly.
 const toWebRequest = (req: ExReq): Request => {
   const headers = new Headers()
   for (const [key, value] of Object.entries(req.headers)) {
@@ -16,26 +37,97 @@ const toWebRequest = (req: ExReq): Request => {
   return new Request(`http://localhost${req.originalUrl}`, { method: req.method, headers })
 }
 
-export const toExpress =
-  <R>(handler: ScopeHandler<R>) =>
-  async (req: ExReq, res: ExRes): Promise<void> => {
-    const params: Record<string, string> = {}
-    for (const [key, value] of Object.entries(req.params)) {
-      params[key] = Array.isArray(value) ? (value[0] ?? '') : value
-    }
-    const outcome = await handler({ request: toWebRequest(req), params })
-
-    for (const cookie of outcome.cookies) res.append('Set-Cookie', serializeCookie(cookie))
-
-    if (outcome.ok) {
-      res.status(200).json(outcome.value)
-      return
-    }
-    const { intent } = outcome.abort
-    if (intent.kind === 'redirect') {
-      res.redirect(intent.status, intent.location)
-      return
-    }
-    if (intent.body !== undefined) res.status(intent.status).json(intent.body)
-    else res.status(intent.status).end()
+const renderExpress = (res: ExRes, outcome: Outcome<unknown>): void => {
+  for (const cookie of outcome.cookies) res.append('Set-Cookie', serializeCookie(cookie))
+  if (outcome.ok) {
+    res.status(200).json(outcome.value)
+    return
   }
+  const { intent } = outcome.abort
+  if (intent.kind === 'redirect') {
+    res.redirect(intent.status, intent.location)
+    return
+  }
+  if (intent.body !== undefined) res.status(intent.status).json(intent.body)
+  else res.status(intent.status).end()
+}
+
+// Express types params as `Record<string, string>`, so we PARSE the path — the
+// typed-params feature Express lacks. Express-5 positional `:name` only (no
+// optional/regex/wildcard/repeated — YAGNI); values are always `string`.
+type ParamNames<P extends string> = P extends `${string}:${infer After}`
+  ? After extends `${infer Name}/${infer Rest}`
+    ? Name | ParamNames<`/${Rest}`>
+    : After
+  : never
+export type ExpressParams<P extends string> = { [K in ParamNames<P>]: string }
+
+// The built app is attached to the express request by the mount middleware.
+type WireReq = ExReq & { __wireApp?: unknown }
+
+// Express pack. Takes the CHAIN, owns build-once, exposes the shared fragment
+// surface, a `mount` middleware, a `route` registrar (typed + plain), and
+// `dispose`. Node has no per-request env — the seed is static (captured at
+// startup), so `seedFrom` takes no argument.
+export function express<C extends Lunette<any, any, any>>(
+  chain: C,
+  seedFrom: () => SeedOf<C>,
+) {
+  type Pub = PubOf<C>
+  const { ensure, dispose } = buildOnce(chain)
+  const base = fragment()
+
+  // mount = the middleware registered ONCE. Ensures the build and attaches the
+  // app to the request; the seed is static.
+  const mount = (): RequestHandler => async (req, _res, next) => {
+    ;(req as WireReq).__wireApp = (await ensure(seedFrom())).app
+    next()
+  }
+
+  const route = (app: Express) => {
+    const run = async <Need extends object, P extends object, R>(
+      handler: Handler<Need, P, R>,
+      req: ExReq,
+      res: ExRes,
+    ): Promise<void> =>
+      renderExpress(
+        res,
+        await runFold<RequestScope, R>(
+          handler,
+          (req as WireReq).__wireApp as object,
+          { request: toWebRequest(req) },
+          req.params,
+        ),
+      )
+
+    const reg = {
+      // Typed routing: the path is parsed into `ExpressParams<Path>`, checked
+      // against the frag's `P` contravariantly; deps by the DepGuard brand.
+      get<Path extends string, Need extends object, R>(
+        path: Path,
+        handler: Handler<Need, ExpressParams<Path>, R> & DepGuard<Pub, Need>,
+      ) {
+        app.get(path, (req, res) => run(handler, req, res))
+        return reg
+      },
+      post<Path extends string, Need extends object, R>(
+        path: Path,
+        handler: Handler<Need, ExpressParams<Path>, R> & DepGuard<Pub, Need>,
+      ) {
+        app.post(path, (req, res) => run(handler, req, res))
+        return reg
+      },
+      // Plain routing, no typed params (design: "also allow plain routing").
+      getPlain<Need extends object, R>(
+        path: string,
+        handler: Handler<Need, Record<string, string>, R> & DepGuard<Pub, Need>,
+      ) {
+        app.get(path, (req, res) => run(handler, req, res))
+        return reg
+      },
+    }
+    return reg
+  }
+
+  return { guard: base.guard, handle: base.handle, mount, route, dispose }
+}

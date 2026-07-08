@@ -1,17 +1,21 @@
 import { Hono } from 'hono'
 import { describe, expect, it } from 'vitest'
-import { chain } from '../chain.ts'
-import { makeHandlers } from '../example.ts'
-import { toHono } from './hono.ts'
+import { chain, type Env } from '../chain.ts'
+import { courseHandler, loginHandler } from '../example.ts'
+import { hono, type WireEnv } from './hono.ts'
 
-describe('Hono adapter — real app.request dispatch', () => {
+describe('Hono pack — mount middleware + registrar dispatch', () => {
   it('runs the same handlers through a real Hono onion', async () => {
-    const { app: pub, dispose } = await chain.build({ env: { label: 'hono' } })
-    const handlers = makeHandlers(pub)
+    type Pub = Awaited<ReturnType<typeof chain.build>>['app']
+    const pack = hono(chain, () => ({ env: { label: 'hono' } satisfies Env }))
 
-    const app = new Hono()
-    app.get('/courses/:courseId', toHono(handlers.course))
-    app.post('/login', toHono(handlers.login))
+    const app = new Hono<WireEnv<Pub>>()
+    // mount is registered ONCE; it seeds the build and stashes the app on ctx.
+    app.use('*', pack.mount())
+    pack
+      .route(app)
+      .get('/courses/:courseId', courseHandler)
+      .post('/login', loginHandler)
 
     const auth = { headers: { authorization: 'Bearer u-admin' } }
 
@@ -32,6 +36,6 @@ describe('Hono adapter — real app.request dispatch', () => {
     expect(login.headers.get('set-cookie')).toContain('sid=u-admin')
     expect(login.headers.get('set-cookie')).toContain('HttpOnly')
 
-    await dispose()
+    await pack.dispose()
   })
 })

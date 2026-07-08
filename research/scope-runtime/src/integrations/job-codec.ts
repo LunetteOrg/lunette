@@ -1,9 +1,13 @@
-import type { Outcome } from '../scope/kit.ts'
+import type { Handler } from '../scope/fragment.ts'
+import { runFold } from '../scope/run-fold.ts'
+import type { JobScope, Message, Outcome } from '../scope/scope.ts'
 
-// The message-bus outcome codec — the SAME host-agnostic `Outcome` the HTTP
-// codec renders, mapped to a bus acknowledgement instead. This makes the
-// "codec = facet" claim concrete on the OUTPUT side: one fold, one Outcome,
-// two renderings. Groundwork for issue #10 (@lntt/listener).
+// The message-bus codec — the SAME host-agnostic `Outcome` the HTTP codec
+// renders, mapped to a bus acknowledgement instead. This makes the "codec =
+// facet" claim concrete on the OUTPUT side, and — with `fragmentFor<JobScope>`
+// + `runJob` over the SAME `runFold` — proves the INPUT carrier generalizes
+// too: an HTTP `Request` and a bus `Message` are sibling carriers, not a
+// special case. Groundwork for issue #10 (@lntt/listener).
 //
 // The error convention (§3) meets messaging, mirroring HTTP exactly:
 //   returned domain result  → ack                (2xx: processed)
@@ -14,11 +18,6 @@ import type { Outcome } from '../scope/kit.ts'
 //                                                 no Outcome, so it is the
 //                                                 consumer's job (runJob), not
 //                                                 the codec's.
-//
-// NOTE — scope: this proves the output codec is swappable. Generalizing the
-// INPUT payload (an HTTP `Request` → a bus `Message`) is the remaining #10
-// work; here the message is faked onto the request-shaped scope so the codec
-// claim can be shown without pretending the input side is done.
 
 export type BusAck =
   | { readonly action: 'ack' }
@@ -31,22 +30,24 @@ export function outcomeToBus(outcome: Outcome<unknown>): BusAck {
   return { action: 'ack', deadLetter: { reason: outcome.abort.intent } }
 }
 
-export async function runJob<R>(
-  handler: (scope: {
-    request: Request
-    params: Record<string, string>
-  }) => Promise<Outcome<R>>,
-  message: { body: unknown; params?: Record<string, string> },
+// Runs a bus handler over a message: the JobScope carrier holds the `message`,
+// params ride the dedicated second arg. A thrown infra error never became an
+// Outcome — nack it (retry).
+export async function runJob<Need extends object, P extends object, R>(
+  handler: Handler<Need, P, R>,
+  app: object,
+  envelope: { message: Message; params?: P },
 ): Promise<BusResult> {
   try {
-    const request = new Request('job://message', {
-      method: 'POST',
-      body: JSON.stringify(message.body),
-      headers: { 'content-type': 'application/json' },
-    })
-    return outcomeToBus(await handler({ request, params: message.params ?? {} }))
+    return outcomeToBus(
+      await runFold<JobScope, R>(
+        handler,
+        app,
+        { message: envelope.message },
+        envelope.params ?? {},
+      ),
+    )
   } catch (error) {
-    // A thrown infra error never became an Outcome — nack it (retry).
     return { action: 'nack', error }
   }
 }
