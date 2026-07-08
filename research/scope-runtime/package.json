@@ -9,12 +9,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@hono/standard-validator": "^0.2.3",
     "@lntt/wire": "workspace:*",
+    "@trpc/server": "^11.18.0",
     "express": "^5.1.0",
     "hono": "^4.9.0",
-    "react-router": "^7.6.0"
+    "react-router": "^7.6.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@standard-schema/spec": "^1.1.0",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
     "typescript": "^5.9.2",

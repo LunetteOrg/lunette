@@ -1,5 +1,6 @@
+import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { Handler } from '../scope/fragment.ts'
-import { runFold } from '../scope/run-fold.ts'
+import { runScope } from '../scope/run-fold.ts'
 import type { JobScope, Message, Outcome } from '../scope/scope.ts'
 
 // The message-bus codec — the SAME host-agnostic `Outcome` the HTTP codec
@@ -33,14 +34,17 @@ export function outcomeToBus(outcome: Outcome<unknown>): BusAck {
 // Runs a bus handler over a message: the JobScope carrier holds the `message`,
 // params ride the dedicated second arg. A thrown infra error never became an
 // Outcome — nack it (retry).
-export async function runJob<Need extends object, P extends object, R>(
-  handler: Handler<Need, P, R>,
+export async function runJob<Need extends object, S extends StandardSchemaV1, R>(
+  handler: Handler<Need, S, R>,
   app: object,
-  envelope: { message: Message; params?: P },
+  envelope: { message: Message; params?: unknown },
 ): Promise<BusResult> {
   try {
+    // The job params are validated against the fragment's schema before the
+    // fold: a bad param → a RETURNED 422 → ack + dead-letter (domain rejection,
+    // do NOT retry). A thrown infra error never became an Outcome → nack (retry).
     return outcomeToBus(
-      await runFold<JobScope, R>(
+      await runScope<JobScope, S, R>(
         handler,
         app,
         { message: envelope.message },

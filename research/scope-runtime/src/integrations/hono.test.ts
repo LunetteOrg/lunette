@@ -4,18 +4,18 @@ import { chain, type Env } from '../chain.ts'
 import { courseHandler, loginHandler } from '../example.ts'
 import { hono, type WireEnv } from './hono.ts'
 
-describe('Hono pack — mount middleware + registrar dispatch', () => {
-  it('runs the same handlers through a real Hono onion', async () => {
+describe('Hono pack — mount middleware + native chain + terminal handler', () => {
+  it('runs the same handlers through a real Hono onion (native chaining)', async () => {
     type Pub = Awaited<ReturnType<typeof chain.build>>['app']
-    const pack = hono(chain, () => ({ env: { label: 'hono' } satisfies Env }))
+    const w = hono(chain, () => ({ env: { label: 'hono' } satisfies Env }))
 
+    // NATIVE chaining: `.use(mount)` seeds the build; `.get/.post(path,
+    // ...wire(handler))` plugs the validator + terminal into Hono's own chain,
+    // so `typeof app` accumulates the route schema (this is what preserves RPC).
     const app = new Hono<WireEnv<Pub>>()
-    // mount is registered ONCE; it seeds the build and stashes the app on ctx.
-    app.use('*', pack.mount())
-    pack
-      .route(app)
-      .get('/courses/:courseId', courseHandler)
-      .post('/login', loginHandler)
+      .use(w.mount())
+      .get('/courses/:courseId', ...w.wire(courseHandler))
+      .post('/login', ...w.wire(loginHandler))
 
     const auth = { headers: { authorization: 'Bearer u-admin' } }
 
@@ -36,6 +36,6 @@ describe('Hono pack — mount middleware + registrar dispatch', () => {
     expect(login.headers.get('set-cookie')).toContain('sid=u-admin')
     expect(login.headers.get('set-cookie')).toContain('HttpOnly')
 
-    await pack.dispose()
+    await w.dispose()
   })
 })

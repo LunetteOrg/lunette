@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { chain } from '../chain.ts'
 import type { Repos } from '../domain.ts'
 import { forbidden, notFound, unauthorized } from './abort.ts'
@@ -10,17 +11,21 @@ const admin = (userId: string) =>
   new Request('http://x/', { headers: { authorization: `Bearer ${userId}` } })
 
 // The fragment stack under test — the same one example.ts ships, inlined so the
-// fold can be driven directly with the built app (no host in the loop).
+// fold can be driven directly with the built app (no host in the loop). It
+// carries its input schema; `runFold` receives already-parsed params (the host
+// validated natively, or the test hands the coerced shape).
+const schema = z.object({ courseId: z.string() })
 const ownedCourse = fragment()
-  .guard((app: Pick<Repos, 'sessionRepo'>, _params: {}, ctx) => {
+  .input(schema)
+  .guard((app: Pick<Repos, 'sessionRepo'>, _params, ctx) => {
     const session = app.sessionRepo.get(ctx.request)
     return session ? { session } : unauthorized()
   })
-  .guard((app: Pick<Repos, 'adminRepo'>, _params: {}, ctx) => {
+  .guard((app: Pick<Repos, 'adminRepo'>, _params, ctx) => {
     const admin = app.adminRepo.byId(ctx.session.userId)
     return admin ? { admin } : forbidden()
   })
-  .guard((app: Pick<Repos, 'courseRepo'>, params: { courseId: string }, ctx) => {
+  .guard((app: Pick<Repos, 'courseRepo'>, params, ctx) => {
     const course = app.courseRepo.byId(params.courseId)
     if (!course) return notFound()
     return course.ownerId === ctx.admin.id ? { course } : forbidden()
@@ -63,9 +68,12 @@ describe('the fragment fold at runtime', () => {
       return { ok: true }
     })
 
-    const out = await runFold<RequestScope, { ok: boolean }>(handler, app, {
-      request: new Request('http://x/'),
-    }, {})
+    const out = await runFold<RequestScope, { ok: boolean }>(
+      handler,
+      app,
+      { request: new Request('http://x/') },
+      {},
+    )
     expect(out.ok).toBe(true)
     if (out.ok) expect(out.value).toEqual({ ok: true })
     expect(out.cookies).toEqual([{ name: 'sid', value: 'abc', options: { httpOnly: true } }])

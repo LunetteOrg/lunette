@@ -1,12 +1,14 @@
 import { Lunette } from '@lntt/wire'
-import type { Hono, MiddlewareHandler } from 'hono'
-import type { ParamKeys, ParamKeyToRecord } from 'hono/types'
-import type { Simplify, UnionToIntersection } from 'hono/utils/types'
+import { sValidator } from '@hono/standard-validator'
+import type { StandardSchemaV1 } from '@standard-schema/spec'
+import type { Context, MiddlewareHandler } from 'hono'
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { DepGuard } from '../scope/adapter-guard.ts'
-import { fragment, type Handler } from '../scope/fragment.ts'
+import { type Handler } from '../scope/fragment.ts'
 import { runFold } from '../scope/run-fold.ts'
+import type { InputOf, OutputOf } from '../scope/schema.ts'
 import type { RequestScope } from '../scope/scope.ts'
-import { outcomeToResponse } from './http-codec.ts'
+import { serializeCookie } from './http-codec.ts'
 
 type PubOf<C> = C extends { build: (...a: never[]) => Promise<{ app: infer A }> } ? A : never
 type SeedOf<C> = C extends Lunette<any, any, infer S> ? S : never
@@ -22,71 +24,72 @@ function buildOnce<C extends Lunette<any, any, any>>(chain: C) {
   return { ensure, dispose }
 }
 
-// Hono's OWN generics are the source of truth for route params — no custom
-// parser. `ParamKeys`/`ParamKeyToRecord` come from `hono/types`, `Simplify`/
-// `UnionToIntersection` from `hono/utils/types` (neither in the root export).
-// A param-less path collapses to `{}`.
-export type HonoParams<Path extends string> = Simplify<
-  UnionToIntersection<ParamKeyToRecord<ParamKeys<Path>>>
->
-
-// The Hono env the mount and registrar share: the built app rides in Variables.
+// The Hono env the mount and terminal share: the built app rides in Variables.
 export type WireEnv<Pub> = { Variables: { __wireApp: Pub } }
 
-// Hono pack. Takes the CHAIN, owns build-once, exposes the shared fragment
-// surface, a `mount` middleware, a `route` registrar, and `dispose`.
+// Hono pack. Takes the CHAIN, owns build-once, and — crucially — DOES NOT wrap
+// the router. It contributes a `mount` middleware, a generic terminal handler
+// (`wire`), and `dispose`. The user assembles routes with Hono's NATIVE
+// chaining (`.get(path, ...wire(handler))`), which is what lets `typeof app`
+// accumulate the route schema so `hc<typeof app>()` stays fully typed — path,
+// method, INPUT (the validated param), and OUTPUT (the leaf's R via `c.json`).
 export function hono<C extends Lunette<any, any, any>>(
   chain: C,
   seedFrom: (hostEnv: unknown) => SeedOf<C>,
 ) {
   type Pub = PubOf<C>
   const { ensure, dispose } = buildOnce(chain)
-  const base = fragment()
 
   // mount = the middleware registered ONCE. Reads c.env (Cloudflare) as the
   // seed source, seeds the per-isolate build, stashes the app on the context.
+  // It contributes NOTHING to the route schema, so RPC typing is untouched.
   const mount = (): MiddlewareHandler<WireEnv<Pub>> => async (c, next) => {
     c.set('__wireApp', (await ensure(seedFrom(c.env))).app as Pub)
     await next()
   }
 
-  // The registrar receives BOTH path and frag — the param check CANNOT live at
-  // a bare `app.get` (spike 2: a Hono Handler cannot carry a param
-  // requirement). `RP = HonoParams<Path>` meets the frag's `P` contravariantly;
-  // the deps check is the DepGuard brand. Hono still owns routing — we only
-  // type-check the (path, frag) pairing.
-  const route = (app: Hono<WireEnv<Pub>>) => {
-    const run = async <Need extends object, P extends object, R>(
-      handler: Handler<Need, P, R>,
-      c: Parameters<MiddlewareHandler<WireEnv<Pub>>>[0],
-    ): Promise<Response> =>
-      outcomeToResponse(
-        await runFold<RequestScope, R>(
-          handler,
-          c.get('__wireApp') as object,
-          { request: c.req.raw },
-          c.req.param(),
-        ),
+  // THE terminal. GENERIC over the route Input `I` (the load-bearing point,
+  // spike 1): Hono's `.get` overload solves `I` to the handler's OWN constraint
+  // — the fragment's schema — and records `ToSchema<M, P, I.in, R>`, so `hc`
+  // reads request `{ param: InferInput<S> }` and response@200 = R. Reads the
+  // built app from the mount'd context, runs OUR fold, returns via `c.json` so
+  // R flows into the RPC output.
+  const handlerFrom =
+    <S extends StandardSchemaV1, Need extends object, R>(handler: Handler<Need, S, R>) =>
+    async <I extends { in: { param: InputOf<S> }; out: { param: OutputOf<S> } }>(
+      c: Context<WireEnv<Pub>, string, I>,
+    ) => {
+      const params = c.req.valid('param') // OutputOf<S>, coerced by sValidator
+      const outcome = await runFold<RequestScope, R>(
+        handler,
+        c.get('__wireApp') as object,
+        { request: c.req.raw },
+        params as object,
       )
-
-    const reg = {
-      get<Path extends string, Need extends object, R>(
-        path: Path,
-        handler: Handler<Need, HonoParams<Path>, R> & DepGuard<Pub, Need>,
-      ) {
-        app.get(path, (c) => run(handler, c))
-        return reg
-      },
-      post<Path extends string, Need extends object, R>(
-        path: Path,
-        handler: Handler<Need, HonoParams<Path>, R> & DepGuard<Pub, Need>,
-      ) {
-        app.post(path, (c) => run(handler, c))
-        return reg
-      },
+      for (const ck of outcome.cookies) {
+        c.header('set-cookie', serializeCookie(ck), { append: true })
+      }
+      if (outcome.ok) return c.json(outcome.value, 200) // R → RPC output@200
+      const { intent } = outcome.abort
+      if (intent.kind === 'redirect') {
+        return c.redirect(intent.location, intent.status as 302)
+      }
+      // The abort body rides its 4xx/5xx status. Excluding 200 from the status
+      // type keeps the RPC response@200 union PURE — only the success branch's R
+      // lands at 200, so `InferResponseType<call, 200>` recovers R, never
+      // `unknown | null` from a domain abort (blueprint §2.5).
+      return c.json(intent.body ?? null, intent.status as Exclude<ContentfulStatusCode, 200>)
     }
-    return reg
-  }
 
-  return { guard: base.guard, handle: base.handle, mount, route, dispose }
+  // Bind validator + terminal to ONE schema (from `handler.schema`) so they
+  // cannot diverge — Hono's native 3-arg placement never cross-checks the
+  // validator's contributed input against the terminal's required input, so
+  // sharing the object is the only safety mechanism (spike 1, caveat 1). This
+  // is also the single place the deps brand fires (Need ⊆ Pub) — at the call
+  // site, before the tuple is spread into the native chain.
+  const wire = <S extends StandardSchemaV1, Need extends object, R>(
+    handler: Handler<Need, S, R> & DepGuard<Pub, Need>,
+  ) => [sValidator('param', handler.schema), handlerFrom(handler)] as const
+
+  return { mount, wire, dispose }
 }

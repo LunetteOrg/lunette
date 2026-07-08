@@ -14,17 +14,22 @@ const rr = reactRouter(chain, (env) => ({ env: env as Env }))
 const ho = hono(chain, () => ({ env: {} as Env }))
 const ex = expressPack(chain, () => ({ env: {} as Env }))
 
-type RRContext = Awaited<ReturnType<typeof rr.mount>>
-
 // A fragment requiring a repo the chain's Pub does NOT expose — the deps axis.
+// Param-less, so its schema is the unit schema (P = {}).
 const needsBilling = fragment()
-  .guard((app: { billingRepo: { charge(): void } }, _p: {}, _ctx) => {
+  .guard((app: { billingRepo: { charge(): void } }, _p, _ctx) => {
     app.billingRepo.charge()
     return { charged: true }
   })
   .handle((deps) => ({ charged: deps.charged }))
 
-describe('adapter contract — deps by brand, params by contravariance', () => {
+// The deps axis (Need ⊆ Pub) is the ONE compile-time reconciliation that
+// survives across every host. Params are NO LONGER reconciled per-adapter
+// against a per-guard annotation: one `.input(schema)` fixes P, each host
+// validates it NATIVELY (Hono `sValidator`, tRPC `.input`) or at runtime
+// (RR7/Express/bus `runScope` → returned 422). Express alone keeps a typed-path
+// KEY-PRESENCE check (its route param keys ⊇ the schema's required input keys).
+describe('adapter contract — deps by brand (Need ⊆ Pub) at each call site', () => {
   it('RR7: deps-vs-Pub is checked at toLoader (missing dep = compile error)', () => {
     // courseHandler's Need (session/admin/course repos) ⊆ Pub → accepted
     rr.toLoader(courseHandler)
@@ -33,44 +38,23 @@ describe('adapter contract — deps by brand, params by contravariance', () => {
     rr.toLoader(needsBilling)
   })
 
-  it('RR7: params reconcile at the call — RP extends P (spike 4)', () => {
-    const loader = rr.toLoader(courseHandler)
-    const match = {} as { request: Request; params: { courseId: string }; context: RRContext }
-    const superset = {} as {
-      request: Request
-      params: { courseId: string; extra: string }
-      context: RRContext
-    }
-    const wrong = {} as { request: Request; params: { wrongId: string }; context: RRContext }
-    // MATCH and SUBSET (route provides a superset of what the frag needs) compile
-    loader(match)
-    loader(superset)
-    // wrong key: route lacks the required param
-    // @ts-expect-error — route params { wrongId } do not satisfy required { courseId }
-    loader(wrong)
-  })
-
-  it('Hono: the registrar reconciles HonoParams<Path> against the frag (spike 2)', () => {
-    const app = new Hono<WireEnv<Pub>>()
-    // matching path param → accepted
-    ho.route(app).get('/courses/:courseId', courseHandler)
-    // wrong path param name → the frag requires courseId, path yields wrongId
-    // @ts-expect-error — path param { wrongId } does not satisfy required { courseId }
-    ho.route(app).get('/courses/:wrongId', courseHandler)
-    // missing dep is still caught at the registrar
+  it('Hono: deps-vs-Pub is checked at wire, before the native chain', () => {
+    const app = new Hono<WireEnv<Pub>>().use(ho.mount())
+    // matching deps → the tuple spreads into Hono's native `.get`
+    app.get('/courses/:courseId', ...ho.wire(courseHandler))
+    // missing dep is caught at `wire`, independent of the terminal's RPC I
     // @ts-expect-error — chain Pub is missing the fragment's required deps
-    ho.route(app).get('/bill/:courseId', needsBilling)
+    ho.wire(needsBilling)
   })
 
-  it('Express: the parsed path param is reconciled against the frag (spike 3)', () => {
+  it('Express: the typed path reconciles route keys against required input keys', () => {
     const app: Express = expressApp()
-    // parsed { courseId } matches the frag
+    // parsed { courseId } ⊇ schema required keys { courseId } → accepted
     ex.route(app).get('/courses/:courseId', courseHandler)
-    // parsed { wrongId } does not
-    // @ts-expect-error — parsed path param { wrongId } does not satisfy { courseId }
+    // parsed { wrongId } lacks the required input key { courseId }
+    // @ts-expect-error — route params { wrongId } miss required input key courseId
     ex.route(app).get('/courses/:wrongId', courseHandler)
-    // plain routing bypasses param typing (P = Record<string, string>): a
-    // param-less frag fits any route
+    // plain routing bypasses key reconciliation: a param-less frag fits any route
     const ping = fragment().handle(() => ({ pong: true }))
     ex.route(app).getPlain('/anything', ping)
   })

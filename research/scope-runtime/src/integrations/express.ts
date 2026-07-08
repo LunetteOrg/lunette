@@ -5,9 +5,11 @@ import type {
   RequestHandler,
   Response as ExRes,
 } from 'express'
+import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { DepGuard } from '../scope/adapter-guard.ts'
 import { fragment, type Handler } from '../scope/fragment.ts'
-import { runFold } from '../scope/run-fold.ts'
+import { runScope } from '../scope/run-fold.ts'
+import type { InputOf } from '../scope/schema.ts'
 import type { Outcome, RequestScope } from '../scope/scope.ts'
 import { serializeCookie } from './http-codec.ts'
 
@@ -62,6 +64,16 @@ type ParamNames<P extends string> = P extends `${string}:${infer After}`
   : never
 export type ExpressParams<P extends string> = { [K in ParamNames<P>]: string }
 
+// The schema's REQUIRED input keys — the raw keys a route path must supply
+// before coercion. Reconciliation is on KEY PRESENCE, not value types: a
+// coercing schema (`z.coerce.number()`) reports its INPUT type as the coerced
+// type, so a string route param would never match by value — only the key set
+// is meaningful. Optional schema keys (`z.string().optional()`) are not required.
+type RequiredKeys<T> = {
+  [K in keyof T]-?: Record<never, never> extends Pick<T, K> ? never : K
+}[keyof T]
+export type RequiredInputKeys<S extends StandardSchemaV1> = RequiredKeys<InputOf<S>>
+
 // The built app is attached to the express request by the mount middleware.
 type WireReq = ExReq & { __wireApp?: unknown }
 
@@ -85,14 +97,14 @@ export function express<C extends Lunette<any, any, any>>(
   }
 
   const route = (app: Express) => {
-    const run = async <Need extends object, P extends object, R>(
-      handler: Handler<Need, P, R>,
+    const run = async <S extends StandardSchemaV1, Need extends object, R>(
+      handler: Handler<Need, S, R>,
       req: ExReq,
       res: ExRes,
     ): Promise<void> =>
       renderExpress(
         res,
-        await runFold<RequestScope, R>(
+        await runScope<RequestScope, S, R>(
           handler,
           (req as WireReq).__wireApp as object,
           { request: toWebRequest(req) },
@@ -100,27 +112,39 @@ export function express<C extends Lunette<any, any, any>>(
         ),
       )
 
+    // Typed routing reconciled on KEY PRESENCE: the parsed path keys
+    // (`ExpressParams<Path>`) must be a superset of the schema's required input
+    // keys — the path must supply everything the schema needs to coerce. Deps
+    // by the DepGuard brand. `runScope` validates+coerces at runtime → a
+    // RETURNED 422 abort on a bad param, which `renderExpress` renders as 4xx.
     const reg = {
-      // Typed routing: the path is parsed into `ExpressParams<Path>`, checked
-      // against the frag's `P` contravariantly; deps by the DepGuard brand.
-      get<Path extends string, Need extends object, R>(
+      get<Path extends string, Need extends object, S extends StandardSchemaV1, R>(
         path: Path,
-        handler: Handler<Need, ExpressParams<Path>, R> & DepGuard<Pub, Need>,
+        handler: Handler<Need, S, R> &
+          DepGuard<Pub, Need> &
+          (ExpressParams<Path> extends Record<RequiredInputKeys<S>, unknown>
+            ? unknown
+            : { readonly __ERROR_route_missing_input_keys: RequiredInputKeys<S> }),
       ) {
         app.get(path, (req, res) => run(handler, req, res))
         return reg
       },
-      post<Path extends string, Need extends object, R>(
+      post<Path extends string, Need extends object, S extends StandardSchemaV1, R>(
         path: Path,
-        handler: Handler<Need, ExpressParams<Path>, R> & DepGuard<Pub, Need>,
+        handler: Handler<Need, S, R> &
+          DepGuard<Pub, Need> &
+          (ExpressParams<Path> extends Record<RequiredInputKeys<S>, unknown>
+            ? unknown
+            : { readonly __ERROR_route_missing_input_keys: RequiredInputKeys<S> }),
       ) {
         app.post(path, (req, res) => run(handler, req, res))
         return reg
       },
-      // Plain routing, no typed params (design: "also allow plain routing").
-      getPlain<Need extends object, R>(
+      // Plain routing, no key reconciliation (design: "also allow plain
+      // routing"); runtime validation still fires via `runScope`.
+      getPlain<Need extends object, S extends StandardSchemaV1, R>(
         path: string,
-        handler: Handler<Need, Record<string, string>, R> & DepGuard<Pub, Need>,
+        handler: Handler<Need, S, R> & DepGuard<Pub, Need>,
       ) {
         app.get(path, (req, res) => run(handler, req, res))
         return reg

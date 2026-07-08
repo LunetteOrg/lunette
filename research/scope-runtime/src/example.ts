@@ -1,36 +1,101 @@
-import type { Repos } from './domain.ts'
-import { forbidden, notFound, redirect, unauthorized } from './scope/abort.ts'
+import { z } from 'zod'
+import type {
+  Admin,
+  AdminRepo,
+  Course,
+  CourseRepo,
+  Repos,
+  Session,
+  SessionRepo,
+} from './domain.ts'
+import { type Abort, forbidden, notFound, redirect, unauthorized } from './scope/abort.ts'
 import { fragment } from './scope/fragment.ts'
+import type { RequestScope } from './scope/scope.ts'
 
 // One guard/leaf model, reused by every host adapter (React Router, Hono,
 // Express) AND the bus. The point of the prototype: the same handlers cross
 // every host unchanged — only the adapter + codec differ. The handlers are
-// abstract FRAGMENTS: they declare their app requirement (the repos each guard
-// reads, in its dedicated first slot) and their route params, but bind to NO
-// concrete app. Deps and params are reconciled at the adapter, at compile time.
+// abstract FRAGMENTS: they declare their input contract with ONE `.input`
+// schema (a Standard Schema — here zod), declare their app requirement (the
+// repos each guard reads, in its dedicated first slot), and bind to NO concrete
+// app. Deps and params are reconciled at the adapter, at compile time; the
+// schema feeds every host's native validator (Hono `sValidator`, tRPC
+// `.input`, our RR7/Express/bus runtime validation).
+
+// The fragment's input contracts. `courseId` stays a string (the RPC input the
+// typed client reconstructs); coercion is demonstrated in the fragment-input
+// probe with `z.coerce.number()`.
+export const courseSchema = z.object({ courseId: z.string() })
+export const loginSchema = z.object({ as: z.string().optional() })
+
+// ── Domain logic, factored as PURE functions (no carrier, no host) ──────────
+// This is the reuse unit across hosts (blueprint §3.4): the tRPC procedure
+// re-expresses its guards natively but calls the SAME decision functions, so
+// the domain rule lives once. Each returns an enrichment or a RETURNED Abort.
+export const authenticate = (
+  sessionRepo: SessionRepo,
+  request: Request,
+): { session: Session } | Abort => {
+  const session = sessionRepo.get(request)
+  return session ? { session } : unauthorized()
+}
+
+export const resolveAdmin = (adminRepo: AdminRepo, userId: string): { admin: Admin } | Abort => {
+  const admin = adminRepo.byId(userId)
+  return admin ? { admin } : forbidden()
+}
+
+export const resolveCourse = (
+  courseRepo: CourseRepo,
+  courseId: string,
+  adminId: string,
+): { course: Course } | Abort => {
+  const course = courseRepo.byId(courseId)
+  if (!course) return notFound()
+  return course.ownerId === adminId ? { course } : forbidden('not owner')
+}
+
+export const shapeCourse = (course: Course): { id: string; title: string } => ({
+  id: course.id,
+  title: course.title,
+})
+
+// ── The fragment-shaped guard/leaf consts (HTTP/bus hosts) ──────────────────
+// Named so RR7/Hono/Express/bus build `courseHandler` from them, and the tRPC
+// procedure reuses the SAME decision functions above.
+export const authGuard = (app: Pick<Repos, 'sessionRepo'>, _params: {}, ctx: RequestScope) =>
+  authenticate(app.sessionRepo, ctx.request)
+
+export const adminGuard = (
+  app: Pick<Repos, 'adminRepo'>,
+  _params: {},
+  ctx: { session: Session },
+) => resolveAdmin(app.adminRepo, ctx.session.userId)
+
+export const courseGuard = (
+  app: Pick<Repos, 'courseRepo'>,
+  params: { courseId: string },
+  ctx: { admin: Admin },
+) => resolveCourse(app.courseRepo, params.courseId, ctx.admin.id)
+
+export const courseLeaf = (deps: { course: Course }): { id: string; title: string } =>
+  shapeCourse(deps.course)
 
 // The ownership + prefetch stack: authenticate, resolve the admin, then
-// prefetch the course and check ownership — enriching or short-circuiting.
+// prefetch the course and check ownership — enriching or short-circuiting. The
+// leaf consumes the prefetched enrichment — no repo, no refetch.
 export const courseHandler = fragment()
-  .guard((app: Pick<Repos, 'sessionRepo'>, _params: {}, ctx) => {
-    const session = app.sessionRepo.get(ctx.request)
-    return session ? { session } : unauthorized()
-  })
-  .guard((app: Pick<Repos, 'adminRepo'>, _params: {}, ctx) => {
-    const admin = app.adminRepo.byId(ctx.session.userId)
-    return admin ? { admin } : forbidden()
-  })
-  .guard((app: Pick<Repos, 'courseRepo'>, params: { courseId: string }, ctx) => {
-    const course = app.courseRepo.byId(params.courseId)
-    if (!course) return notFound()
-    return course.ownerId === ctx.admin.id ? { course } : forbidden()
-  })
-  // The leaf consumes the prefetched enrichment — no repo, no refetch.
-  .handle((deps) => ({ id: deps.course.id, title: deps.course.title }))
+  .input(courseSchema)
+  .guard(authGuard)
+  .guard(adminGuard)
+  .guard(courseGuard)
+  .handle(courseLeaf)
 
-// An action exercising the cookie sink + a redirect abort. It declares no app
-// requirement and reads one optional param.
-export const loginHandler = fragment().handle((deps, params: { as?: string }) => {
+// An action exercising the cookie sink + a redirect abort. Its one optional
+// param `{ as?: string }` now comes from the `.input` schema.
+export const loginLeaf = (deps: RequestScope, params: { as?: string | undefined }): Abort => {
   deps.cookies.set('sid', params.as ?? 'u-admin', { httpOnly: true, path: '/' })
   return redirect('/dashboard')
-})
+}
+
+export const loginHandler = fragment().input(loginSchema).handle(loginLeaf)

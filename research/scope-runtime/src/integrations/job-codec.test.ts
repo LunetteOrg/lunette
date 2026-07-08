@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { chain } from '../chain.ts'
 import { forbidden } from '../scope/abort.ts'
 import { fragmentFor } from '../scope/fragment.ts'
@@ -24,11 +25,13 @@ describe('message-bus codec — the scope-KIND facet', () => {
   it('runs a real handler over a message: result → ack, abort → dead-letter, throw → nack', async () => {
     const { app, dispose } = await chain.build({ env: { label: 'job' } })
 
-    // A guard on the JobScope carrier declares the typed param (proving guards
-    // work off HTTP too) and reads the message body; the leaf consumes both.
+    // The fragment declares its input via ONE `.input` schema (same as HTTP
+    // hosts); `runJob` validates the job params against it before folding. The
+    // guard reads the coerced param and the message body; the leaf consumes both.
     // Three outcomes: a domain result, a domain abort, an infra throw.
     const process = fragmentFor<JobScope>()
-      .guard((_app: {}, params: { kind: string }, ctx) => {
+      .input(z.object({ kind: z.string() }))
+      .guard((_app: {}, params, ctx) => {
         // the carrier is the message, not a request
         void (ctx.message.body as unknown)
         return { requestedKind: params.kind }

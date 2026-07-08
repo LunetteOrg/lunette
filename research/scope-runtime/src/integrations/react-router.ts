@@ -1,7 +1,8 @@
 import { Lunette } from '@lntt/wire'
+import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { DepGuard } from '../scope/adapter-guard.ts'
 import { fragment, type Handler } from '../scope/fragment.ts'
-import { runFold } from '../scope/run-fold.ts'
+import { runScope } from '../scope/run-fold.ts'
 import type { RequestScope } from '../scope/scope.ts'
 import { outcomeToResponse } from './http-codec.ts'
 
@@ -46,19 +47,22 @@ export function reactRouter<C extends Lunette<any, any, any>>(
     __wireApp: (await ensure(seedFrom(hostEnv))).app as Pub,
   })
 
-  // The deps check (DepGuard) fires when the frag meets `toLoader`; the params
-  // check fires at `(args)` when Route.LoaderArgs (params: RP) meets the
-  // `params: P` slot — contravariance, `RP extends P` (spike 4).
+  // The deps check (DepGuard) fires when the frag meets `toLoader`. Params are
+  // NOT reconciled against the schema here: RR7's own typegen types
+  // `args.params` from the file route (`Record<string, string>`), independent
+  // of the fragment's schema. `runScope` validates+coerces them at runtime →
+  // a RETURNED 422 abort on a bad param, and the leaf reads the coerced
+  // `OutputOf<S>`.
   const toLoader =
-    <Need extends object, P extends object, R>(
-      handler: Handler<Need, P, R> & DepGuard<Pub, Need>,
+    <Need extends object, S extends StandardSchemaV1, R>(
+      handler: Handler<Need, S, R> & DepGuard<Pub, Need>,
     ) =>
     (args: {
       request: Request
-      params: P
+      params: Record<string, string>
       context: WireContext<Pub>
     }): Promise<Response> =>
-      runFold<RequestScope, R>(
+      runScope<RequestScope, S, R>(
         handler,
         args.context.__wireApp as object,
         { request: args.request },

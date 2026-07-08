@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { chain } from '../bootstrap/chain.ts'
 import type { App } from '../bootstrap/chain.ts'
 import type { Env } from '../config/env.ts'
@@ -40,8 +41,9 @@ export const feedFragment = fragment()
 // value, not the raw `throw new Response(null, { status: 404 })`. The viewer id
 // flows from the prior guard's enrichment (`ctx.session`), typed, no re-read.
 export const postFragment = fragment()
+  .input(z.object({ postId: z.string() }))
   .guard(readSession)
-  .guard((app: Pick<App, 'threads'>, params: { postId: string }, ctx) =>
+  .guard((app: Pick<App, 'threads'>, params, ctx) =>
     app.threads
       .getPostForReading(params.postId, 'web', ctx.session?.userId)
       .then((post) => (isError(post) ? notFound() : { post })),

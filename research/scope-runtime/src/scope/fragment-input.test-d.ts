@@ -1,0 +1,81 @@
+import { describe, expectTypeOf, it } from 'vitest'
+import { z } from 'zod'
+import type { SessionRepo } from '../domain.ts'
+import { forbidden } from './abort.ts'
+import { fragment, type Handler } from './fragment.ts'
+import type { InputOf, OutputOf } from './schema.ts'
+
+// One schema on the fragment. `z.coerce.number()` gives an OUTPUT of `number`
+// (the coerced value) from a string-ish INPUT — the exact split the host needs:
+// the path provides `courseId` as a string, the leaf reads it as a number.
+const params = z.object({ courseId: z.coerce.number(), tab: z.string().optional() })
+type S = typeof params
+
+describe('fragment .input(schema) — Standard Schema type contract', () => {
+  it('OutputOf<S> is the coerced params type; InputOf<S> keeps the raw keys', () => {
+    expectTypeOf<OutputOf<S>>().toEqualTypeOf<{ courseId: number; tab?: string | undefined }>()
+    expectTypeOf<InputOf<S>>().toMatchTypeOf<{ courseId: unknown }>()
+  })
+
+  it('the leaf reads params typed as the schema OUTPUT', () => {
+    const h = fragment()
+      .input(params)
+      .handle((_deps, p) => {
+        expectTypeOf(p.courseId).toEqualTypeOf<number>()
+        expectTypeOf(p.tab).toEqualTypeOf<string | undefined>()
+        return { id: p.courseId }
+      })
+    expectTypeOf(h).toMatchTypeOf<Handler<Record<never, never>, S, { id: number }>>()
+    expectTypeOf(h.schema).toEqualTypeOf<S>()
+  })
+
+  it('a leaf reading a key the schema does not define is a compile error', () => {
+    fragment()
+      .input(params)
+      .handle((_deps, p) => {
+        // @ts-expect-error — `missing` is not a key of the schema OUTPUT
+        return { leaked: p.missing }
+      })
+  })
+
+  it('guards read the coerced params too, and later guards see prior enrichments', () => {
+    fragment()
+      .input(params)
+      .guard((deps: { sessionRepo: SessionRepo }, p, _ctx) => {
+        expectTypeOf(p.courseId).toEqualTypeOf<number>()
+        const s = deps.sessionRepo.get(new Request('http://x'))
+        return s ? { session: s } : forbidden()
+      })
+      .guard((_deps: {}, p, ctx) => {
+        // the previous guard's enrichment is visible, typed
+        expectTypeOf(ctx.session.userId).toEqualTypeOf<string>()
+        expectTypeOf(p.courseId).toEqualTypeOf<number>()
+        return { admin: true as const }
+      })
+      .handle((ctx, _p) => {
+        expectTypeOf(ctx.session.userId).toEqualTypeOf<string>()
+        expectTypeOf(ctx.admin).toEqualTypeOf<true>()
+        return { ok: true }
+      })
+  })
+
+  it('a guard reading a params key the schema does not define is a compile error', () => {
+    fragment()
+      .input(params)
+      // @ts-expect-error — `nope` is not a key of the schema OUTPUT
+      .guard((_deps: {}, p) => ({ x: p.nope }))
+      .handle(() => ({ ok: true }))
+  })
+
+  it('the fragment accumulates every guard`s app-dep requirement into Need', () => {
+    const h = fragment()
+      .input(params)
+      .guard((_d: { sessionRepo: SessionRepo }, _p) => ({ a: 1 }))
+      .guard((_d: { courseRepo: { size: number } }, _p) => ({ b: 2 }))
+      .handle(() => ({ ok: true }))
+    // Need is the intersection of both guards' declared deps — carried in __need.
+    expectTypeOf(h).toMatchTypeOf<
+      Handler<{ sessionRepo: SessionRepo } & { courseRepo: { size: number } }, S, { ok: boolean }>
+    >()
+  })
+})
