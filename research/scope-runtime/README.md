@@ -55,8 +55,19 @@ src/
   integrations/react-router.ts    toLoader / toAction
   integrations/hono.ts            toHono
   integrations/express.ts         toExpress (Web Request ↔ node res)
+  integrations/job-codec.ts       Outcome → bus ack/nack (the scope-KIND facet, #10)
   integrations/*.test.ts          each host driven for real
 ```
+
+## Beyond HTTP — the codec is a facet (issue #10 groundwork)
+
+`integrations/job-codec.*` renders the SAME host-agnostic `Outcome` the HTTP
+codec renders, but as a message-bus acknowledgement: result→`ack`,
+domain abort→`ack + dead-letter` (processed, do not retry, but flagged),
+infra throw→`nack` (retry). Evidence the outcome codec is a swappable facet,
+not an HTTP assumption. The remaining #10 work is the INPUT payload
+(`Request` → `Message`), which this PoC fakes deliberately rather than pretend
+it is done.
 
 ## Run
 

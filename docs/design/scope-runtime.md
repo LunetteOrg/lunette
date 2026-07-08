@@ -40,11 +40,21 @@ now keeps the HTTP kit from baking the Response assumption into the core.
 
 The kinds, and how much of the mechanism each exercises:
 
-| kind | host that hands over the invocation | deps DOWN | outcome codec |
+| kind | host that hands over the invocation | deps DOWN | outcome codec (error convention §3) |
 |---|---|---|---|
-| **request** (#5) | RR7 / Express middleware (`(args, next)`) | ✅ | HTTP `200/4xx/5xx` |
-| **message** (#10) | a bus consumer with a handshake (Kafka `eachMessage`, a queue worker) | ✅ | `return→ack`, `throw→nack` |
+| **request** (#5) | RR7 / Express middleware (`(args, next)`) | ✅ | result→`2xx` · abort→`redirect/4xx` · throw→`5xx` |
+| **message** (#10) | a bus consumer with a handshake (Kafka `eachMessage`, a queue worker) | ✅ | result→`ack` · abort→`ack + dead-letter` · throw→`nack` |
 | **fire-and-forget** | Node `EventEmitter` (`(payload) ⇒ void`) | ✅ | none — the degenerate kind |
+
+The message codec's **abort→ack+dead-letter** is the subtle one: a returned
+domain rejection means the message *was* processed and must NOT be retried
+(retrying a domain failure cannot help — same as an HTTP `4xx` committing),
+but it is flagged to a dead-letter for inspection; only a THROWN infra error
+nacks for retry. This output codec is proven in the prototype
+(`integrations/job-codec.*`): the same host-agnostic `Outcome` the HTTP codec
+renders is mapped to a bus ack — evidence the codec is a swappable facet. What
+remains for #10 is generalizing the INPUT payload (an HTTP `Request` → a bus
+`Message`); the request-shaped scope is the one HTTP assumption still baked in.
 
 Two things this table pins down:
 
@@ -207,18 +217,69 @@ ownership, enriching `deps` (reused by the leaf, no refetch) or short-circuiting
 `scope.cookies` sink (fork 2), `guard` as a dialect fold (no core change,
 fork 3), and the leaf seeing enrichments + scope but never the repos.
 
-## Sub-decisions this opened (deferred)
+## Sub-decisions — resolved
 
-- **`to*` handler surface.** Variadic `toLoader(g1, g2, leaf)` reads best,
-  but accumulating types over a guard *tuple* is hard; fluent
-  `scope().guard(g1).guard(g2).handle(leaf)` types like the boot chain (one
-  intersection per step). **Owner's lean: variadic, but with fluent
-  composition of the first argument** (compose the guard stack fluently,
-  pass it as one argument to a variadic `to*`).
-- **Output channel.** Mutable `scope.cookies` sink (read back by the codec)
-  vs a richer `return { data, cookies }` that keeps `deps` immutable.
-- **`guard` scope.** A core verb usable at BOTH cadences (a boot-time guard
-  — "required env var missing" — may also make sense) or scope-tier only.
+Sparred out after the prototype; these are the verdicts to implement next
+round (with the bootstrap replica as the real-chain proving ground). The
+current prototype demonstrates the core (fold, three hosts, codec facet); the
+typed-params / fragment / host-context refinements below are the target it
+evolves toward.
+
+- **Packaging — `scopeFor` + per-host packs.** `scopeFor(chain)` stays the
+  host-agnostic primitive (`{ guard, handle }`) where shared handlers are
+  defined once. Each host pack — `reactRouter(chain)` / `hono(chain)` /
+  `express(chain)`, imported from `@lntt/http/*` — wraps it with that host's
+  codec and lifecycle. The core never imports a framework (principle 6); the
+  `to*` "come from scope" via the per-host pack, not a free function.
+- **Lifecycle — `mount` via the host context.** The host pack takes the
+  **chain** and owns build-once (promise-memo per isolate, ADR #12). `mount`
+  is the framework middleware you register once; it reads the **host context**
+  (`c.env` on Cloudflare, a preceding middleware, static `env` on node),
+  seeds the build from it, and puts the built app in the host context; the
+  `to*` read it back. This unifies static-env (seed at build) and dynamic-env
+  (seed at first request from `c.env`) under one path — exactly the
+  boot / first-request / per-request cadence split this doc asks decision 7 to
+  make.
+- **Handler = fragment, adapter = mount.** The handler is kept ABSTRACT (a
+  fragment declaring its requirements), not bound to a concrete app up front.
+  Its two requirement kinds are checked when it is mounted at the adapter:
+  app **deps** against the chain's `Pub`, and **params** against the route.
+  So a missing dep or a wrong param name is a compile error AT `toHono` /
+  `toLoader`, not at runtime — the type contract (principle 1) extended to the
+  scope tier, mirroring wire's Seed-vs-Ctx mount check (decision 31). Bonus:
+  abstract handlers are testable with flat fakes, no app (principle 4).
+- **`to*` handler surface — fluent stack, variadic-2 adapter.** `guard`
+  composes a stack fluently (one intersection per step, like the boot chain —
+  the tuple-accumulation of a pure variadic is the hard, costly path); the
+  composed stack passes as ONE argument to a 2-arg `to*`. Proven in the
+  prototype.
+- **Params — the bare-leaf's second arg, typed by annotation.** Not a
+  separate `kit.params<P>()`: params ARE the `(deps, params)` args, declared by
+  annotation like a layer's `ctx`, unified across the stack into `P`. Guards
+  and leaf both read them (the ownership guard needs `courseId`). Params are
+  the handler's **Seed**; deps are its requirement — same two-axis shape as a
+  chain. Per host:
+  - **Hono** — inherit Hono's own path-param types (`Handler`'s path generic);
+    Hono owns the routing, we reconcile the declared params against it.
+  - **Express** — Express types params as `Record<string,string>`, so we parse
+    the path ourselves via template-literal types: a typed-params feature
+    Express does not natively have (or plain routing if they skip the types).
+  - **RR7** — routing is external (typegen `Route.LoaderArgs`); the handler
+    declares required params and we reconcile against `Route.LoaderArgs` at the
+    route module. Same error-at-binding, different source of truth.
+- **Output channel — mutable `scope.cookies` sink.** The leaf's RETURN stays
+  the domain result; cookies ride an opt-in sink the codec reads back (not a
+  `return { data, cookies }` envelope that would pollute every handler's return
+  type). Proven in the prototype.
+- **`guard` scope — dialect, scope-tier only.** Return-to-abort has meaning
+  only where a codec maps it; a boot-time domain error is meaningless (a
+  missing env is infra → throw). No core verb, no third slot. Confirmed by the
+  prototype finding: `guard` is a typed fold over wire, not a wire layer.
+- **Non-HTTP — HTTP-first, generalizes, build at #10.** The output codec is a
+  proven facet (message-bus `ack/nack/dead-letter` above); the design position
+  is closed. Building a listener adapter waits for #10's real bus case
+  (principle 5); the remaining work is the input-payload generalization
+  (`Request` → `Message`).
 - **Perf: measured, gate cleared.** Feeding the whole app `Pub` as the scope
   chain's seed, once per route, was the one untested assumption. Spike
   (`test/limits/scope-reseed.spike.*`, a ~15-layer app):
