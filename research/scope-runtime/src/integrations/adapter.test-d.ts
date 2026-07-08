@@ -17,11 +17,11 @@ const ex = expressPack(chain, () => ({ env: {} as Env }))
 // A fragment requiring a repo the chain's Pub does NOT expose — the deps axis.
 // Param-less, so its schema is the unit schema (P = {}).
 const needsBilling = fragment()
-  .guard((app: { billingRepo: { charge(): void } }, _p, _ctx) => {
+  .guard((app: { billingRepo: { charge(): void } }, _ctx) => {
     app.billingRepo.charge()
     return { charged: true }
   })
-  .handle((deps) => ({ charged: deps.charged }))
+  .handle((_deps: {}, ctx) => ({ charged: ctx.charged }))
 
 // The deps axis (Need ⊆ Pub) is the ONE compile-time reconciliation that
 // survives across every host. Params are NO LONGER reconciled per-adapter

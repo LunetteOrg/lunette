@@ -23,16 +23,20 @@ export async function runFold<S extends { cookies: CookieSink }, R>(
   const cookies: CookieSink = {
     set: (name, value, options = {}) => pending.push({ name, value, options }),
   }
-  const ctx = { ...carrier, cookies }
+  // `ctx` merges the carrier, the cookie sink, and the validated params. Guards
+  // and the leaf both read `(app, ctx)`; enrichments accumulate into ctx.
+  const ctx = { ...carrier, cookies, params }
 
   let enrich: Record<string, unknown> = {}
   for (const g of handler.guards) {
-    const out = await g(app, params, { ...ctx, ...enrich })
+    const out = await g(app, { ...ctx, ...enrich })
     if (isAbort(out)) return { ok: false, abort: out as Abort, cookies: pending }
     enrich = { ...enrich, ...(out as object) }
   }
 
-  const result = await handler.leaf({ ...ctx, ...enrich }, params)
+  // The leaf is the use case: it declares its own deps, so it too receives the
+  // app (typed as its declared subset) plus the enriched ctx.
+  const result = await handler.leaf(app, { ...ctx, ...enrich })
   if (isAbort(result)) return { ok: false, abort: result as Abort, cookies: pending }
   return { ok: true, value: result as R, cookies: pending }
 }

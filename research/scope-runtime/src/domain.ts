@@ -30,10 +30,18 @@ export interface CourseRepo {
   list(): readonly Course[]
 }
 
+// A use-case service — the kind of thing a LEAF calls (distinct from the repos
+// the guards read for auth/prefetch). The leaf declares it and delegates the
+// domain work; guards never touch it.
+export interface CourseView {
+  detail(course: Course): { id: string; title: string }
+}
+
 export interface Repos {
   readonly sessionRepo: SessionRepo
   readonly adminRepo: AdminRepo
   readonly courseRepo: CourseRepo
+  readonly courseView: CourseView
 }
 
 // In-memory repos with fixed seed data. `Authorization: Bearer <userId>`
@@ -60,6 +68,9 @@ export function makeRepos(): Repos {
     courseRepo: {
       byId: (id) => courses.get(id) ?? null,
       list: () => [...courses.values()],
+    },
+    courseView: {
+      detail: (course) => ({ id: course.id, title: course.title }),
     },
   }
 }

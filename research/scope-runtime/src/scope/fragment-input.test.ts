@@ -15,7 +15,7 @@ describe('fragment .input(schema) — runtime coercion + abort', () => {
   it('coerces "42" → 42 on success and hands the leaf the typed params', async () => {
     const h = fragment()
       .input(params)
-      .handle((_deps, p) => ({ doubled: p.courseId * 2 }))
+      .handle((_deps: {}, ctx) => ({ doubled: ctx.params.courseId * 2 }))
 
     const out = await runScope<RequestScope, typeof params, { doubled: number }>(
       h,
@@ -30,7 +30,7 @@ describe('fragment .input(schema) — runtime coercion + abort', () => {
   it('a validation failure is a RETURNED 422 abort, never a throw', async () => {
     const h = fragment()
       .input(params)
-      .handle((_deps, p) => ({ id: p.courseId }))
+      .handle((_deps: {}, ctx) => ({ id: ctx.params.courseId }))
 
     // "abc" cannot coerce to a number → the Standard-Schema validate reports
     // issues → a RETURNED domain abort with status 422 (a client error).
@@ -48,11 +48,11 @@ describe('fragment .input(schema) — runtime coercion + abort', () => {
     const seen: number[] = []
     const h = fragment()
       .input(params)
-      .guard((_deps: {}, p) => {
-        seen.push(p.courseId)
-        return p.courseId > 0 ? { positive: true as const } : forbidden()
+      .guard((_deps: {}, ctx) => {
+        seen.push(ctx.params.courseId)
+        return ctx.params.courseId > 0 ? { positive: true as const } : forbidden()
       })
-      .handle((ctx, p) => ({ courseId: p.courseId, positive: ctx.positive }))
+      .handle((_deps: {}, ctx) => ({ courseId: ctx.params.courseId, positive: ctx.positive }))
 
     const ok = await runScope<RequestScope, typeof params, { courseId: number; positive: true }>(
       h,
@@ -77,7 +77,7 @@ describe('fragment .input(schema) — runtime coercion + abort', () => {
     let guardRan = false
     const h = fragment()
       .input(params)
-      .guard((_deps: {}, _p) => {
+      .guard((_deps: {}, _ctx) => {
         guardRan = true
         return { ok: true as const }
       })

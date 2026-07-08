@@ -17,20 +17,20 @@ const admin = (userId: string) =>
 const schema = z.object({ courseId: z.string() })
 const ownedCourse = fragment()
   .input(schema)
-  .guard((app: Pick<Repos, 'sessionRepo'>, _params, ctx) => {
+  .guard((app: Pick<Repos, 'sessionRepo'>, ctx) => {
     const session = app.sessionRepo.get(ctx.request)
     return session ? { session } : unauthorized()
   })
-  .guard((app: Pick<Repos, 'adminRepo'>, _params, ctx) => {
+  .guard((app: Pick<Repos, 'adminRepo'>, ctx) => {
     const admin = app.adminRepo.byId(ctx.session.userId)
     return admin ? { admin } : forbidden()
   })
-  .guard((app: Pick<Repos, 'courseRepo'>, params, ctx) => {
-    const course = app.courseRepo.byId(params.courseId)
+  .guard((app: Pick<Repos, 'courseRepo'>, ctx) => {
+    const course = app.courseRepo.byId(ctx.params.courseId)
     if (!course) return notFound()
     return course.ownerId === ctx.admin.id ? { course } : forbidden()
   })
-  .handle((deps) => ({ title: deps.course.title }))
+  .handle((_deps: {}, ctx) => ({ title: ctx.course.title }))
 
 describe('the fragment fold at runtime', () => {
   it('accumulates enrichments then runs the leaf; short-circuits on abort', async () => {
@@ -63,8 +63,8 @@ describe('the fragment fold at runtime', () => {
   it('the cookie sink collects Set-Cookie without changing the leaf return', async () => {
     const { app, dispose } = await chain.build({ env: { label: 'test' } })
 
-    const handler = fragment().handle((deps) => {
-      deps.cookies.set('sid', 'abc', { httpOnly: true })
+    const handler = fragment().handle((_deps: {}, ctx) => {
+      ctx.cookies.set('sid', 'abc', { httpOnly: true })
       return { ok: true }
     })
 

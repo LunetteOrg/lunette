@@ -31,14 +31,14 @@ describe('message-bus codec — the scope-KIND facet', () => {
     // Three outcomes: a domain result, a domain abort, an infra throw.
     const process = fragmentFor<JobScope>()
       .input(z.object({ kind: z.string() }))
-      .guard((_app: {}, params, ctx) => {
+      .guard((_app: {}, ctx) => {
         // the carrier is the message, not a request
         void (ctx.message.body as unknown)
-        return { requestedKind: params.kind }
+        return { requestedKind: ctx.params.kind }
       })
-      .handle((deps, params) => {
-        const kind = params.kind
-        void deps.requestedKind
+      .handle((_deps: {}, ctx) => {
+        const kind = ctx.params.kind
+        void ctx.requestedKind
         if (kind === 'reject') return forbidden('domain rule')
         if (kind === 'boom') throw new Error('infra down')
         return { processed: kind }

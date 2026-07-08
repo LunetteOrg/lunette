@@ -15,9 +15,12 @@ import { unit, type OutputOf, type UnitSchema } from './schema.ts'
 export interface Handler<Need extends object, S extends StandardSchemaV1, R> {
   readonly schema: S
   // Erased fold ingredients — the fragment defers execution until an app is
-  // mounted at the adapter; `runFold`/`runScope` run these.
-  readonly guards: ReadonlyArray<(app: object, params: object, ctx: object) => unknown>
-  readonly leaf: (deps: object, params: object) => unknown
+  // mounted at the adapter; `runFold`/`runScope` run these. Both guard and leaf
+  // are `(deps, ctx)`: `deps` is the declared app requirement (its own slot, so
+  // `Need` stays recoverable — spike 1), `ctx` is the carrier + validated
+  // `params` + accumulated enrichments.
+  readonly guards: ReadonlyArray<(deps: object, ctx: object) => unknown>
+  readonly leaf: (deps: object, ctx: object) => unknown
   readonly __need?: (n: Need) => void
   readonly __result?: R
 }
@@ -35,19 +38,28 @@ export interface Fragment<
 > {
   readonly schema: S
 
-  // The app-requirement lives in a DEDICATED first arg (never merged into the
-  // ctx bag) so `Need` is recoverable — a merged bag is not subtractable
-  // (spike 1). `params` is the schema OUTPUT, identical for every guard; `ctx`
-  // is the carrier plus every prior enrichment.
+  // Both guard and leaf are `(deps, ctx)`. `deps` — the declared app
+  // requirement — lives in a DEDICATED first arg (never merged into the ctx
+  // bag) so `Need` is recoverable: a merged bag is not subtractable (spike 1).
+  // Declare it inline and structural (`{ sessionRepo: SessionRepo }`), like a
+  // wire bare leaf's deps — no `Pick` from a global. `ctx` is the carrier + the
+  // validated `params` (schema OUTPUT) + every prior enrichment, merged.
   guard<Need2 extends object, E extends object>(
-    g: (app: Need2, params: OutputOf<S>, ctx: Carrier & Acc) => E | Abort | Promise<E | Abort>,
+    g: (
+      deps: Need2,
+      ctx: Carrier & Acc & { readonly params: OutputOf<S> },
+    ) => E | Abort | Promise<E | Abort>,
   ): Fragment<Carrier, S, Need & Need2, Acc & E>
 
-  // The leaf keeps the two-arg `(deps, params)` shape. It NEVER sees the app:
-  // `deps` is the carrier plus enrichments only — repos stay in the guards.
-  handle<R>(
-    leaf: (deps: Carrier & Acc, params: OutputOf<S>) => R | Abort | Promise<R | Abort>,
-  ): Handler<Need, S, R>
+  // The leaf IS the use case: it DECLARES its own deps (the services it calls),
+  // which accumulate into `Need` and are reconciled against the chain's Pub at
+  // the adapter, exactly like a guard's. It returns a domain `Result | Abort`.
+  handle<Need2 extends object, R>(
+    leaf: (
+      deps: Need2,
+      ctx: Carrier & Acc & { readonly params: OutputOf<S> },
+    ) => R | Abort | Promise<R | Abort>,
+  ): Handler<Need & Need2, S, R>
 }
 
 // `.input` is reachable ONLY as the FIRST call: `FragmentStart` extends a plain
@@ -63,7 +75,7 @@ export interface FragmentStart<Carrier extends object>
   input<S extends StandardSchemaV1>(schema: S): Fragment<Carrier, S, {}, {}>
 }
 
-type AnyGuard = (app: object, params: object, ctx: object) => unknown
+type AnyGuard = (deps: object, ctx: object) => unknown
 
 function makeFragment<
   Carrier extends object,

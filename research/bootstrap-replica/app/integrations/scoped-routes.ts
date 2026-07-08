@@ -20,7 +20,6 @@ import { reactRouter } from '../../../scope-runtime/src/integrations/react-route
 // the session read.
 const readSession = (
   app: Pick<App, 'getSession'>,
-  _params: {},
   ctx: { request: Request },
 ): Promise<{ session: Session | null }> =>
   app.getSession(ctx.request).then((session) => ({ session }))
@@ -31,10 +30,10 @@ const readSession = (
 // ceremony in the route body.
 export const feedFragment = fragment()
   .guard(readSession)
-  .guard((app: Pick<App, 'threads'>, _params: {}, _ctx) =>
+  .guard((app: Pick<App, 'threads'>, _ctx) =>
     app.threads.listFeed('feed').then((feed) => ({ feed })),
   )
-  .handle((deps) => ({ signedIn: deps.session !== null, feed: deps.feed }))
+  .handle((_deps: {}, ctx) => ({ signedIn: ctx.session !== null, feed: ctx.feed }))
 
 // AFTER of `postLoader`. The shared session guard again; then a prefetch guard
 // that either enriches `{ post }` or ABORTS with `notFound()` — a RETURNED
@@ -43,12 +42,12 @@ export const feedFragment = fragment()
 export const postFragment = fragment()
   .input(z.object({ postId: z.string() }))
   .guard(readSession)
-  .guard((app: Pick<App, 'threads'>, params, ctx) =>
+  .guard((app: Pick<App, 'threads'>, ctx) =>
     app.threads
-      .getPostForReading(params.postId, 'web', ctx.session?.userId)
+      .getPostForReading(ctx.params.postId, 'web', ctx.session?.userId)
       .then((post) => (isError(post) ? notFound() : { post })),
   )
-  .handle((deps) => ({ post: deps.post }))
+  .handle((_deps: {}, ctx) => ({ post: ctx.post }))
 
 // AFTER of `loginAction`. One guard owns the whole side-effecting path (parse
 // the form, validate, request the code); the leaf is a pure success shape. The
@@ -57,7 +56,7 @@ export const postFragment = fragment()
 // scope model surfaces a domain-vs-abort question the prototype answers by
 // mapping validation failure to a 4xx.
 export const loginFragment = fragment().guard(
-  async (app: Pick<App, 'access' | 'validateEmail'>, _params: {}, ctx) => {
+  async (app: Pick<App, 'access' | 'validateEmail'>, ctx) => {
     const form = await ctx.request.formData()
     const email = String(form.get('email') ?? '')
     if (!app.validateEmail(email)) return httpError(422, { error: 'invalid-email' as const })

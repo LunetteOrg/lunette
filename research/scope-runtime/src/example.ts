@@ -4,7 +4,7 @@ import type {
   AdminRepo,
   Course,
   CourseRepo,
-  Repos,
+  CourseView,
   Session,
   SessionRepo,
 } from './domain.ts'
@@ -63,23 +63,29 @@ export const shapeCourse = (course: Course): { id: string; title: string } => ({
 // ── The fragment-shaped guard/leaf consts (HTTP/bus hosts) ──────────────────
 // Named so RR7/Hono/Express/bus build `courseHandler` from them, and the tRPC
 // procedure reuses the SAME decision functions above.
-export const authGuard = (app: Pick<Repos, 'sessionRepo'>, _params: {}, ctx: RequestScope) =>
-  authenticate(app.sessionRepo, ctx.request)
+// Each guard/leaf is `(deps, ctx)`: `deps` is its inline, structural app
+// requirement (no `Pick` from a global), `ctx` the carrier + validated
+// `params` + prior enrichments. The guards read repos for auth/prefetch; the
+// leaf declares a use-case service and calls it.
+export const authGuard = ({ sessionRepo }: { sessionRepo: SessionRepo }, ctx: RequestScope) =>
+  authenticate(sessionRepo, ctx.request)
 
 export const adminGuard = (
-  app: Pick<Repos, 'adminRepo'>,
-  _params: {},
+  { adminRepo }: { adminRepo: AdminRepo },
   ctx: { session: Session },
-) => resolveAdmin(app.adminRepo, ctx.session.userId)
+) => resolveAdmin(adminRepo, ctx.session.userId)
 
 export const courseGuard = (
-  app: Pick<Repos, 'courseRepo'>,
-  params: { courseId: string },
-  ctx: { admin: Admin },
-) => resolveCourse(app.courseRepo, params.courseId, ctx.admin.id)
+  { courseRepo }: { courseRepo: CourseRepo },
+  ctx: { admin: Admin; params: { courseId: string } },
+) => resolveCourse(courseRepo, ctx.params.courseId, ctx.admin.id)
 
-export const courseLeaf = (deps: { course: Course }): { id: string; title: string } =>
-  shapeCourse(deps.course)
+// The leaf IS the use case: it declares `courseView` (a service, not a repo)
+// and delegates the domain work, reading the prefetched `course` from ctx.
+export const courseLeaf = (
+  { courseView }: { courseView: CourseView },
+  ctx: { course: Course },
+): { id: string; title: string } => courseView.detail(ctx.course)
 
 // The ownership + prefetch stack: authenticate, resolve the admin, then
 // prefetch the course and check ownership — enriching or short-circuiting. The
@@ -93,8 +99,11 @@ export const courseHandler = fragment()
 
 // An action exercising the cookie sink + a redirect abort. Its one optional
 // param `{ as?: string }` now comes from the `.input` schema.
-export const loginLeaf = (deps: RequestScope, params: { as?: string | undefined }): Abort => {
-  deps.cookies.set('sid', params.as ?? 'u-admin', { httpOnly: true, path: '/' })
+export const loginLeaf = (
+  _deps: {},
+  ctx: RequestScope & { params: { as?: string | undefined } },
+): Abort => {
+  ctx.cookies.set('sid', ctx.params.as ?? 'u-admin', { httpOnly: true, path: '/' })
   return redirect('/dashboard')
 }
 
