@@ -1,0 +1,104 @@
+import { z } from 'zod'
+import type {
+  Admin,
+  AdminRepo,
+  Course,
+  CourseRepo,
+  CourseView,
+  Session,
+  SessionRepo,
+} from './domain.ts'
+import { type Abort, forbidden, notFound, redirect, unauthorized } from '@lntt/scope'
+import { fragment } from '@lntt/scope'
+import type { RequestScope } from '@lntt/scope'
+
+// ONE guard/leaf model, reused by every host adapter (Hono, Express, React
+// Router 7, tRPC). The handlers are abstract FRAGMENTS: they declare their
+// input contract with ONE `.input` schema (a Standard Schema — here zod), their
+// app requirement (the repos each guard reads, in its dedicated first slot),
+// and bind to NO concrete app. Deps and params are reconciled at the adapter,
+// at compile time; the schema feeds every host's native validator.
+
+// The fragment's input contract. `courseId` stays a string (the RPC input the
+// typed client reconstructs).
+export const courseSchema = z.object({ courseId: z.string() })
+export const loginSchema = z.object({ as: z.string().optional() })
+
+// ── Domain logic, factored as PURE functions (no carrier, no host) ──────────
+// This is the reuse unit across hosts: the tRPC procedure re-expresses its
+// guards natively but calls the SAME decision functions, so the domain rule
+// lives once. Each returns an enrichment or a RETURNED Abort.
+export const authenticate = (
+  sessionRepo: SessionRepo,
+  request: Request,
+): { session: Session } | Abort => {
+  const session = sessionRepo.get(request)
+  return session ? { session } : unauthorized()
+}
+
+export const resolveAdmin = (adminRepo: AdminRepo, userId: string): { admin: Admin } | Abort => {
+  const admin = adminRepo.byId(userId)
+  return admin ? { admin } : forbidden()
+}
+
+export const resolveCourse = (
+  courseRepo: CourseRepo,
+  courseId: string,
+  adminId: string,
+): { course: Course } | Abort => {
+  const course = courseRepo.byId(courseId)
+  if (!course) return notFound()
+  return course.ownerId === adminId ? { course } : forbidden('not owner')
+}
+
+export const shapeCourse = (course: Course): { id: string; title: string } => ({
+  id: course.id,
+  title: course.title,
+})
+
+// ── The fragment-shaped guard/leaf consts (HTTP hosts) ──────────────────────
+// Each guard/leaf is `(deps, ctx)`: `deps` is its inline, structural app
+// requirement (no `Pick` from a global), `ctx` the carrier + validated
+// `params` + prior enrichments. The guards read repos for auth/prefetch; the
+// leaf declares a use-case service and calls it.
+export const authGuard = ({ sessionRepo }: { sessionRepo: SessionRepo }, ctx: RequestScope) =>
+  authenticate(sessionRepo, ctx.request)
+
+export const adminGuard = (
+  { adminRepo }: { adminRepo: AdminRepo },
+  ctx: { session: Session },
+) => resolveAdmin(adminRepo, ctx.session.userId)
+
+export const courseGuard = (
+  { courseRepo }: { courseRepo: CourseRepo },
+  ctx: { admin: Admin; params: { courseId: string } },
+) => resolveCourse(courseRepo, ctx.params.courseId, ctx.admin.id)
+
+// The leaf IS the use case: it declares `courseView` (a service, not a repo)
+// and delegates the domain work, reading the prefetched `course` from ctx.
+export const courseLeaf = (
+  { courseView }: { courseView: CourseView },
+  ctx: { course: Course },
+): { id: string; title: string } => courseView.detail(ctx.course)
+
+// The ownership + prefetch stack: authenticate, resolve the admin, then
+// prefetch the course and check ownership — enriching or short-circuiting. The
+// leaf consumes the prefetched enrichment — no repo, no refetch.
+export const courseHandler = fragment()
+  .input(courseSchema)
+  .guard(authGuard)
+  .guard(adminGuard)
+  .guard(courseGuard)
+  .handle(courseLeaf)
+
+// An action exercising the cookie sink + a redirect abort. Its one optional
+// param `{ as?: string }` comes from the `.input` schema.
+export const loginLeaf = (
+  _deps: {},
+  ctx: RequestScope & { params: { as?: string | undefined } },
+): Abort => {
+  ctx.cookies.set('sid', ctx.params.as ?? 'u-admin', { httpOnly: true, path: '/' })
+  return redirect('/dashboard')
+}
+
+export const loginHandler = fragment().input(loginSchema).handle(loginLeaf)

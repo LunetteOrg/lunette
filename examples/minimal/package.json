@@ -1,0 +1,27 @@
+{
+  "name": "@lntt/example-minimal",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Minimal example: ONE @lntt/scope fragment model served across four hosts (Hono, Express, React Router 7, tRPC) via @lntt/integration. In-memory domain, no database.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lntt/integration": "workspace:*",
+    "@lntt/scope": "workspace:*",
+    "@lntt/wire": "workspace:*"
+  },
+  "devDependencies": {
+    "@hono/standard-validator": "^0.2.3",
+    "@trpc/server": "^11.18.0",
+    "@types/express": "^5.0.6",
+    "express": "^5.2.1",
+    "hono": "^4.12.25",
+    "react-router": "^7.18.1",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.0",
+    "zod": "^3.25.76"
+  }
+}
