@@ -23,10 +23,8 @@ describe('Express pack — mount middleware + real HTTP round-trip', () => {
     const app = express()
     // mount is registered ONCE; it ensures the build and attaches the app.
     app.use(pack.mount())
-    pack
-      .route(app)
-      .get('/courses/:courseId', courseHandler)
-      .post('/login', loginHandler)
+    app.get('/courses/:courseId', pack.handler(courseHandler))
+    app.post('/login', pack.handler(loginHandler))
     const { url, close } = await startServer(app)
 
     const auth = { headers: { authorization: 'Bearer u-admin' } }

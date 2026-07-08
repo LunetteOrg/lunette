@@ -21,10 +21,15 @@ import { TRPCError } from '@trpc/server'
 // only imports, no runtime coupling.
 import type {
   MiddlewareFunction,
+  ProcedureBuilder,
   StandardSchemaV1,
+  UnsetMarker,
 } from '@trpc/server/unstable-core-do-not-import'
 import { type Abort, isAbort } from '../scope/abort.ts'
+import { type Handler } from '../scope/fragment.ts'
+import { runFold } from '../scope/run-fold.ts'
 import type { OutputOf } from '../scope/schema.ts'
+import type { RequestScope } from '../scope/scope.ts'
 
 // The schema OUTPUT is the ctx.input type — the SAME projection guards and leaf
 // read on every other host. tRPC's `.input(schema)` consumes the identical
@@ -84,4 +89,61 @@ export function leaf<Ctx, In, R>(
     if (isAbort(out)) throw abortToTRPCError(out)
     return out
   }
+}
+
+// toProcedure — the whole-fragment shortcut. `guard`/`leaf` above wrap ONE
+// decision each and are folded into a native procedure BY HAND with per-step
+// ctx annotations; `toProcedure` consumes an entire fragment `Handler` in ONE
+// call, with ZERO annotations, and STILL preserves the typed client. The
+// resolver runs OUR fold inside a native `.input(schema).query(resolver)`, so
+// tRPC infers the procedure INPUT from `.input(handler.schema)` and the OUTPUT
+// from the resolver's `R` — `hc`/`createCaller` inference is untouched.
+//
+// `procedure` is typed as a FRESH builder (no input/output yet: `UnsetMarker`s;
+// not a caller: `TCaller = false`) whose context/meta/overrides are inferred
+// from the concrete `t.procedure` passed in — `AnyProcedureBuilder` cannot be
+// used directly because its `TCaller = any` unions `.query`'s return into
+// `(() => …) | QueryProcedure`, which `t.router({...})` rejects. Fixing the
+// markers keeps `.input(schema).query(resolver)` returning a clean
+// `QueryProcedure<{ input: InferInput<S>; output: R }>`, so `hc`/`createCaller`
+// inference survives. The context is constrained to carry the fragment's
+// carrier field(s) — for the HTTP `RequestScope` fragment that is `request` —
+// so the resolver reads `ctx.request` and builds the carrier from it. A
+// RETURNED domain Abort becomes a THROWN TRPCError (the convention-translation
+// point); an actual throw stays infrastructure (INTERNAL_SERVER_ERROR).
+export function toProcedure<
+  TContext extends { request: Request },
+  TMeta,
+  TContextOverrides,
+  Need extends object,
+  S extends StandardSchemaV1,
+  R,
+>(
+  procedure: ProcedureBuilder<
+    TContext,
+    TMeta,
+    TContextOverrides,
+    UnsetMarker,
+    UnsetMarker,
+    UnsetMarker,
+    UnsetMarker,
+    false
+  >,
+  handler: Handler<Need, S, R>,
+) {
+  return procedure.input(handler.schema).query(async (opts): Promise<R> => {
+    // `opts` is contextually typed by tRPC's resolver signature; the constraint
+    // `TContext extends { request: Request }` guarantees the carrier is present,
+    // but a generic override could in principle re-type it, so read it through a
+    // local view. `input` is the schema OUTPUT (`OutputOf<S>`).
+    const ctx = opts.ctx as { request: Request }
+    const outcome = await runFold<RequestScope, R>(
+      handler,
+      ctx,
+      { request: ctx.request },
+      opts.input as object,
+    )
+    if (!outcome.ok) throw abortToTRPCError(outcome.abort)
+    return outcome.value
+  })
 }

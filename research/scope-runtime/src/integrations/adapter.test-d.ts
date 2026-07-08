@@ -27,8 +27,9 @@ const needsBilling = fragment()
 // survives across every host. Params are NO LONGER reconciled per-adapter
 // against a per-guard annotation: one `.input(schema)` fixes P, each host
 // validates it NATIVELY (Hono `sValidator`, tRPC `.input`) or at runtime
-// (RR7/Express/bus `runScope` → returned 422). Express alone keeps a typed-path
-// KEY-PRESENCE check (its route param keys ⊇ the schema's required input keys).
+// (RR7/Express/bus `runScope` → returned 422). Express is per-handler
+// (`app.get(path, w.handler(frag))`) with NO path check — params are validated
+// at runtime, so DIFFERENT chains can serve routes in the same Express app.
 describe('adapter contract — deps by brand (Need ⊆ Pub) at each call site', () => {
   it('RR7: deps-vs-Pub is checked at toLoader (missing dep = compile error)', () => {
     // courseHandler's Need (session/admin/course repos) ⊆ Pub → accepted
@@ -47,15 +48,14 @@ describe('adapter contract — deps by brand (Need ⊆ Pub) at each call site', 
     ho.wire(needsBilling)
   })
 
-  it('Express: the typed path reconciles route keys against required input keys', () => {
+  it('Express: deps-vs-Pub is checked per handler; params validated at runtime', () => {
     const app: Express = expressApp()
-    // parsed { courseId } ⊇ schema required keys { courseId } → accepted
-    ex.route(app).get('/courses/:courseId', courseHandler)
-    // parsed { wrongId } lacks the required input key { courseId }
-    // @ts-expect-error — route params { wrongId } miss required input key courseId
-    ex.route(app).get('/courses/:wrongId', courseHandler)
-    // plain routing bypasses key reconciliation: a param-less frag fits any route
-    const ping = fragment().handle(() => ({ pong: true }))
-    ex.route(app).getPlain('/anything', ping)
+    // per-handler: matching deps → a plain RequestHandler for a native route.
+    // There is NO compile-time path check — params are validated at runtime by
+    // `runScope` (a bad/missing param → a returned 422).
+    app.get('/courses/:courseId', ex.handler(courseHandler))
+    // missing dep is caught at `handler`, independent of the route path
+    // @ts-expect-error — chain Pub is missing the fragment's required deps
+    ex.handler(needsBilling)
   })
 })

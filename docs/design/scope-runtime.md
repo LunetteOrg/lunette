@@ -21,7 +21,8 @@ How does wire relate to the framework that holds the request?
 3. **Wire *grafts onto* the framework and owns a generic scope runtime** —
    the framework middleware is only the power socket. You no longer write
    RR7/Express middleware; you write handlers against our model, and a
-   `toLoader`/`toAction`/`toExpress` adapter bolts them on. **This is the
+   per-host adapter (`toLoader`/`toAction`, Hono `wire`, an Express
+   registrar) bolts them on. **This is the
    posture the exploration develops.**
 
 ## Not HTTP-specific — an *invocation* runtime, with the codec as a facet
@@ -110,10 +111,10 @@ and run-per-invocation all already exist.
 A scope-tier layer that may **return a domain error to abort the scope** —
 the codec maps it (401/redirect/dead-letter). This is the "middleware
 pre-usecase". The boot chain has no need for it (a domain error at boot is
-meaningless). `guard` **enriches `deps`, typed** (adds `admin`, `event`),
-NOT a separate bag — so cadence stays invisible to the leaf, preserving the
-principle that a use case declares deps without knowing or caring when they
-were born (still testable with flat fakes).
+meaningless). `guard` **enriches the handler `ctx`, typed** (adds `admin`, `event`) — the
+next guard and the leaf read it back merged into `ctx`, so the cadence stays
+invisible: a use case declares the deps it calls without knowing or caring
+when the enrichments were born (still testable with flat fakes).
 
 **Prototype finding — `guard` is a typed fold, not a wire layer.** Building
 the prototype (below) sharpened this: the return-to-abort **cannot** be a wire
@@ -125,23 +126,31 @@ the boot chain, fork 1), a returned abort short-circuits. This confirms the
 needs no core "third slot", and the fold is lighter than a per-request wire
 chain (so the re-seed spike measured the heavier road).
 
-## `scope` collapses to a namespace — retiring the third slot
+## No third slot — but the handler is `(deps, ctx)`
 
-The dead end that killed the two-argument handler: *everything can be a
-dep*, including the raw request and the mutable output sink (`cookies.set`
-is a value). So there is no structural second argument; `scope` is just a
-namespace **inside `deps`** (project convention: "namespace = the patch's
-shape"). Consequences:
+Two questions were resolved together. First, the scope tier needs **no
+third axis** on `Provided`: `guard` runs as a typed fold beside wire, not
+as a core onion return, so `Provided<All, Pub>` stays two-axis and the
+request-time Response channel reserved in decision 3 is never spent here.
 
-- the leaf keeps the bare-leaf shape `(deps, ...args)` untouched;
-- `Provided<All, Pub>` grows **no** third axis;
-- two-tier typing is just **two ordinary two-axis chains**, the scope one
-  seeded by the first's `Pub`.
+Second — and this REVERSED an earlier "everything is a dep, scope is a
+namespace inside `deps`" sketch — the handler settled on **two arguments,
+`(deps, ctx)`**:
 
-This lands issue #5's fork on **(a)/(b), not (c)** — with `guard` as the
-sole new surface. Transport coupling stays visible not by argument position
-but by the destructured key: `({ scope }) => …` is as loud a signal as a
-second argument.
+- **`deps`** is the handler's OWN app requirement, in a DEDICATED first
+  slot. Keeping it separate is not cosmetic: `Need` must stay recoverable
+  at the adapter to be reconciled against the chain's `Pub`, and a bag
+  merged with the carrier is not subtractable. Deps are declared inline and
+  structural (`{ sessionRepo: SessionRepo }`, not a `Pick` from a global
+  Services type) — lighter, and identical to a wire bare leaf's deps.
+- **`ctx`** is the carrier (`request` + `cookies` for HTTP, `message` +
+  `cookies` for the bus) MERGED with the validated `params` (at
+  `ctx.params`) MERGED with every prior guard enrichment.
+
+So the leaf reads `ctx.request` / `ctx.params.courseId`, never a `scope`
+namespace. This lands issue #5's fork on **(a)/(b), not (c)** — `guard` is
+the sole new surface, and two-tier typing is still **two ordinary two-axis
+chains**, the scope one seeded by the first's `Pub`.
 
 ## Frictions examined and cleared (no (c) trigger surfaced)
 
@@ -161,125 +170,195 @@ second argument.
   handle in the `scope` namespace (`scope.waitUntil(...)`), used inside the
   leaf.
 
-## The adapter surface (simulated)
+## The adapter surface
 
-`scopeFor(chain)` returns the kit bound once to the chain's `Pub` — App
-**inferred**, no manual `typeof`. `mount` is the framework middleware: build
-once (HMR promise-memo), hook `dispose` to shutdown, put the `Pub` in the
-host context. `to*` translate the host's calling convention ↔ `(deps)`, run
-the scope chain, and map the outcome through the kind's codec. The route
-leaf is `(deps) => Response` with **no extra positional args** — route
-params ride in the `scope` namespace.
+A per-host pack — `reactRouter(chain)` / `hono(chain)` / `express(chain)`,
+plus the tRPC wrappers — takes the **chain** (App **inferred**, no manual
+`typeof`), owns build-once, and hands back that host's surface. `mount` is
+the framework middleware registered once: it seeds the memoized build from
+the host context and stashes the built app there for the per-handler
+functions to read back. The handler is an abstract **fragment** — it
+declares its input with ONE `.input(schema)`, and each guard/leaf is
+`(deps, ctx)`. The pack reconciles the handler's `deps` against the chain's
+`Pub` and its params against the route, at compile time, at the adapter.
 
 ```ts
-// scope.ts — kit bound once to the chain's Pub (App inferred, no manual typeof)
-export const { mount, guard, toLoader, toAction } = scopeFor(chain)
+// example.ts — one handler, abstract (bound to NO app), reused by every host
+export const courseSchema = z.object({ courseId: z.string() })
 
-// root.tsx — build 1×, hook dispose, put the Pub in the host context
-export const middleware = [mount]
+const authGuard = ({ sessionRepo }: { sessionRepo: SessionRepo }, ctx: RequestScope) =>
+  authenticate(sessionRepo, ctx.request)                  // enrich { session } or return Abort
 
-// guards/admin.ts — the "middleware pre-usecase": enrich deps, or short-circuit
-export const withAdmin = guard(async ({ adminUserRepo, scope }) => {
-  const session = await readSession(scope.request)
-  if (!session) return redirect('/auth/login')            // returned ⇒ 0 runs, leaf skipped
-  const admin = await adminUserRepo.findById(session.adminUserId)
-  return isError(admin) || !admin
-    ? redirect('/auth/login')
-    : { admin }                                           // typed enrichment: adds admin:AdminUser
-})
+const adminGuard = ({ adminRepo }: { adminRepo: AdminRepo }, ctx: { session: Session }) =>
+  resolveAdmin(adminRepo, ctx.session.userId)             // enrich { admin } or return Abort
 
-// routes/courses.tsx — leaf is (deps) ⇒ Response; params ride in scope
-export const loader = toLoader(withAdmin, ({ courses, admin, scope }) =>
-  courses.list({ authorId: scope.params.author }))
+const courseGuard = (
+  { courseRepo }: { courseRepo: CourseRepo },
+  ctx: { admin: Admin; params: { courseId: string } },   // params come from .input
+) => resolveCourse(courseRepo, ctx.params.courseId, ctx.admin.id) // enrich { course } or Abort
 
-// Express — SAME leaf, different adapter + codec:
-// app.get('/courses', toExpress(withAdmin, ({ courses }) => Response.json(courses.list())))
+// The leaf IS the use case: it declares the SERVICE it calls (a Need, like a
+// guard), reads the prefetched enrichment from ctx, returns Result | Abort.
+const courseLeaf = ({ courseView }: { courseView: CourseView }, ctx: { course: Course }) =>
+  courseView.detail(ctx.course)
+
+export const courseHandler = fragment()
+  .input(courseSchema)
+  .guard(authGuard)
+  .guard(adminGuard)
+  .guard(courseGuard)
+  .handle(courseLeaf)
+
+// scope.ts — one pack per host, taking the chain (App inferred)
+const web = reactRouter(chain, seedFrom)   // { guard, handle, toLoader, toAction, mount, dispose }
+const api = hono(chain, seedFrom)          // { mount, wire, dispose }
+
+// root.tsx — register mount ONCE
+export const middleware = [web.mount]
+
+// routes/courses.tsx — the leaf never changes across hosts
+export const loader = web.toLoader(courseHandler)
+
+// api.ts (Hono) — native chaining keeps hc<typeof app>() typed (input + output)
+app.get('/courses/:courseId', ...api.wire(courseHandler))
 ```
 
 The ~20 repeated `requireAdmin(app, request)` calls collapse: the guard is
-IN the route signature, not forgettable. `toLoader` internals are
-mechanical — read the built `Pub` from host context, build `scope =
-{ request, params, cookies }`, run the scope chain (guards accumulate deps
-or return-to-abort), call the leaf, map the outcome via the HTTP codec
-(`return→200` +Set-Cookie · domain error→redirect/4xx · throw→5xx).
+IN the route signature, not forgettable. The `to*` internals are mechanical
+— read the built `Pub` from the host context, build the carrier + validated
+`params` + cookie sink, run the fold (guards accumulate enrichments or
+return-to-abort), call the leaf, map the outcome via the host's codec
+(`return→200` +Set-Cookie · domain abort→redirect/4xx · throw→5xx).
 
-## Prototype: proven across three real hosts
+## Prototype: proven across four real hosts
 
-A live prototype (`research/scope-runtime/`) implements this against **three
-real hosts** — React Router 7, Hono, Express — with **one** guard/leaf model
-carried unchanged by per-host adapters (`toLoader`/`toAction`, `toHono`,
-`toExpress`) and a per-host outcome codec. Driven for real: an RR7 loader
-invoked with a `Request`, a Hono `app.request()`, an Express server over a
-socket + `fetch`. The central case is the ownership + prefetch guard
-(`ownedCourse`): authenticate → resolve admin → prefetch the course and check
-ownership, enriching `deps` (reused by the leaf, no refetch) or short-circuiting
-`401/403/404`. It validates: the fluent stack (fork 1), the mutable
-`scope.cookies` sink (fork 2), `guard` as a dialect fold (no core change,
-fork 3), and the leaf seeing enrichments + scope but never the repos.
+A live prototype (`research/scope-runtime/`) implements this against **four
+real hosts** — React Router 7, Hono, Express, and tRPC — with **one**
+guard/leaf model carried unchanged by per-host adapters and a per-host
+outcome codec. Driven for real: an RR7 loader invoked with a `Request`, a
+Hono `app.request()`, an Express server over a socket + `fetch`, and a tRPC
+`createCaller`. The central case is the ownership + prefetch stack
+(`courseHandler`): authenticate → resolve admin → prefetch the course and
+check ownership, enriching `ctx` (reused by the leaf, no refetch) or
+short-circuiting `401/403/404`. It validates: the fluent stack (fork 1), the
+mutable `ctx.cookies` sink (fork 2), `guard` as a dialect fold (no core
+change, fork 3), the `(deps, ctx)` split with the leaf declaring its own
+`Need`, the `.input` schema feeding every host's native validator, and — the
+adversarial crux — that both `hc<typeof app>()` (Hono) and the tRPC typed
+client survive the model end to end, input AND output.
 
-## Sub-decisions — resolved
+## Sub-decisions — settled
 
-Sparred out after the prototype; these are the verdicts to implement next
-round (with the bootstrap replica as the real-chain proving ground). The
-current prototype demonstrates the core (fold, three hosts, codec facet); the
-typed-params / fragment / host-context refinements below are the target it
-evolves toward.
+Sparred out and then verified against the prototype (`research/scope-runtime/`,
+four real hosts). These are the verdicts the real packages implement.
 
-- **Packaging — `scopeFor` + per-host packs.** `scopeFor(chain)` stays the
-  host-agnostic primitive (`{ guard, handle }`) where shared handlers are
-  defined once. Each host pack — `reactRouter(chain)` / `hono(chain)` /
-  `express(chain)`, imported from `@lntt/http/*` — wraps it with that host's
-  codec and lifecycle. The core never imports a framework (principle 6); the
-  `to*` "come from scope" via the per-host pack, not a free function.
-- **Lifecycle — `mount` via the host context.** The host pack takes the
-  **chain** and owns build-once (promise-memo per isolate, ADR #12). `mount`
-  is the framework middleware you register once; it reads the **host context**
-  (`c.env` on Cloudflare, a preceding middleware, static `env` on node),
-  seeds the build from it, and puts the built app in the host context; the
-  `to*` read it back. This unifies static-env (seed at build) and dynamic-env
-  (seed at first request from `c.env`) under one path — exactly the
-  boot / first-request / per-request cadence split this doc asks decision 7 to
-  make.
-- **Handler = fragment, adapter = mount.** The handler is kept ABSTRACT (a
-  fragment declaring its requirements), not bound to a concrete app up front.
-  Its two requirement kinds are checked when it is mounted at the adapter:
-  app **deps** against the chain's `Pub`, and **params** against the route.
-  So a missing dep or a wrong param name is a compile error AT `toHono` /
-  `toLoader`, not at runtime — the type contract (principle 1) extended to the
-  scope tier, mirroring wire's Seed-vs-Ctx mount check (decision 31). Bonus:
-  abstract handlers are testable with flat fakes, no app (principle 4).
-- **`to*` handler surface — fluent stack, variadic-2 adapter.** `guard`
-  composes a stack fluently (one intersection per step, like the boot chain —
-  the tuple-accumulation of a pure variadic is the hard, costly path); the
-  composed stack passes as ONE argument to a 2-arg `to*`. Proven in the
-  prototype.
-- **Params — the bare-leaf's second arg, typed by annotation.** Not a
-  separate `kit.params<P>()`: params ARE the `(deps, params)` args, declared by
-  annotation like a layer's `ctx`, unified across the stack into `P`. Guards
-  and leaf both read them (the ownership guard needs `courseId`). Params are
-  the handler's **Seed**; deps are its requirement — same two-axis shape as a
-  chain. Per host:
-  - **Hono** — inherit Hono's own path-param types (`Handler`'s path generic);
-    Hono owns the routing, we reconcile the declared params against it.
-  - **Express** — Express types params as `Record<string,string>`, so we parse
-    the path ourselves via template-literal types: a typed-params feature
-    Express does not natively have (or plain routing if they skip the types).
-  - **RR7** — routing is external (typegen `Route.LoaderArgs`); the handler
-    declares required params and we reconcile against `Route.LoaderArgs` at the
-    route module. Same error-at-binding, different source of truth.
-- **Output channel — mutable `scope.cookies` sink.** The leaf's RETURN stays
-  the domain result; cookies ride an opt-in sink the codec reads back (not a
+- **`.input(schema)` — the fragment's ONE input contract.** A fragment
+  declares its input with a single Standard Schema
+  ([standardschema.dev](https://standardschema.dev) v1 — zod, Valibot and
+  ArkType all implement it; the core types depend only on
+  `@standard-schema/spec`, type-only, with NO hard zod dependency). From that
+  one schema flow three things: (a) the params type `OutputOf<schema>` that
+  every guard and the leaf read as `ctx.params`; (b) the native validator each
+  host registers (Hono's `sValidator`, tRPC's `.input`, our own RR7/Express/bus
+  runtime validation); (c) runtime coercion + validation → a RETURNED **422
+  domain abort** on failure, never a throw (a bad input is a domain outcome,
+  decision 14). `.input` is reachable only as the FIRST call and fixes the
+  schema once — "one input contract per fragment", enforced at the type level.
+  This REPLACES the earlier "params typed by per-guard annotation": one schema
+  is the single source of truth, and it is the same object the native
+  validators consume, so the fragment and the host's validator cannot diverge.
+- **Handlers are `(deps, ctx)`; the leaf declares its own deps.** Both guard
+  and leaf take two arguments. `deps` is the handler's OWN app requirement,
+  declared inline and structural (`{ sessionRepo: SessionRepo }`, not a `Pick`
+  from a global) in a DEDICATED first slot — so `Need` stays recoverable at the
+  adapter (a merged bag is not subtractable). `ctx` is the carrier + validated
+  `params` + prior enrichments, merged. The LEAF now declares its own deps too
+  (new): the leaf IS the use case — it declares the services it calls (e.g.
+  `{ courseView }`), which accumulate into `Need` and reconcile against the
+  chain's `Pub` exactly like a guard. This dissolves the earlier "leaf never
+  sees the app → trivial leaf / forced abort" seam. Guards stay for
+  cross-cutting concerns (authentication, authorization, resource
+  extraction/prefetch); the leaf calls use cases. `guard` returns
+  `Enrich | Abort`; the leaf returns `Result | Abort`.
+- **Handler = fragment, checked at the adapter.** The handler is kept ABSTRACT
+  (a fragment bound to NO concrete app). Its requirement kinds are checked when
+  it meets the adapter: app **deps** against the chain's `Pub` (by a brand,
+  `DepGuard`), and route **params** against the host's own route type. A
+  missing dep or a wrong param name is a compile error AT the adapter, not at
+  runtime — the type contract (principle 1) extended to the scope tier,
+  mirroring wire's Seed-vs-Ctx mount check (decisions 7/8). Abstract handlers
+  are testable with flat fakes, no app (principle 4).
+- **The seeding cadences collapse to two; the request window nests the
+  transaction window.** `mount` does first-request build-once EVERYWHERE
+  (Node, Bun/Elysia, Cloudflare Workers): `seedFrom(hostContext)` reads
+  `process.env` on Node or `c.env` on a Worker, and the build is memoized per
+  isolate (Node may warm it eagerly at boot — opt-in, not a separate cadence).
+  The second tier is per-request: the scope window (the guard/leaf fold). The
+  request window (outer) and a transaction window (inner) compose only through
+  the error convention. This is **decision 33**.
+- **Per-handler model EVERYWHERE — no central registrar.** Each host has ONE
+  function that consumes a fragment, used with the host's NATIVE routing. This
+  is what lets DIFFERENT CHAINS coexist in one app: each pack's `mount` stashes
+  its built app under a distinct context key, and each route picks its chain
+  via the per-handler function. The forms differ per host by necessity (each
+  framework's type-level routing differs):
+  - **Hono** — `app.get(path, ...w.wire(handler))`: native chaining, a native
+    validator (from the fragment's schema) and `c.json`, which preserves
+    `hc<typeof app>()` fully typed (input + output). The spread injects
+    `[validator, terminalHandler]`.
+  - **Express** — `app.get(path, w.handler(handler))`: a per-handler
+    `RequestHandler` on native `app.get`. No registrar (so different chains can
+    serve routes on one app) and no compile-time path check — params are
+    validated at RUNTIME (a returned 422 on failure). The deps-vs-Pub brand
+    still fires at the `w.handler(...)` call site.
+  - **React Router 7** — `web.toLoader(handler)` / `web.toAction(handler)` in
+    the route module; routing is external (file-based, RR7 typegen types the
+    params); runtime validation via the schema.
+  - **tRPC** — `toProcedure(t.procedure, handler)`: ONE call, NO annotations. It
+    consumes the whole fragment into a native `t.procedure.input(schema)
+    .query(resolver)`, where the resolver runs OUR fold (guards inside), throws
+    `TRPCError` on abort, and returns `R`. tRPC infers input from `.input` and
+    output from the resolver's `R`, so the typed `AppRouter` / caller / client
+    is preserved — VERIFIED (type-level load-bearing + runtime). The lower-level
+    `guard` / `leaf` wrappers stay exported for hand-assembled procedures.
+    Honest caveat: a RequestScope fragment consumed by tRPC needs the tRPC
+    context to provide the carrier's fields (e.g. a `request`) — natural for
+    tRPC-over-HTTP.
+- **RPC preservation is the crux.** Both `hc<typeof app>()` (Hono) and the tRPC
+  typed client survive the model end to end (input AND output), verified
+  adversarially with degrade checks. The mechanism: NEVER wrap the router;
+  contribute only the terminal handler / procedure into the host's native
+  assembly, sharing ONE schema (from the fragment) so the native validator and
+  the fragment cannot diverge.
+- **`to*` handler surface — fluent stack.** `guard` composes a stack fluently
+  (one intersection per step, like the boot chain — the tuple-accumulation of a
+  pure variadic is the hard, costly path); the composed fragment passes as ONE
+  argument to the per-handler function. Proven in the prototype.
+- **Output channel — mutable `ctx.cookies` sink.** The leaf's RETURN stays the
+  domain result; cookies ride an opt-in sink the codec reads back (not a
   `return { data, cookies }` envelope that would pollute every handler's return
   type). Proven in the prototype.
 - **`guard` scope — dialect, scope-tier only.** Return-to-abort has meaning
   only where a codec maps it; a boot-time domain error is meaningless (a
   missing env is infra → throw). No core verb, no third slot. Confirmed by the
   prototype finding: `guard` is a typed fold over wire, not a wire layer.
+- **Packaging — `@lntt/scope` + `@lntt/integration/*`.** The plan for the real
+  packages: `@lntt/scope` is the framework-free core (fragment, `.input`,
+  guard/handle, `runFold`/`runScope`, abort, `Outcome`, `DepGuard`; only the
+  `@standard-schema/spec` type-dep). `@lntt/integration` is ONE package with
+  tree-shakable SUBPATHS — `@lntt/integration/hono`, `/express`,
+  `/react-router`, `/trpc` — with optional peer deps per framework. The old
+  `@lntt/http` pipe-based pattern (decision 11) is retired/superseded. The
+  bus/listener is out of scope here — it goes to `@lntt/listener` (issue #10).
+  Naming note: the Hono pack's `wire` method name is flagged for a later rename
+  (it is ambiguous with the library name `@lntt/wire`) — an open naming choice,
+  not urgent.
 - **Non-HTTP — HTTP-first, generalizes, build at #10.** The output codec is a
-  proven facet (message-bus `ack/nack/dead-letter` above); the design position
-  is closed. Building a listener adapter waits for #10's real bus case
+  proven facet (message-bus `ack/nack/dead-letter`); the design position is
+  closed. Building a listener adapter waits for #10's real bus case
   (principle 5); the remaining work is the input-payload generalization
-  (`Request` → `Message`).
+  (`Request` → `Message`), for which `fragmentFor` already swaps the carrier
+  (`JobScope`) and `runJob` reruns the same `runFold`.
 - **Perf: measured, gate cleared.** Feeding the whole app `Pub` as the scope
   chain's seed, once per route, was the one untested assumption. Spike
   (`test/limits/scope-reseed.spike.*`, a ~15-layer app):

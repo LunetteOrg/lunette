@@ -927,3 +927,60 @@ add) and its own recorded flow convention; untouched.
 **Pinned.** The refusal on every patch door, the union member-wise
 judgment, the empty-patch pass, the namespaced green twin, and the
 runtime net under a cast (`keyed.test.ts`).
+
+---
+
+## The scope runtime
+
+### 33. Three seeding cadences collapse to two; the request window nests the transaction window
+
+**Decision.** The Seed of decision 7 is read at cadences distinguished by
+lifetime. The exploration first framed three (boot-time, first-request-time,
+per-request); it collapses to **two**, because the host pack ALWAYS does
+first-request build-once (uniform across Node, Bun/Elysia, Cloudflare
+Workers). Boot-time and first-request are the same cadence with different
+seed SOURCES (`process.env` on Node, `c.env` on a Worker), not two
+mechanisms. Node MAY warm the memo eagerly at startup (opt-in fail-fast),
+but that is the same cadence triggered early — not a third one.
+
+- **Tier 1 — build-once.** The pack takes the **chain** (never a built app)
+  and owns a first-seed-wins promise-memo per isolate, cleared on failure.
+  `mount` is the framework middleware registered once: it reads the host
+  context (`c.env` on Cloudflare, a preceding middleware, or static env on
+  Node), seeds the memoized build, and places the built app in the host
+  context for the per-handler functions to read back. Distinct context keys
+  let multiple chains coexist in one app. This generalizes the lazy
+  memoized boot of decision 12 (issue #12's concern) to every host.
+- **Tier 2 — per-request.** The scope window: the guard/leaf fold. Each
+  invocation gets a fresh cookie sink + enrichment bag; the built app is
+  threaded read-only; the handler's requirement (`deps`) and the route
+  params are reconciled against the chain's `Pub` and the host's route at
+  the adapter — a missing dep or a wrong param is a compile error THERE.
+  This mirrors wire's Seed-vs-Ctx mount check (decisions 7/8).
+
+**Window nesting.** The request window (outer) and a transaction window
+(inner — a wire `window()` / `.with`) are independent and compose ONLY
+through the error convention (decision 14): a RETURNED domain value means
+the inner transaction committed AND the outer scope emits its 2xx/4xx; a
+THROWN infrastructure error means the inner rolled back AND propagates as
+5xx. No ambient storage, no implicit join (principle 7).
+
+**Alternatives.** (a) The pack takes a BUILT app plus a separate boot step:
+splits lifecycle ownership across two callers and reopens the two-teardown
+ambiguity decision 8 rejected. (b) A per-request build keyed by the seed:
+defeats the isolate-static model, turning cold-start cost into per-request
+cost. (c) A transaction shared implicitly across the whole request via
+ambient storage: rejected by principle 7 (implicit join is the behaviour
+you debug in postmortems).
+
+**Why.** One mechanism (first-seed-wins promise-memo per isolate) covers
+every host; the only thing that varies is where the seed is read from.
+Keeping the two windows composed by the error convention alone means the
+scope tier adds no new lifecycle concept — it reuses the pivot (decision
+14) the rest of the design already turns on.
+
+**Open follow-up.** Whether a SINGLE transaction should bracket the whole
+fold (multiple guards + the leaf) is unresolved. Principle 7 dictates an
+explicit named window a guard OPENS and later guards receive as an
+enrichment, never an ambient join — left until a real case demands it
+(principle 5).
