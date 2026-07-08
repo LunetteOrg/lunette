@@ -232,7 +232,7 @@ return-to-abort), call the leaf, map the outcome via the host's codec
 
 ## Prototype: proven across four real hosts
 
-A live prototype (`research/scope-runtime/`) implements this against **four
+The prototype (now shipped as `@lntt/scope` + `@lntt/integration`) implemented this against **four
 real hosts** — React Router 7, Hono, Express, and tRPC — with **one**
 guard/leaf model carried unchanged by per-host adapters and a per-host
 outcome codec. Driven for real: an RR7 loader invoked with a `Request`, a
@@ -249,7 +249,7 @@ client survive the model end to end, input AND output.
 
 ## Sub-decisions — settled
 
-Sparred out and then verified against the prototype (`research/scope-runtime/`,
+Sparred out and then verified against the prototype (now `@lntt/scope` + `@lntt/integration`,
 four real hosts). These are the verdicts the real packages implement.
 
 - **`.input(schema)` — the fragment's ONE input contract.** A fragment

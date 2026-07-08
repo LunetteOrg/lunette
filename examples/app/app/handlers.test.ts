@@ -1,14 +1,14 @@
 import { afterAll, describe, expect, it } from 'vitest'
-import { parseEnv } from '../config/env.ts'
-import { feedLoader, loginAction, pack, postLoader } from './scoped-routes.ts'
+import { parseEnv } from './config/env.ts'
+import { feedLoader, loginAction, pack, postLoader } from './handlers.ts'
 
-// The AFTER, exercised through the REAL chain (memory db, logging mailer). The
-// contrast with routes.ts + react-router.test.ts: no loader re-reads the
-// session, the 404 is a returned abort, and the deps check happened at compile
-// time (this file would not typecheck if a fragment reached for a hidden repo).
+// The fragments, exercised through the REAL chain (memory db, logging mailer):
+// no loader re-reads the session, the 404 is a returned abort, and the deps
+// check happened at compile time (this file would not typecheck if a fragment
+// reached for a hidden repo).
 const env = parseEnv({})
 
-describe('scoped routes (after): the per-request session/guard collapses', () => {
+describe('scoped handlers: the per-request session/guard collapses', () => {
   afterAll(async () => {
     await pack.dispose()
   })

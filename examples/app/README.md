@@ -1,11 +1,12 @@
-# bootstrap-replica — the design's proving ground (TODO story 1)
+# example-app — a real-shaped composition root (issue #1)
 
-Research validation, **not a product**. A faithful, anonymized replica of a
-real React Router 7 + Drizzle composition root (`createApp`, ~25 hand-wired use
-cases) **dissolved into an `@lntt/wire` chain**. It anonymizes names and domain
-but **preserves form and cardinality** — same layer count, same transactional
-window, same feature-flag/cookie/memoized-infra stressors — so it stresses the
-design the way the real bootstrap would.
+The lead adoption example. A faithful, anonymized replica of a real React Router
+7 + Drizzle composition root (`createApp`, ~25 hand-wired use cases) **dissolved
+into an `@lntt/wire` chain**, with its use cases **exposed as `@lntt/scope`
+fragments** and wired into React Router 7 via `@lntt/integration`. It anonymizes
+names and domain but **preserves form and cardinality** — same layer count, same
+transactional window, same feature-flag/cookie/memoized-infra stressors — so it
+stresses the design the way the real bootstrap would.
 
 ## What it proves
 
@@ -21,9 +22,10 @@ design the way the real bootstrap would.
   (a half-created user vanishes).
 - The **seed is the mock boundary**: fragments run against fakes, the real db is
   never created (`app/use-cases/render/render-cache.test.ts`).
-- The chain integrates with **two hosts**: the RR7 `getLoadContext` + promise-memo
-  recipe (`app/integrations/react-router.ts`) and a raw **Express** server that
-  actually serves over HTTP (`app/integrations/express.ts`).
+- The chain's use cases are **exposed as `@lntt/scope` fragments** (`app/handlers.ts`):
+  guards read the app's Pub surface, the leaf only shapes the response, and the
+  fragments wire into React Router 7 via `@lntt/integration/react-router`
+  (the `getLoadContext` + promise-memo recipe).
 
 ## Anonymization map (form preserved)
 
@@ -40,8 +42,8 @@ cookies · ~19 bare leaves · 1 transaction window · the title-variant double-b
 ## Run
 
 ```sh
-pnpm --filter @lntt/research-bootstrap-replica test       # runtime + *.test-d.ts
-pnpm --filter @lntt/research-bootstrap-replica typecheck   # tsc --noEmit
+pnpm --filter @lntt/example-app test       # runtime + *.test-d.ts
+pnpm --filter @lntt/example-app typecheck   # tsc --noEmit
 ```
 
 PGlite runs in-process (`memory://`), so transactions are real and the suite

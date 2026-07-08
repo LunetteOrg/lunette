@@ -17,6 +17,10 @@ the `errore` library (errors as values) applied to DI.
                         "./trpc") — wire as a guest, per-host native routing
   packages/{cli,listener,flow}       scaffolds only — no shipped design;
                         their stories live in the tracker
+  examples/             example apps USING the shipped packages (IN review
+                        scope): examples/app is the broad issue-1 app (its use
+                        cases as @lntt/scope fragments); per-host entries mount
+                        it via @lntt/integration/*
   research/             live research prototypes (prior art, not products) —
                         PoC code proving out @lntt/wire's behaviour and DX,
                         OUT OF SCOPE for code review (correctness/security/

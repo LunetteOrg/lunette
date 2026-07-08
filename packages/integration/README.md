@@ -86,8 +86,8 @@ A missing dependency is a **compile error** at every adapter (`DepGuard`).
 ## Not included
 
 The message-bus / event host (a `Message` carrier, `ack`/`nack`/dead-letter
-codec) is deferred to `@lntt/listener` (issue #10). The prototype lives in
-`research/scope-runtime/` until then.
+codec) is deferred to `@lntt/listener` (issue #10); the retired prototype is
+recoverable from git history.
 
 ## Status
 

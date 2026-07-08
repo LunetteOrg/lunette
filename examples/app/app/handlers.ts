@@ -1,30 +1,28 @@
 import { z } from 'zod'
-import { chain } from '../bootstrap/chain.ts'
-import type { App } from '../bootstrap/chain.ts'
-import type { Env } from '../config/env.ts'
-import type { Session } from '../domain/access.ts'
-import { isError } from '../lib/errors.ts'
-// The scope runtime lives in the sibling prototype (research/scope-runtime).
-// Imported by relative path — no shipped packaging yet, this is a PoC proving
-// the two prototypes compose. Compare every route below with its hand-rolled
-// twin in ./routes.ts: the AFTER to that BEFORE.
-import { httpError, notFound } from '../../../scope-runtime/src/scope/abort.ts'
-import { fragment } from '../../../scope-runtime/src/scope/fragment.ts'
-import { reactRouter } from '../../../scope-runtime/src/integrations/react-router.ts'
+import { chain } from './bootstrap/chain.ts'
+import type { App } from './bootstrap/chain.ts'
+import type { Env } from './config/env.ts'
+import type { Session } from './domain/access.ts'
+import { isError } from './lib/errors.ts'
+// The scope runtime ships as @lntt/scope (host-agnostic) plus @lntt/integration
+// (per-host adapters). This example exposes its use cases as fragments and wires
+// them into React Router 7 via the shipped packages.
+import { fragment, httpError, notFound } from '@lntt/scope'
+import { reactRouter } from '@lntt/integration/react-router'
 
-// The pain routes.ts repeats by hand — `const session = await
-// context.app.getSession(request)` at the top of every loader/action — becomes
-// ONE reusable guard. It reads its slice of the Pub surface (getSession) in the
-// guard's dedicated app slot, reads the request off the carrier, and enriches
-// the bag with `{ session }`. Every fragment below opens with it; none rewrites
-// the session read.
+// The session read that a hand-rolled loader would repeat — `const session =
+// await context.app.getSession(request)` at the top of every loader/action —
+// is ONE reusable guard here. It reads its slice of the Pub surface (getSession)
+// in the guard's dedicated app slot, reads the request off the carrier, and
+// enriches the bag with `{ session }`. Every fragment below opens with it; none
+// rewrites the session read.
 const readSession = (
   app: Pick<App, 'getSession'>,
   ctx: { request: Request },
 ): Promise<{ session: Session | null }> =>
   app.getSession(ctx.request).then((session) => ({ session }))
 
-// AFTER of routes.ts `feedLoader`. The session read is the shared guard; the
+// The feed loader as a fragment. The session read is the shared guard; the
 // feed fetch is a second guard (the leaf never sees the app, so app access
 // lives in guards and the leaf only SHAPES the response). No `context.app.`
 // ceremony in the route body.
@@ -35,7 +33,7 @@ export const feedFragment = fragment()
   )
   .handle((_deps: {}, ctx) => ({ signedIn: ctx.session !== null, feed: ctx.feed }))
 
-// AFTER of `postLoader`. The shared session guard again; then a prefetch guard
+// The post loader as a fragment. The shared session guard again; then a prefetch guard
 // that either enriches `{ post }` or ABORTS with `notFound()` — a RETURNED
 // value, not the raw `throw new Response(null, { status: 404 })`. The viewer id
 // flows from the prior guard's enrichment (`ctx.session`), typed, no re-read.
@@ -49,12 +47,10 @@ export const postFragment = fragment()
   )
   .handle((_deps: {}, ctx) => ({ post: ctx.post }))
 
-// AFTER of `loginAction`. One guard owns the whole side-effecting path (parse
-// the form, validate, request the code); the leaf is a pure success shape. The
-// invalid-email branch is a returned `httpError(422, …)` abort — see the note
-// in the before/after write-up: routes.ts returns it as a 200 domain body, the
-// scope model surfaces a domain-vs-abort question the prototype answers by
-// mapping validation failure to a 4xx.
+// The login action as a fragment. One guard owns the whole side-effecting path
+// (parse the form, validate, request the code); the leaf is a pure success
+// shape. The invalid-email branch is a returned `httpError(422, …)` abort: the
+// scope model maps a validation failure to a 4xx rather than a 200 domain body.
 export const loginFragment = fragment().guard(
   async (app: Pick<App, 'access' | 'validateEmail'>, ctx) => {
     const form = await ctx.request.formData()
