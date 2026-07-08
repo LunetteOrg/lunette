@@ -1,64 +1,154 @@
-import { afterAll, describe, expect, it } from 'vitest'
-import { parseEnv } from './config/env.ts'
-import { feedLoader, loginAction, pack, postLoader } from './handlers.ts'
+import { runScope } from '@lntt/scope'
+import type { RequestScope } from '@lntt/scope'
+import { describe, expect, it } from 'vitest'
+import type { Session } from './domain/access.ts'
+import type { FeedPost, PostForReading } from './domain/threads.ts'
+import { feedFragment, loginFragment, postFragment } from './handlers.ts'
+import { PostNotFound } from './lib/errors.ts'
 
-// The fragments, exercised through the REAL chain (memory db, logging mailer):
-// no loader re-reads the session, the 404 is a returned abort, and the deps
-// check happened at compile time (this file would not typecheck if a fragment
-// reached for a hidden repo).
-const env = parseEnv({})
+// A fragment is a testable UNIT: no host, no chain, no database. Each test
+// drives one fragment through `runScope` with PLAIN FAKE deps — the exact
+// function shapes the guards declare. `runScope` hands the same `app` object to
+// every guard and the leaf, so a fake carries only the methods that fragment
+// touches. We assert the host-agnostic `Outcome` shape (`ok`/`value` or
+// `ok`/`abort`), never a `Response`.
 
-describe('scoped handlers: the per-request session/guard collapses', () => {
-  afterAll(async () => {
-    await pack.dispose()
+const carrier = { request: new Request('http://x') }
+
+const aSession: Session = {
+  id: 's1',
+  userId: 'u1',
+  expiresAt: new Date(Date.now() + 60_000),
+}
+
+const aFeedPost: FeedPost = {
+  id: 'p1',
+  title: 'Hello',
+  excerpt: 'world',
+  authorName: 'Ada',
+  authorColor: '#abc',
+  commentCount: 0,
+}
+
+const aPost: PostForReading = {
+  id: 'p1',
+  title: 'Hello',
+  body: 'world',
+  authorName: 'Ada',
+  authorColor: '#abc',
+  surface: 'web',
+}
+
+describe('feedFragment: signed-in vs anonymous, no session re-read', () => {
+  it('signed in → signedIn true, feed shaped from the guard', async () => {
+    const app = {
+      getSession: async (_request: Request): Promise<Session | null> => aSession,
+      threads: { listFeed: async (_scope: string): Promise<FeedPost[]> => [aFeedPost] },
+    }
+    const out = await runScope<RequestScope, typeof feedFragment.schema, {
+      signedIn: boolean
+      feed: FeedPost[]
+    }>(feedFragment, app, carrier, {})
+    expect(out).toEqual({ ok: true, value: { signedIn: true, feed: [aFeedPost] }, cookies: [] })
   })
 
-  it('feed loader: fresh db → empty feed, not signed in', async () => {
-    const context = await pack.mount(env)
-    const res = await feedLoader({ request: new Request('http://x'), params: {}, context })
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ signedIn: false, feed: [] })
+  it('anonymous → signedIn false, empty feed', async () => {
+    const app = {
+      getSession: async (_request: Request): Promise<Session | null> => null,
+      threads: { listFeed: async (_scope: string): Promise<FeedPost[]> => [] },
+    }
+    const out = await runScope<RequestScope, typeof feedFragment.schema, {
+      signedIn: boolean
+      feed: FeedPost[]
+    }>(feedFragment, app, carrier, {})
+    expect(out).toEqual({ ok: true, value: { signedIn: false, feed: [] }, cookies: [] })
+  })
+})
+
+describe('postFragment: found → post, missing → returned 404 abort', () => {
+  it('found → the leaf shapes { post }', async () => {
+    const app = {
+      getSession: async (): Promise<Session | null> => null,
+      threads: {
+        getPostForReading: async (
+          _id: string,
+          _channel: 'web',
+          _viewer?: string,
+        ): Promise<PostForReading | PostNotFound> => aPost,
+      },
+    }
+    const out = await runScope<RequestScope, typeof postFragment.schema, { post: PostForReading }>(
+      postFragment,
+      app,
+      carrier,
+      { postId: 'p1' },
+    )
+    expect(out).toEqual({ ok: true, value: { post: aPost }, cookies: [] })
   })
 
-  it('post loader: unknown id → notFound() abort → 404, leaf never runs', async () => {
-    const context = await pack.mount(env)
-    const res = await postLoader({
-      request: new Request('http://x'),
-      params: { postId: 'does-not-exist' },
-      context,
-    })
-    expect(res.status).toBe(404)
+  it('missing → a RETURNED 404 abort, the leaf never runs', async () => {
+    let leafRan = false
+    const app = {
+      getSession: async (): Promise<Session | null> => null,
+      threads: {
+        getPostForReading: async (): Promise<PostForReading | PostNotFound> => new PostNotFound(),
+      },
+    }
+    const out = await runScope<RequestScope, typeof postFragment.schema, { post: PostForReading }>(
+      { ...postFragment, leaf: (...args) => (leafRan = true, postFragment.leaf(...args)) },
+      app,
+      carrier,
+      { postId: 'nope' },
+    )
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.abort.intent).toMatchObject({ kind: 'status', status: 404 })
+    expect(leafRan).toBe(false)
   })
+})
 
-  it('login action: invalid email → 422 domain body, requestCode never runs', async () => {
-    const context = await pack.mount(env)
-    const form = new FormData()
-    form.set('email', 'not-an-email')
-    const res = await loginAction({
-      request: new Request('http://x', { method: 'POST', body: form }),
-      params: {},
-      context,
-    })
-    expect(res.status).toBe(422)
-    expect(await res.json()).toEqual({ error: 'invalid-email' })
-  })
-
-  it('login action: valid email → requestCode runs → 200 ok', async () => {
-    const context = await pack.mount(env)
+describe('loginFragment: valid → ok, invalid → returned 422 abort', () => {
+  it('valid email → requestCode runs → ok', async () => {
+    const called: string[] = []
+    const app = {
+      validateEmail: (email: string): boolean => email.includes('@'),
+      access: {
+        requestCode: async (email: string): Promise<void> => {
+          called.push(email)
+        },
+      },
+    }
     const form = new FormData()
     form.set('email', 'user@example.com')
-    const res = await loginAction({
-      request: new Request('http://x', { method: 'POST', body: form }),
-      params: {},
-      context,
-    })
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ ok: true })
+    const out = await runScope<RequestScope, typeof loginFragment.schema, { ok: true }>(
+      loginFragment,
+      app,
+      { request: new Request('http://x', { method: 'POST', body: form }) },
+      {},
+    )
+    expect(out).toEqual({ ok: true, value: { ok: true }, cookies: [] })
+    expect(called).toEqual(['user@example.com'])
   })
 
-  it('mount builds once per isolate: the same app instance is handed back', async () => {
-    const a = await pack.mount(env)
-    const b = await pack.mount(env)
-    expect(a.__wireApp).toBe(b.__wireApp)
+  it('invalid email → 422 abort, requestCode never runs', async () => {
+    const called: string[] = []
+    const app = {
+      validateEmail: (email: string): boolean => email.includes('@'),
+      access: {
+        requestCode: async (email: string): Promise<void> => {
+          called.push(email)
+        },
+      },
+    }
+    const form = new FormData()
+    form.set('email', 'not-an-email')
+    const out = await runScope<RequestScope, typeof loginFragment.schema, { ok: true }>(
+      loginFragment,
+      app,
+      { request: new Request('http://x', { method: 'POST', body: form }) },
+      {},
+    )
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.abort.intent).toMatchObject({ kind: 'status', status: 422, body: { error: 'invalid-email' } })
+    expect(called).toEqual([])
   })
 })

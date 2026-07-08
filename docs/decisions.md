@@ -664,7 +664,7 @@ into the binder as `.by`.
   (`bind.with(window, record)`): the best ergonomics, but keeps the arity
   hole of (a) — rejected on principle 1.
 - (d) A separate helper (`leaves`/`bound`/`wired`, proved userland-viable
-  in `research/module-shapes/`): a new verb to teach what `bind` already
+  in a prototype): a new verb to teach what `bind` already
   means.
 - Naming: `.with` kept for the per-call property (Python's `with`
   statement, Effect's `with*` combinators, the HOF `withX` convention; the

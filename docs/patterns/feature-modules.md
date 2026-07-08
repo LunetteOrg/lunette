@@ -4,8 +4,11 @@ A feature module is a fragment: a chain that *requires* its infrastructure
 via its Seed and exposes bound leaves. This page fixes the canonical way
 to write one — and names the two independent levers that get you there.
 
-The executable specimens (with behavioural parity tests between the
-shapes) live in [`research/module-shapes/`](../../research/module-shapes/).
+The control shape (one `expose` with a per-`bind` deps slice) and the
+fluent shape (one chain step per statement) are behaviourally
+interchangeable: same Pub, same runtime behaviour. The choice is
+organization, not capability — the levers below explain what the fluent
+shape buys.
 
 ## The shape
 
@@ -77,8 +80,10 @@ export const threadsModule = lunette<ThreadsSeed>()
 ```
 
 Measured on the same module shape, this is the difference between ~40
-lines of per-key slices and four statements (`research/module-shapes/`:
-`code-oriented.ts` vs `fluent.ts`, behavioural parity proven by test).
+lines of per-key slices and four statements: the control and fluent
+shapes are behaviourally interchangeable, and the ctx-aligned leaf style
+makes the per-key slices vanish — same Pub, same runtime behaviour, four
+statements that read as sentences.
 
 Know what you are trading: the per-key slice documented, at the wiring
 site, exactly which repo methods each leaf touches. That information does

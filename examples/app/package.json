@@ -4,6 +4,9 @@
   "private": true,
   "description": "Example app (issue #1 structure): a realistic RR7+Drizzle composition root as an @lntt/wire chain, with its use cases exposed as @lntt/scope fragments.",
   "type": "module",
+  "exports": {
+    ".": "./app/index.ts"
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
