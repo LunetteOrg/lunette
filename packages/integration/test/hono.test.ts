@@ -10,12 +10,12 @@ describe('Hono pack — mount middleware + native chain + terminal handler', () 
     const w = hono(chain, () => ({ env: { label: 'hono' } satisfies Env }))
 
     // NATIVE chaining: `.use(mount)` seeds the build; `.get/.post(path,
-    // ...wire(handler))` plugs the validator + terminal into Hono's own chain,
+    // ...handler(handler))` plugs the validator + terminal into Hono's own chain,
     // so `typeof app` accumulates the route schema (this is what preserves RPC).
     const app = new Hono<WireEnv<Pub>>()
       .use(w.mount())
-      .get('/courses/:courseId', ...w.wire(courseHandler))
-      .post('/login', ...w.wire(loginHandler))
+      .get('/courses/:courseId', ...w.handler(courseHandler))
+      .post('/login', ...w.handler(loginHandler))
 
     const auth = { headers: { authorization: 'Bearer u-admin' } }
 

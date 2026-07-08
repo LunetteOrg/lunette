@@ -39,13 +39,13 @@ describe('adapter contract — deps by brand (Need ⊆ Pub) at each call site', 
     rr.toLoader(needsBilling)
   })
 
-  it('Hono: deps-vs-Pub is checked at wire, before the native chain', () => {
+  it('Hono: deps-vs-Pub is checked at handler, before the native chain', () => {
     const app = new Hono<WireEnv<Pub>>().use(ho.mount())
     // matching deps → the tuple spreads into Hono's native `.get`
-    app.get('/courses/:courseId', ...ho.wire(courseHandler))
+    app.get('/courses/:courseId', ...ho.handler(courseHandler))
     // missing dep is caught at `wire`, independent of the terminal's RPC I
     // @ts-expect-error — chain Pub is missing the fragment's required deps
-    ho.wire(needsBilling)
+    ho.handler(needsBilling)
   })
 
   it('Express: deps-vs-Pub is checked per handler; params validated at runtime', () => {

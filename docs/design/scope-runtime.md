@@ -211,7 +211,7 @@ export const courseHandler = fragment()
 
 // scope.ts — one pack per host, taking the chain (App inferred)
 const web = reactRouter(chain, seedFrom)   // { guard, handle, toLoader, toAction, mount, dispose }
-const api = hono(chain, seedFrom)          // { mount, wire, dispose }
+const api = hono(chain, seedFrom)          // { mount, handler, dispose }
 
 // root.tsx — register mount ONCE
 export const middleware = [web.mount]
@@ -220,7 +220,7 @@ export const middleware = [web.mount]
 export const loader = web.toLoader(courseHandler)
 
 // api.ts (Hono) — native chaining keeps hc<typeof app>() typed (input + output)
-app.get('/courses/:courseId', ...api.wire(courseHandler))
+app.get('/courses/:courseId', ...api.handler(courseHandler))
 ```
 
 The ~20 repeated `requireAdmin(app, request)` calls collapse: the guard is
@@ -302,7 +302,7 @@ four real hosts). These are the verdicts the real packages implement.
   its built app under a distinct context key, and each route picks its chain
   via the per-handler function. The forms differ per host by necessity (each
   framework's type-level routing differs):
-  - **Hono** — `app.get(path, ...w.wire(handler))`: native chaining, a native
+  - **Hono** — `app.get(path, ...w.handler(handler))`: native chaining, a native
     validator (from the fragment's schema) and `c.json`, which preserves
     `hc<typeof app>()` fully typed (input + output). The spread injects
     `[validator, terminalHandler]`.

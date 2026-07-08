@@ -21,7 +21,7 @@ const w = hono(chain, () => ({ env: {} as Env }))
 // carries the accumulated route schema that `hc` reads.
 const app = new Hono<WireEnv<Pub>>()
   .use(w.mount())
-  .get('/courses/:courseId', ...w.wire(courseHandler))
+  .get('/courses/:courseId', ...w.handler(courseHandler))
 
 export type AppType = typeof app
 

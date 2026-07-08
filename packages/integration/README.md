@@ -31,7 +31,7 @@ import { hc } from 'hono/client'
 const w = hono(chain, (env) => ({ env }))
 const app = new Hono()
   .use(w.mount())
-  .get('/courses/:courseId', ...w.wire(courseHandler))
+  .get('/courses/:courseId', ...w.handler(courseHandler))
 
 // the RPC client stays fully typed (input + output):
 const client = hc<typeof app>('/')
@@ -76,7 +76,7 @@ procedures.
 
 | host | routing | input check | typed client |
 |---|---|---|---|
-| Hono | native `.get(path, ...wire(h))` | native validator | `hc<typeof app>()` ✓ |
+| Hono | native `.get(path, ...handler(h))` | native validator | `hc<typeof app>()` ✓ |
 | Express | native `.get(path, handler(h))` | runtime (422) | — |
 | React Router | file-based, `toLoader(h)` | runtime (422) | — |
 | tRPC | native `.input().query()` | native `.input` | caller/client ✓ |

@@ -27,7 +27,7 @@ export type WireEnv<Pub> = { Variables: { __wireApp: Pub } }
 // Hono pack. Takes the CHAIN, owns build-once, and — crucially — DOES NOT wrap
 // the router. It contributes a `mount` middleware, a generic terminal handler
 // (`wire`), and `dispose`. The user assembles routes with Hono's NATIVE
-// chaining (`.get(path, ...wire(handler))`), which is what lets `typeof app`
+// chaining (`.get(path, ...handler(handler))`), which is what lets `typeof app`
 // accumulate the route schema so `hc<typeof app>()` stays fully typed — path,
 // method, INPUT (the validated param), and OUTPUT (the leaf's R via `c.json`).
 export function hono<C extends Lunette<any, any, any>>(
@@ -84,9 +84,9 @@ export function hono<C extends Lunette<any, any, any>>(
   // sharing the object is the only safety mechanism (spike 1, caveat 1). This
   // is also the single place the deps brand fires (Need ⊆ Pub) — at the call
   // site, before the tuple is spread into the native chain.
-  const wire = <S extends StandardSchemaV1, Need extends object, R>(
+  const handler = <S extends StandardSchemaV1, Need extends object, R>(
     handler: Handler<Need, S, R> & DepGuard<Pub, Need>,
   ) => [sValidator('param', handler.schema), handlerFrom(handler)] as const
 
-  return { mount, wire, dispose }
+  return { mount, handler, dispose }
 }

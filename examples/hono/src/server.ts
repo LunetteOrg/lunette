@@ -13,9 +13,9 @@ const w = hono(chain, (hostEnv) => ({
 
 export const app = new Hono()
   .use(w.mount())
-  .get('/feed', ...w.wire(feedFragment))
-  .get('/posts/:postId', ...w.wire(postFragment))
-  .post('/login', ...w.wire(loginFragment))
+  .get('/feed', ...w.handler(feedFragment))
+  .get('/posts/:postId', ...w.handler(postFragment))
+  .post('/login', ...w.handler(loginFragment))
 
 // The type a Hono RPC client (`hc<AppType>()`) consumes — routes, params, and
 // the JSON each returns, all inferred from the fragments.

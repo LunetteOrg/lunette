@@ -24,7 +24,7 @@ against the real (in-memory PGlite) chain.
 
 | entry | host | how | what its test drives |
 |---|---|---|---|
-| [`hono/`](./hono) | Hono | `app.get(path, ...w.wire(h))` | `app.request` + a typed `hc<AppType>()` client (`.test-d`) |
+| [`hono/`](./hono) | Hono | `app.get(path, ...w.handler(h))` | `app.request` + a typed `hc<AppType>()` client (`.test-d`) |
 | [`express/`](./express) | Express | `app.get(path, w.handler(h))` | a real HTTP server + `fetch` |
 | [`rr7/`](./rr7) | React Router 7 | `w.toLoader(h)` / `w.toAction(h)` | loaders/actions invoked with a `Request` |
 | [`trpc/`](./trpc) | tRPC | `toProcedure(t.procedure, h)` | a typed server-side caller |
