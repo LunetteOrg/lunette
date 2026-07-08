@@ -32,7 +32,16 @@ const toWebRequest = (req: ExReq): Request => {
     if (Array.isArray(value)) for (const v of value) headers.append(key, v)
     else if (value !== undefined) headers.set(key, value)
   }
-  return new Request(`http://localhost${req.originalUrl}`, { method: req.method, headers })
+  const method = req.method
+  const init: RequestInit & { duplex?: 'half' } = { method, headers }
+  // GET/HEAD carry no body. For the rest, stream the node request as the Web
+  // Request body so the leaf can read `formData()` / `json()` / `text()`. The
+  // `duplex: 'half'` option is required when a Request is built from a stream.
+  if (method !== 'GET' && method !== 'HEAD') {
+    ;(init as { body?: unknown }).body = req
+    init.duplex = 'half'
+  }
+  return new Request(`http://localhost${req.originalUrl}`, init)
 }
 
 const renderExpress = (res: ExRes, outcome: Outcome<unknown>): void => {
