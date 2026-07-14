@@ -1,5 +1,4 @@
-import { z } from 'zod'
-import { type Abort, fragment, unauthorized } from '@lntt/scope'
+import { type Abort, unauthorized } from '@lntt/scope'
 import type { RequestHead, RequestScope } from '@lntt/scope'
 import type { Session } from '../domain/access.ts'
 import type { PendingAuth, PendingCookie } from '../lib/cookies.ts'
@@ -43,17 +42,3 @@ export const pendingGuard = (
   ctx: RequestScope,
 ): Promise<{ pending: PendingAuth } | Abort> =>
   deps.pendingCookie.read(ctx.request).then((pending) => (pending ? { pending } : unauthorized()))
-
-// ── base fragments: the shared guard-plumbing, factored once ─────────────────
-// `.input` is FIRST-ONLY on the builder, so a base that fixes a route-param
-// schema must call `.input` INSIDE the helper, before the guards. Each base
-// preserves `Cap` (a `.body` fragment built on `gated` still gates off tRPC)
-// and keeps accumulating `Need`/`Acc` for whatever `.body`/`.handle` follows.
-
-// Gated, no route param: read the session, then narrow it or 401.
-export const gated = () => fragment().guard(sessionGuard).guard(authGuard)
-
-// Gated, with a route-param schema fixed FIRST (before the guards), so the
-// leaf reads `ctx.params` typed while still sitting behind the session gate.
-export const gatedWith = <S extends z.ZodTypeAny>(schema: S) =>
-  fragment().input(schema).guard(sessionGuard).guard(authGuard)

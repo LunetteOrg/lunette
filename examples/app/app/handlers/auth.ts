@@ -1,12 +1,11 @@
 import { z } from 'zod'
-import { type Abort, type CookieSink, fragment, httpError, redirect } from '@lntt/scope'
+import { type Abort, type CookieSink, httpError, redirect } from '@lntt/scope'
 import type { RequestScope } from '@lntt/scope'
 import type { UserRegistration } from '../domain/access.ts'
 import type { PendingAuth, PendingCookie, SessionCookie } from '../lib/cookies.ts'
 import { isError, type TaggedError } from '../lib/errors.ts'
 import type { VerifyCodeResult } from '../use-cases/access/verify-code.ts'
 import { abortFor } from './respond.ts'
-import { pendingGuard } from './guards.ts'
 
 // The login side-effect — a guard owning the whole path (validate the form,
 // request the code, set the pending cookie); it declares only the functions it
@@ -33,15 +32,11 @@ export const loginGuard = async (
   return {}
 }
 
-// The login action as a fragment. One guard owns the side-effecting path; the
-// leaf is a pure success shape. Thin wiring over `loginGuard`.
-export const loginFragment = fragment()
-  // `.form` = the multipart/urlencoded body channel (design A): the validated
-  // form lands on `ctx.form`, and the fragment carries the `body` capability, so
-  // it mounts on the HTTP hosts but NOT on tRPC (compile-gated).
-  .form(z.object({ email: z.string() }))
-  .guard(loginGuard)
-  .handle(() => ({ ok: true as const }))
+// The login `.form` schema (design A: the multipart/urlencoded body channel).
+// The composed `loginFragment` in ../handlers.ts lands the validated form on
+// `ctx.form`, carrying the `body` capability so it mounts on the HTTP hosts but
+// NOT on tRPC (compile-gated).
+export const loginForm = z.object({ email: z.string() })
 
 // ── auth: POST /verify — the transaction-window path + cookie set + redirect ─
 // `pendingGuard` (the shared guard) reads the signed pending cookie; no cookie →
@@ -97,26 +92,24 @@ export const verifyHandler = async (
   return redirect(ctx.pending.returnTo ?? '/')
 }
 
-export const verifyFragment = fragment()
-  // A NEW user completes registration on the verify screen: `displayName` +
-  // `termsAccepted` ride the body alongside the code. An existing user (or a
-  // pending cookie that already carries registration) needs neither.
-  .body(
-    z.object({
-      code: z.string().optional(),
-      displayName: z.string().optional(),
-      termsAccepted: z.boolean().optional(),
-    }),
-  )
-  .guard(pendingGuard)
-  .handle(verifyHandler)
+// The verify `.body` schema. A NEW user completes registration on the verify
+// screen: `displayName` + `termsAccepted` ride the body alongside the code. An
+// existing user (or a pending cookie that already carries registration) needs
+// neither.
+export const verifyBody = z.object({
+  code: z.string().optional(),
+  displayName: z.string().optional(),
+  termsAccepted: z.boolean().optional(),
+})
 
 // ── auth: POST /logout ──────────────────────────────────────────────────────
 // Drops the session cookie through the sink and redirects. No app dependency
-// beyond the cookie helper — the server keeps no session row to revoke here.
-export const logoutFragment = fragment().handle(
-  (deps: { sessionCookie: Pick<SessionCookie, 'drop'> }, ctx: RequestScope) => {
-    deps.sessionCookie.drop(ctx.cookies)
-    return redirect('/')
-  },
-)
+// beyond the cookie helper — the server keeps no session row to revoke here. A
+// leaf, so the composed `logoutFragment` in ../handlers.ts is thin wiring.
+export const logoutHandler = (
+  deps: { sessionCookie: Pick<SessionCookie, 'drop'> },
+  ctx: RequestScope,
+): Abort => {
+  deps.sessionCookie.drop(ctx.cookies)
+  return redirect('/')
+}

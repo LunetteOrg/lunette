@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { type Abort, fragment, notFound } from '@lntt/scope'
+import { type Abort, notFound } from '@lntt/scope'
 import type { Session } from '../domain/access.ts'
 import type { Surface } from '../domain/render.ts'
 import type {
@@ -13,11 +13,10 @@ import { isError, type PostNotFound, type TaggedError } from '../lib/errors.ts'
 import type { ComposeCommentInput } from '../use-cases/threads/compose-comment.ts'
 import type { PublishPostInput } from '../use-cases/threads/publish-post.ts'
 import { abortFor } from './respond.ts'
-import { gated, gatedWith, sessionGuard } from './guards.ts'
 
 // PROTOTYPE — the feed handler as PURE, named functions, so each is unit-tested
 // in isolation (typed, no carrier, no fold, no fake session to satisfy a gate).
-// The fragment below is then just declarative WIRING over them.
+// The fragment that wires them lives in ../handlers.ts.
 
 // The feed fetch — a guard: declares only the slice of the app it calls
 // (`threads.listFeed`), returns the enrichment `{ feed }`. It ignores the ctx.
@@ -33,11 +32,6 @@ export const feedHandler = (
 ): { feed: FeedPost[] } => ({
   feed: ctx.feed,
 })
-
-// The fragment is now one declarative line: guard + leaf, each a named pure
-// function. The feed is an anonymous read — it needs no session at all, so it
-// composes the fetch guard directly, no session guard.
-export const feedFragment = fragment().guard(feedGuard).handle(feedHandler)
 
 // The post prefetch — a guard: declares only `threads.getPostForReading`, and
 // either enriches `{ post }` or ABORTS with `notFound()` — a RETURNED value, not
@@ -59,14 +53,12 @@ export const postGuard = (
     .getPostForReading(ctx.params.postId, 'web', ctx.session?.userId)
     .then((post) => (isError(post) ? notFound() : { post }))
 
-// The post loader as a fragment. The shared session read again (anonymous is
-// allowed, so NOT the gate); then the prefetch guard; then a trivial shape leaf
-// (`{ post }`) that stays inline — no logic to unit-test.
-export const postFragment = fragment()
-  .input(z.object({ postId: z.string() }))
-  .guard(sessionGuard)
-  .guard(postGuard)
-  .handle((_deps: {}, ctx) => ({ post: ctx.post }))
+// The trivial shape leaf behind the post loader: no deps, reads only the post
+// the prefetch guard accumulated. Named so the fragment stays declarative.
+export const postHandler = (
+  _deps: Record<never, never>,
+  ctx: { post: PostForReading },
+): { post: PostForReading } => ({ post: ctx.post })
 
 // ── write path: the wide composition node behind POST /posts ────────────────
 // The leaf declares only `threads.publishPost` (a bound leaf on the app: deps
@@ -82,7 +74,7 @@ export const postFragment = fragment()
 // The `.body` schema is the source of truth for the optional-field type: the
 // hand-written `PublishFields` is DERIVED from it via `z.infer`, so a schema
 // tweak can never drift from the type the step consumes.
-const publishBody = z.object({
+export const publishBody = z.object({
   title: z.string().optional(),
   body: z.string().optional(),
   status: z.enum(['draft', 'published']).optional(),
@@ -105,32 +97,12 @@ export const publishHandler = (
     })
     .then((result) => (isError(result) ? abortFor(result) : { post: result }))
 
-export const publishPostFragment = gated()
-  // `.body` = the JSON body channel: validated onto `ctx.body`, HTTP-only.
-  .body(publishBody)
-  .handle((deps: PublishDeps, ctx) => publishHandler(deps, ctx.session.userId, ctx.body))
-
-// The tRPC-shaped write: the SAME use case as publishPostFragment, authored for
-// RPC. Its whole input is the payload (`.input`, not `.body`), so it carries NO
-// `body` capability and mounts on tRPC — as a MUTATION — while the auth guards
-// (which read only headers, so they work on tRPC too) and `publishHandler` are
-// shared. The gated-with-input base fixes the payload FIRST, then the gate.
-// Mounted with `toMutation`; the HTTP hosts keep the `.body` variant. Required
-// payload fields are assignable to the optional `PublishFields` the step reads.
-export const publishPostProcedure = gatedWith(
-  z.object({
-    title: z.string(),
-    body: z.string(),
-    status: z.enum(['draft', 'published']).optional(),
-  }),
-).handle((deps: PublishDeps, ctx) => publishHandler(deps, ctx.session.userId, ctx.params))
-
 // ── write path: POST /posts/:postId/comments ────────────────────────────────
 // The gated-with-input base fixes the ROUTE param (`postId`); the body carries
 // the comment. composeComment prefetches the post/parent itself and RETURNS
 // PostNotFound / ParentCommentNotFound — mapped to 404 — or CommentBodyRequired
 // → 422. As with publish, `CommentFields` is DERIVED from the `.body` schema.
-const commentBody = z.object({ body: z.string().optional(), parentId: z.string().optional() })
+export const commentBody = z.object({ body: z.string().optional(), parentId: z.string().optional() })
 export type CommentFields = z.infer<typeof commentBody>
 export type CommentDeps = {
   threads: { composeComment(input: ComposeCommentInput): Promise<Comment | TaggedError> }
@@ -150,24 +122,6 @@ export const commentHandler = (
     })
     .then((result) => (isError(result) ? abortFor(result) : { comment: result }))
 
-export const commentFragment = gatedWith(z.object({ postId: z.string() })) // the ROUTE param
-  .body(commentBody) // the JSON body
-  .handle((deps: CommentDeps, ctx) =>
-    commentHandler(deps, ctx.params.postId, ctx.session.userId, ctx.body),
-  )
-
-// The tRPC-shaped comment write: postId + body + parentId all ride the RPC
-// payload (`.input`), so it clears the capability gate and mounts as a mutation.
-export const commentProcedure = gatedWith(
-  z.object({
-    postId: z.string(),
-    body: z.string(),
-    parentId: z.string().optional(),
-  }),
-).handle((deps: CommentDeps, ctx) =>
-  commentHandler(deps, ctx.params.postId, ctx.session.userId, ctx.params),
-)
-
 // ── read path: GET /posts/:postId/comments (all four hosts) ──────────────────
 // The comments read — a leaf: normalises the surface through the degenerate
 // empty-deps leaf (`resolveSurface`), then lists at that surface (the composed
@@ -186,9 +140,3 @@ export const commentsHandler = async (
   const comments = await deps.threads.listCommentsForReading(ctx.params.postId, surface)
   return { comments }
 }
-
-// Public read, one route param, no body — so it also mounts on tRPC (input =
-// the RPC payload `{ postId }`). Thin wiring over `commentsHandler`.
-export const commentsFragment = fragment()
-  .input(z.object({ postId: z.string() }))
-  .handle(commentsHandler)

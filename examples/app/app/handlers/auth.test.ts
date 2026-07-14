@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest'
 import type { PendingAuth } from '../lib/cookies.ts'
 import { OtpInvalid } from '../lib/errors.ts'
 import type { VerifyCodeResult } from '../use-cases/access/verify-code.ts'
-import { loginGuard, verifyHandler, verifyFragment } from './auth.ts'
+import { loginGuard, verifyHandler } from './auth.ts'
+import { verifyFragment } from '../handlers.ts'
 import { jsonPost } from './fixtures.ts'
 
 // The auth handlers as PURE functions plus — for `verify` alone — the thinner
