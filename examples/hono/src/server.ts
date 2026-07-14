@@ -1,16 +1,18 @@
 import { Hono } from 'hono'
+import { fragment } from '@lntt/scope'
 import {
   chain,
   commentFragment,
   commentsFragment,
-  feedFragment,
   identityFragment,
+  feedGuard,
   loginFragment,
   logoutFragment,
   parseEnv,
   postFragment,
   publishPostFragment,
   setPreferenceFragment,
+  feedHandler,
   verifyFragment,
 } from '@lntt/example-app'
 import type { Env } from '@lntt/example-app'
@@ -34,7 +36,11 @@ export const makeApp = (env?: Env) => {
   return new Hono()
     .use(w.mount())
     // reads
-    .get('/feed', ...w.handler(feedFragment))
+    // The feed is composed INLINE here to show the single-host idiom — a real
+    // app has one host and composes at the wiring, so no shared-fragment module
+    // is needed. The shared `*Fragment` imports below are the multi-host
+    // portability device; `feedFragment` still ships as their documented form.
+    .get('/feed', ...w.handler(fragment().guard(feedGuard).handle(feedHandler)))
     .get('/posts/:postId', ...w.handler(postFragment))
     .get('/posts/:postId/comments', ...w.handler(commentsFragment))
     .get('/me', ...w.handler(identityFragment))

@@ -22,7 +22,7 @@ describe('example-app on Express — integration', () => {
 
     const feed = await fetch(`${url}/feed`)
     expect(feed.status).toBe(200)
-    expect(await feed.json()).toEqual({ signedIn: false, feed: [] })
+    expect(await feed.json()).toEqual({ feed: [] })
 
     const missing = await fetch(`${url}/posts/does-not-exist`)
     expect(missing.status).toBe(404)

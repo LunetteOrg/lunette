@@ -16,6 +16,7 @@ export {
   commentsFragment,
   feedFragment,
   identityFragment,
+  feedGuard,
   loginFragment,
   logoutFragment,
   postFragment,
@@ -23,5 +24,9 @@ export {
   publishPostProcedure,
   setPreferenceFragment,
   setPreferenceProcedure,
+  feedHandler,
   verifyFragment,
 } from './handlers.ts'
+// `feedGuard` + `feedHandler` (exported above) are the feed's pure pieces, so a
+// single host can compose the feed route INLINE (the single-host idiom) instead
+// of importing `feedFragment`.

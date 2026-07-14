@@ -65,8 +65,7 @@ describe('example-app on React Router 7 — authenticated end-to-end', () => {
       params: {},
       context,
     })
-    const body = (await feed.json()) as { signedIn: boolean; feed: { id: string }[] }
-    expect(body.signedIn).toBe(true)
+    const body = (await feed.json()) as { feed: { id: string }[] }
     expect(body.feed.some((p) => p.id === created.post.id)).toBe(true)
   })
 })

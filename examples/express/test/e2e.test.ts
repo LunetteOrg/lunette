@@ -59,8 +59,7 @@ describe('example-app on Express — authenticated end-to-end', () => {
     expect(created.post.title).toBe('Hello express e2e')
 
     const feed = await fetch(`${url}/feed`, { headers: { cookie: session } })
-    const body = (await feed.json()) as { signedIn: boolean; feed: { id: string }[] }
-    expect(body.signedIn).toBe(true)
+    const body = (await feed.json()) as { feed: { id: string }[] }
     expect(body.feed.some((p) => p.id === created.post.id)).toBe(true)
 
     await close()

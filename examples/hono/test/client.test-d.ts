@@ -17,7 +17,9 @@ describe('hc<AppType>() — the typed client survives the mount', () => {
 
   it('infers the /feed response shape', () => {
     const call = hc<AppType>('http://localhost').feed.$get
-    expectTypeOf<InferResponseType<typeof call, 200>>().toMatchTypeOf<{ signedIn: boolean }>()
+    expectTypeOf<InferResponseType<typeof call, 200>>().toMatchTypeOf<{
+      feed: { id: string; title: string }[]
+    }>()
   })
 
   it('infers the gated GET /me response (the profile identity)', () => {

@@ -53,8 +53,7 @@ describe('example-app on Hono — authenticated end-to-end', () => {
 
     // 5. read the feed as the signed-in author → the post is there
     const feed = await app.request('/feed', { headers: { cookie: session } })
-    const body = (await feed.json()) as { signedIn: boolean; feed: { id: string }[] }
-    expect(body.signedIn).toBe(true)
+    const body = (await feed.json()) as { feed: { id: string }[] }
     expect(body.feed.some((p) => p.id === created.post.id)).toBe(true)
   })
 })

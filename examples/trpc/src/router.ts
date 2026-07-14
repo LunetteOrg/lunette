@@ -1,13 +1,15 @@
 import { initTRPC } from '@trpc/server'
+import { fragment } from '@lntt/scope'
 import {
   chain,
   commentProcedure,
   commentsFragment,
-  feedFragment,
   identityFragment,
+  feedGuard,
   postFragment,
   publishPostProcedure,
   setPreferenceProcedure,
+  feedHandler,
 } from '@lntt/example-app'
 import type { App } from '@lntt/example-app'
 import { toMutation, toProcedure } from '@lntt/integration/trpc'
@@ -29,7 +31,11 @@ const t = initTRPC.context<Ctx>().create()
 // are NOT exposed here — exactly the feed/post/comments/me split.
 export const appRouter = t.router({
   // reads → queries
-  feed: toProcedure(t.procedure, feedFragment),
+  // The feed is composed INLINE here to show the single-host idiom — a real app
+  // has one host and composes at the wiring, so no shared-fragment module is
+  // needed. The shared `*Fragment`/`*Procedure` imports below are the multi-host
+  // portability device; `feedFragment` still ships as their documented form.
+  feed: toProcedure(t.procedure, fragment().guard(feedGuard).handle(feedHandler)),
   post: toProcedure(t.procedure, postFragment),
   comments: toProcedure(t.procedure, commentsFragment),
   me: toProcedure(t.procedure, identityFragment),

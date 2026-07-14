@@ -12,7 +12,7 @@ describe('example-app on tRPC — integration', () => {
 
     // feed: no input, anonymous by default → empty feed
     const feed = await caller.feed({})
-    expect(feed).toEqual({ signedIn: false, feed: [] })
+    expect(feed).toEqual({ feed: [] })
 
     // post: an unknown id aborts NOT_FOUND (a returned domain abort → TRPCError)
     await expect(caller.post({ postId: 'does-not-exist' })).rejects.toMatchObject({

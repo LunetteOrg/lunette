@@ -19,7 +19,7 @@ describe('example-app on React Router 7 — integration', () => {
 
     const feed = await feedLoader({ request: new Request('http://x/feed'), params: {}, context })
     expect(feed.status).toBe(200)
-    expect(await feed.json()).toEqual({ signedIn: false, feed: [] })
+    expect(await feed.json()).toEqual({ feed: [] })
 
     const missing = await postLoader({
       request: new Request('http://x/posts/nope'),

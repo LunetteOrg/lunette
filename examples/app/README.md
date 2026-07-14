@@ -27,6 +27,80 @@ stresses the design the way the real bootstrap would.
   fragments wire into React Router 7 via `@lntt/integration/react-router`
   (the `getLoadContext` + promise-memo recipe).
 
+## The fragment model (how `app/handlers/` is organized)
+
+A **fragment** is one route dissolved into pure pieces: an **input contract**
+(`.input` for route params, `.body` for a JSON body, `.form` for a
+multipart/urlencoded body), then a chain of **guards**, then a single **leaf**.
+It is composed once and mounted per host (`w.handler(fragment)` /
+`pack.toLoader(fragment)` / `toProcedure(...)`), or composed INLINE at the
+`to*` call site when the app has a single host (see below).
+
+### Guards vs leaves
+
+Both are plain `(deps, ctx)` functions — the same shape. The difference is the
+return, and a **suffix convention** names the role so a fragment reads as
+declarative wiring:
+
+- A **guard** (`*Guard`) enriches the ctx (returns `{ … }`, merged into the bag
+  the next step reads) or **aborts** (returns `unauthorized()` / `notFound()` /
+  an `httpError`). It never writes the final response.
+- A **leaf** (`*Handler`) is the terminal step: it returns the final response
+  (or a `redirect` / abort).
+
+| guards (`*Guard`) | leaves (`*Handler`) |
+|---|---|
+| `sessionGuard` — reads the session (nullable) | `feedHandler` — shapes `{ feed }` |
+| `authGuard` — narrows it or 401 | `identityHandler` — the gated profile read |
+| `pendingGuard` — the pending-cookie gate | `commentsHandler` — lists a post's comments |
+| `feedGuard` — fetches the feed | `publishHandler` — the shared publish step |
+| `postGuard` — prefetches a post or 404 | `commentHandler` — the shared comment step |
+| `loginGuard` — validates + requests the code | `verifyHandler` — the windowed verify step |
+| | `preferenceHandler` — the surface write |
+
+The shared bases in `guards.ts` layer these: `gated()` = `sessionGuard` +
+`authGuard`; `gatedWith(schema)` fixes a route param FIRST, then gates. An
+anonymous read composes guards directly rather than through a base — the feed
+(`fragment().guard(feedGuard).handle(feedHandler)`, no session at all) and the
+post (`sessionGuard` for a nullable session, then `postGuard`).
+
+### Two testing levels
+
+- **Pure functions, unit-tested in isolation** — the colocated
+  `handlers/*.test.ts` call each guard/leaf directly with a typed `(deps, ctx)`:
+  no carrier, no fold, no fake session to satisfy a gate. Every fetch, mapping
+  and abort branch is proven here.
+- **Thin composition, proven per host** — the per-host `integration.test.ts`
+  (real chain, one round-trip) and `e2e.test.ts` (sign in → publish → read
+  back) exercise the wiring. There is deliberately NO per-fragment `runScope`
+  layer, since the fold itself is proven once in `@lntt/scope` — the one
+  exception is `verify`, whose fold interaction (a real transaction window) is
+  fragment-specific and kept in `auth.test.ts`.
+
+### The write-seam: one step, two channels
+
+A value-returning write is authored twice around a SHARED `*Handler` step:
+
+- an HTTP fragment on `.body` (`publishPostFragment` → `publishHandler`), and
+- a tRPC procedure whose whole input is the `.input` payload
+  (`publishPostProcedure` → the same `publishHandler`), mounted as a mutation.
+
+The auth guards (they read only headers) and the `*Handler` are shared; only
+where the fields come from differs (`ctx.body` vs `ctx.params`). `login` /
+`verify` / `logout` stay HTTP-only — cookies and redirects have no RPC meaning,
+so they carry the `body`/`form` capability that compile-gates them off tRPC.
+
+### Compose at the `to*` (single-host) vs the shared fragment (multi-host)
+
+The exported `*Fragment` modules are a **multi-host portability device**: this
+example mounts the same fragments on four hosts, so they live once in
+`handlers/`. A REAL app has one host and can compose at the wiring instead — the
+**single-host idiom**, shown here by the feed, whose
+`fragment().guard(feedGuard).handle(feedHandler)` is written INLINE in each host
+entry (`examples/{hono,express,rr7,trpc}/src/*`) rather than imported. Both
+authorings are the same fold over the same pure pieces; `feedFragment` still
+ships as the documented shared form.
+
 ## Anonymization map (form preserved)
 
 | real (pelion/community) | replica |

@@ -1,15 +1,17 @@
+import { fragment } from '@lntt/scope'
 import {
   chain,
   commentFragment,
   commentsFragment,
-  feedFragment,
   identityFragment,
+  feedGuard,
   loginFragment,
   logoutFragment,
   parseEnv,
   postFragment,
   publishPostFragment,
   setPreferenceFragment,
+  feedHandler,
   verifyFragment,
 } from '@lntt/example-app'
 import type { Env } from '@lntt/example-app'
@@ -29,7 +31,11 @@ export const makePack = (env?: Env) => {
   return {
     pack,
     // reads → loaders
-    feedLoader: pack.toLoader(feedFragment),
+    // The feed loader is composed INLINE here to show the single-host idiom — a
+    // real app has one host and composes at the wiring, so no shared-fragment
+    // module is needed. The shared `*Fragment` imports below are the multi-host
+    // portability device; `feedFragment` still ships as their documented form.
+    feedLoader: pack.toLoader(fragment().guard(feedGuard).handle(feedHandler)),
     postLoader: pack.toLoader(postFragment),
     commentsLoader: pack.toLoader(commentsFragment),
     meLoader: pack.toLoader(identityFragment),
