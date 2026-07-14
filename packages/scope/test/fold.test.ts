@@ -68,5 +68,52 @@ describe('the fragment fold at runtime', () => {
     if (out.ok) expect(out.value).toEqual({ ok: true })
     expect(out.cookies).toEqual([{ name: 'sid', value: 'abc', options: { httpOnly: true } }])
   })
+
+  it('.body parses + validates the JSON body into ctx.body; a bad body → 422', async () => {
+    const bodySchema = z.object({ title: z.string() })
+    const handler = fragment()
+      .body(bodySchema)
+      .handle((_deps: {}, ctx) => ({ echoed: ctx.body.title }))
+    const jsonReq = (body: unknown) =>
+      new Request('http://x/', {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: { 'content-type': 'application/json' },
+      })
+
+    const ok = await runFold<RequestScope, { echoed: string }>(
+      handler,
+      {},
+      { request: jsonReq({ title: 'Hello' }) },
+      {},
+    )
+    expect(ok).toEqual({ ok: true, value: { echoed: 'Hello' }, cookies: [] })
+
+    // a body missing the required field is a RETURNED 422 (the error convention)
+    const bad = await runFold<RequestScope, { echoed: string }>(
+      handler,
+      {},
+      { request: jsonReq({ nope: 1 }) },
+      {},
+    )
+    expect(bad.ok).toBe(false)
+    if (!bad.ok) expect(bad.abort.intent).toMatchObject({ kind: 'status', status: 422 })
+  })
+
+  it('.form parses + validates the form body into ctx.form', async () => {
+    const formSchema = z.object({ email: z.string() })
+    const handler = fragment()
+      .form(formSchema)
+      .handle((_deps: {}, ctx) => ({ to: ctx.form.email }))
+    const fd = new FormData()
+    fd.set('email', 'user@example.com')
+    const out = await runFold<RequestScope, { to: string }>(
+      handler,
+      {},
+      { request: new Request('http://x/', { method: 'POST', body: fd }) },
+      {},
+    )
+    expect(out).toEqual({ ok: true, value: { to: 'user@example.com' }, cookies: [] })
+  })
 })
 

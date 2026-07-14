@@ -25,7 +25,7 @@ import type {
   StandardSchemaV1,
   UnsetMarker,
 } from '@trpc/server/unstable-core-do-not-import'
-import type { Abort, Handler, OutputOf, RequestScope } from '@lntt/scope'
+import type { Abort, Capability, CarrierGuard, Handler, OutputOf, RequestScope } from '@lntt/scope'
 import { isAbort, runFold } from '@lntt/scope'
 
 // The schema OUTPUT is the ctx.input type — the SAME projection guards and leaf
@@ -115,6 +115,7 @@ export function toProcedure<
   Need extends object,
   S extends StandardSchemaV1,
   R,
+  Cap extends Capability,
 >(
   procedure: ProcedureBuilder<
     TContext,
@@ -126,7 +127,11 @@ export function toProcedure<
     UnsetMarker,
     false
   >,
-  handler: Handler<Need, S, R>,
+  // tRPC has ONE JSON `input`, no separate readable body — its carrier provides
+  // NO capabilities (`CarrierGuard<Cap, never>`). A fragment that declared
+  // `.body`/`.form` (Cap ⊇ 'body') is a COMPILE ERROR here, at the mount site,
+  // naming the missing capability — instead of silently reading an empty body.
+  handler: Handler<Need, S, R, Cap> & CarrierGuard<Cap, never>,
 ) {
   return procedure.input(handler.schema).query(async (opts): Promise<R> => {
     // `opts` is contextually typed by tRPC's resolver signature; the constraint

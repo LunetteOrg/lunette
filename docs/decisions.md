@@ -984,3 +984,53 @@ fold (multiple guards + the leaf) is unresolved. Principle 7 dictates an
 explicit named window a guard OPENS and later guards receive as an
 enrichment, never an ambient join — left until a real case demands it
 (principle 5).
+
+### 34. Carrier capabilities gate host portability; the body is a declared channel
+
+**Decision.** A fragment's input splits by SOURCE, and each host maps `.input`
+to its own native notion: the HTTP hosts (Hono/Express/React Router) map it to
+the ROUTE PARAMS (validated by the native `param` validator), while tRPC maps it
+to the single RPC payload. The request BODY is therefore NOT `.input`; it is a
+SEPARATE, DECLARED channel — `.body(schema)` for JSON, `.form(schema)` for
+multipart/urlencoded — validated into `ctx.body` / `ctx.form` by the fold. A
+fragment that declares either carries the `body` **capability** in its `Cap`
+axis (a phantom on `Handler`, load-bearing like `__need`/`__result`).
+
+Each host adapter declares the capabilities its carrier PROVIDES (`'body'` for
+Hono/Express/RR7; NONE for tRPC — one JSON `input`, no separate readable body)
+and intersects the wiring parameter with `CarrierGuard<Cap, HostCaps>` — the
+same brand shape as `DepGuard` (decision doc §adapter-guard). When `Cap ⊆
+HostCaps` the clause vanishes and the mount compiles; otherwise it becomes an
+unsatisfiable branded object (`__ERROR_host_missing_capability`) and the mount
+(`toProcedure`/`w.handler`/`toLoader`) is a COMPILE ERROR naming the gap.
+
+Enforcement is by CONSTRUCTION, not by convention: `ctx.request` is narrowed to
+a headless `RequestHead` (url/method/headers, NO body accessors), so the body is
+UNREACHABLE except through the declared `.body`/`.form` channels. A guard cannot
+call `ctx.request.json()` to sneak the body past the capability — it does not
+typecheck. A missing capability is thus impossible to forget: reading the body
+requires the declaration that flows `Cap`, which the gate reads.
+
+**Alternatives.** (a) Normalize all sources into one `.input` bag the adapter
+assembles per host: rejected — auto-merging path/query/body is "ambient magic"
+(principle 7), risks name collisions, and threatens the typed client (`hc` reads
+Hono's native `param`/`json` split). (b) Content-type negotiation inside one
+`.body` (json vs form auto-detected): the "magic" convenience, deferred until a
+real case — explicit `.body`/`.form` first (principle 5, "one way to do each
+thing"). (c) A declaration-only marker (`.reads('body')`) NOT enforced by the
+carrier type: a fragment could forget it and still read the body, so the gate
+would give false safety; the headless `RequestHead` closes that hole. (d) A
+runtime proxy whose `.json()` throws on a body-less host: turns a silent
+empty-body read into a loud failure, but stays RUNTIME — kept only as a possible
+backstop, not the primary mechanism.
+
+**Why.** The capability axis is the `DepGuard` idiom applied to the carrier: the
+same "brand at the wiring call site, named gap, compile error" the deps check
+already gives — no new concept, one more phantom on `Handler`. It makes the real
+constraint (a raw-body write is HTTP-dialect and cannot ride RPC) VISIBLE where a
+user looks (the `to*` line), before runtime. It also types and validates the
+body as a bonus. tRPC keeps only the fragments whose whole input is the payload
+(the reads); a future dedicated tRPC write path would deliver the body AS
+`input`, a DIFFERENT authoring channel — so the gate stays correct rather than
+loosening. `Cap` defaults to `never`, so every param-only/read fragment and
+every existing `*.test-d.ts` is unaffected (additive).

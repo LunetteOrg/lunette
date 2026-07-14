@@ -3,7 +3,15 @@ import { sValidator } from '@hono/standard-validator'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { Context, MiddlewareHandler } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
-import type { DepGuard, Handler, InputOf, OutputOf, RequestScope } from '@lntt/scope'
+import type {
+  Capability,
+  CarrierGuard,
+  DepGuard,
+  Handler,
+  InputOf,
+  OutputOf,
+  RequestScope,
+} from '@lntt/scope'
 import { runFold } from '@lntt/scope'
 import { serializeCookie } from './http-codec.ts'
 
@@ -84,8 +92,11 @@ export function hono<C extends Lunette<any, any, any>>(
   // sharing the object is the only safety mechanism (spike 1, caveat 1). This
   // is also the single place the deps brand fires (Need ⊆ Pub) — at the call
   // site, before the tuple is spread into the native chain.
-  const handler = <S extends StandardSchemaV1, Need extends object, R>(
-    handler: Handler<Need, S, R> & DepGuard<Pub, Need>,
+  // Hono's carrier streams a readable request, so it PROVIDES the `body`
+  // capability — the `CarrierGuard<Cap, 'body'>` clause accepts body/form
+  // fragments. (tRPC's clause is `CarrierGuard<Cap, never>`, which rejects them.)
+  const handler = <S extends StandardSchemaV1, Need extends object, R, Cap extends Capability>(
+    handler: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body'>,
   ) => [sValidator('param', handler.schema), handlerFrom(handler)] as const
 
   return { mount, handler, dispose }

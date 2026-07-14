@@ -1,3 +1,5 @@
+import type { RequestHead } from '@lntt/scope'
+
 // The domain the scope-runtime prototype exercises: an ownership + prefetch
 // guard. Sessions come from a bearer token, admins from the session's user,
 // courses carry an owner — the case the design was sparked by.
@@ -18,7 +20,8 @@ export interface Course {
 }
 
 export interface SessionRepo {
-  get(request: Request): Session | null
+  // Reads only the headers → typed on the headless `RequestHead`.
+  get(request: RequestHead): Session | null
 }
 
 export interface AdminRepo {

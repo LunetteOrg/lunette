@@ -10,7 +10,7 @@ import type {
 } from './domain.ts'
 import { type Abort, forbidden, notFound, redirect, unauthorized } from '@lntt/scope'
 import { fragment } from '@lntt/scope'
-import type { RequestScope } from '@lntt/scope'
+import type { RequestHead, RequestScope } from '@lntt/scope'
 
 // One guard/leaf model, reused by every host adapter (React Router, Hono,
 // Express) AND the bus. The point of the prototype: the same handlers cross
@@ -34,7 +34,7 @@ export const loginSchema = z.object({ as: z.string().optional() })
 // the domain rule lives once. Each returns an enrichment or a RETURNED Abort.
 export const authenticate = (
   sessionRepo: SessionRepo,
-  request: Request,
+  request: RequestHead,
 ): { session: Session } | Abort => {
   const session = sessionRepo.get(request)
   return session ? { session } : unauthorized()

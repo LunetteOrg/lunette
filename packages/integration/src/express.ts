@@ -5,7 +5,7 @@ import type {
   Response as ExRes,
 } from 'express'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { DepGuard, Handler, Outcome, RequestScope } from '@lntt/scope'
+import type { Capability, CarrierGuard, DepGuard, Handler, Outcome, RequestScope } from '@lntt/scope'
 import { fragment, runScope } from '@lntt/scope'
 import { serializeCookie } from './http-codec.ts'
 
@@ -87,9 +87,11 @@ export function express<C extends Lunette<any, any, any>>(
   // `w.handler(...)` call site. There is NO compile-time path check — params
   // are validated at RUNTIME by `runScope` (a bad/missing param → a RETURNED
   // 422 abort, which `renderExpress` renders as 4xx).
+  // Express streams the request body into the Web Request, so it PROVIDES the
+  // `body` capability (`CarrierGuard<Cap, 'body'>` accepts body/form fragments).
   const handler =
-    <Need extends object, S extends StandardSchemaV1, R>(
-      h: Handler<Need, S, R> & DepGuard<Pub, Need>,
+    <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
+      h: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body'>,
     ): RequestHandler =>
     async (req: ExReq, res: ExRes): Promise<void> =>
       renderExpress(

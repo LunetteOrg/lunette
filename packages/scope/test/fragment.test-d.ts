@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { Admin, Course, Repos, Session } from './domain.ts'
 import { forbidden, notFound, unauthorized } from '../src/abort.ts'
 import { fragment, type Handler } from '../src/fragment.ts'
+import type { RequestHead } from '../src/scope.ts'
 
 // One schema on the fragment fixes `P = OutputOf<S>` for every guard and the
 // leaf — the params axis now flows from ONE `.input`, not a per-guard
@@ -16,7 +17,7 @@ describe('fragment — the type contract', () => {
       .input(schema)
       .guard((app: Pick<Repos, 'sessionRepo'>, ctx) => {
         expectTypeOf(app.sessionRepo).toEqualTypeOf<Repos['sessionRepo']>()
-        expectTypeOf(ctx.request).toEqualTypeOf<Request>()
+        expectTypeOf(ctx.request).toEqualTypeOf<RequestHead>()
         expectTypeOf(ctx.params.courseId).toEqualTypeOf<string>()
         // the carrier is the request scope only — NO repos leak into ctx
         // @ts-expect-error — repos live in the app slot, not the ctx bag
@@ -68,7 +69,7 @@ describe('fragment — the type contract', () => {
       .handle((_deps: {}, ctx) => {
         expectTypeOf(ctx.course).toEqualTypeOf<Course>()
         expectTypeOf(ctx.admin).toEqualTypeOf<Admin>()
-        expectTypeOf(ctx.request).toEqualTypeOf<Request>()
+        expectTypeOf(ctx.request).toEqualTypeOf<RequestHead>()
         expectTypeOf(ctx.params.courseId).toEqualTypeOf<string>()
         // @ts-expect-error — repos are the scope tier's; a leaf must not see them in ctx
         ctx.courseRepo
@@ -82,9 +83,34 @@ describe('fragment — the type contract', () => {
     >()
   })
 
+  it('.body / .form expose the validated body on ctx and flow the body capability into Cap', () => {
+    const bodySchema = z.object({ title: z.string() })
+    const handler = fragment()
+      .body(bodySchema)
+      .handle((_deps: {}, ctx) => {
+        expectTypeOf(ctx.body).toEqualTypeOf<{ title: string }>()
+        return { ok: true }
+      })
+    // the fragment carries 'body' in its Cap marker — the adapter's CarrierGuard
+    // reads exactly this to gate a mount on a body-less host (tRPC).
+    expectTypeOf(handler.__cap).toEqualTypeOf<((c: 'body') => void) | undefined>()
+
+    const formSchema = z.object({ email: z.string() })
+    fragment()
+      .form(formSchema)
+      .handle((_deps: {}, ctx) => {
+        expectTypeOf(ctx.form).toEqualTypeOf<{ email: string }>()
+        return {}
+      })
+
+    // a param-only fragment requires NO capability (Cap = never)
+    const paramOnly = fragment().input(schema).handle((_deps: {}) => ({ ok: true }))
+    expectTypeOf(paramOnly.__cap).toEqualTypeOf<((c: never) => void) | undefined>()
+  })
+
   it('a param-less fragment (no .input) still gets the carrier and requires no app', () => {
     const handler = fragment().handle((_deps: {}, ctx) => {
-      expectTypeOf(ctx.request).toEqualTypeOf<Request>()
+      expectTypeOf(ctx.request).toEqualTypeOf<RequestHead>()
       // @ts-expect-error — repos are not in the ctx bag
       ctx.sessionRepo
       return { pong: true }

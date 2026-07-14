@@ -14,7 +14,7 @@ import { validateInput } from './validate.ts'
 // fragment would not be assignable to a fixed `Handler<object, …, R>` — picking
 // `guards`/`leaf` (which never depend on `Need`/`S`) sidesteps that.
 export async function runFold<S extends { cookies: CookieSink }, R>(
-  handler: Pick<Handler<object, StandardSchemaV1, R>, 'guards' | 'leaf'>,
+  handler: Pick<Handler<object, StandardSchemaV1, R>, 'guards' | 'leaf' | 'bodySchema' | 'formSchema'>,
   app: object,
   carrier: Omit<S, 'cookies'>,
   params: object,
@@ -23,9 +23,32 @@ export async function runFold<S extends { cookies: CookieSink }, R>(
   const cookies: CookieSink = {
     set: (name, value, options = {}) => pending.push({ name, value, options }),
   }
-  // `ctx` merges the carrier, the cookie sink, and the validated params. Guards
-  // and the leaf both read `(app, ctx)`; enrichments accumulate into ctx.
-  const ctx = { ...carrier, cookies, params }
+
+  // Declared body channels (design A): parse + validate the request body into
+  // `ctx.body` / `ctx.form`. A malformed/invalid body is a RETURNED 422 abort
+  // (the error convention), never a throw. Touched ONLY when the fragment
+  // declared `.body`/`.form`, so param-only and bus fragments are untouched.
+  // The runtime carrier holds a full `Request` even though the fragment's
+  // `ctx.request` type is the headless `RequestHead`.
+  const bodyBag: { body?: unknown; form?: unknown } = {}
+  const req = (carrier as { request?: Request }).request
+  if (handler.bodySchema) {
+    const raw = req ? await req.json().catch(() => undefined) : undefined
+    const v = await validateInput(handler.bodySchema, raw)
+    if (!v.ok) return { ok: false, abort: v.abort, cookies: pending }
+    bodyBag.body = v.params
+  }
+  if (handler.formSchema) {
+    const raw = req ? Object.fromEntries(await req.formData()) : undefined
+    const v = await validateInput(handler.formSchema, raw)
+    if (!v.ok) return { ok: false, abort: v.abort, cookies: pending }
+    bodyBag.form = v.params
+  }
+
+  // `ctx` merges the carrier, the cookie sink, the validated params, and the
+  // declared body/form. Guards and the leaf both read `(app, ctx)`; enrichments
+  // accumulate into ctx.
+  const ctx = { ...carrier, cookies, params, ...bodyBag }
 
   let enrich: Record<string, unknown> = {}
   for (const g of handler.guards) {
@@ -51,7 +74,7 @@ export async function runScope<
   Sch extends StandardSchemaV1,
   R,
 >(
-  handler: Pick<Handler<object, Sch, R>, 'guards' | 'leaf' | 'schema'>,
+  handler: Pick<Handler<object, Sch, R>, 'guards' | 'leaf' | 'schema' | 'bodySchema' | 'formSchema'>,
   app: object,
   carrier: Omit<Carrier, 'cookies'>,
   raw: unknown,

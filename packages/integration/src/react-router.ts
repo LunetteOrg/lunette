@@ -1,6 +1,6 @@
 import { Lunette } from '@lntt/wire'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { DepGuard, Handler, RequestScope } from '@lntt/scope'
+import type { Capability, CarrierGuard, DepGuard, Handler, RequestScope } from '@lntt/scope'
 import { fragment, runScope } from '@lntt/scope'
 import { outcomeToResponse } from './http-codec.ts'
 
@@ -51,9 +51,11 @@ export function reactRouter<C extends Lunette<any, any, any>>(
   // of the fragment's schema. `runScope` validates+coerces them at runtime →
   // a RETURNED 422 abort on a bad param, and the leaf reads the coerced
   // `OutputOf<S>`.
+  // RR7 loaders/actions get the Fetch request with a readable body, so RR7
+  // PROVIDES the `body` capability (`CarrierGuard<Cap, 'body'>`).
   const toLoader =
-    <Need extends object, S extends StandardSchemaV1, R>(
-      handler: Handler<Need, S, R> & DepGuard<Pub, Need>,
+    <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
+      handler: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body'>,
     ) =>
     (args: {
       request: Request
