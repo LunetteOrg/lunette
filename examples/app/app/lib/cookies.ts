@@ -1,12 +1,21 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import type { CookieSink, RequestHead } from '@lntt/scope'
 import type { Env } from '../config/env.ts'
 
 // Signed client-side state: a base64url payload plus an HMAC signature. The
 // read side verifies in constant time and returns null on any tampering — no
 // db row exists for the pending-auth flow before the code is confirmed.
 export type Cookie<T> = {
-  read(request: Request): Promise<T | null>
+  // Reads only the cookie header → typed on the headless `RequestHead` a
+  // fragment exposes on `ctx.request` (the body is off-limits to a guard).
+  read(request: RequestHead): Promise<T | null>
   write(value: T): string // a Set-Cookie header value
+  // The bridge to the scope `CookieSink`: a fragment sets/clears a signed
+  // cookie through the sink without knowing its name, secret or attributes —
+  // `app.sessionCookie.apply(ctx.cookies, id)` / `.drop(ctx.cookies)`. Signing
+  // and the name stay here; the sink owns Path/Max-Age/HttpOnly serialization.
+  apply(sink: CookieSink, value: T): void
+  drop(sink: CookieSink): void
   clear(): string
 }
 
@@ -52,6 +61,12 @@ const makeCookie = <T>(opts: {
     },
     write(value) {
       return serialize(encode(value), opts.maxAge)
+    },
+    apply(sink, value) {
+      sink.set(opts.name, encode(value), { path: '/', httpOnly: true, maxAge: opts.maxAge })
+    },
+    drop(sink) {
+      sink.set(opts.name, '', { path: '/', httpOnly: true, maxAge: 0 })
     },
     clear() {
       return serialize('', 0)

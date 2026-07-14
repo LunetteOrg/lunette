@@ -19,4 +19,23 @@ describe('hc<AppType>() — the typed client survives the mount', () => {
     const call = hc<AppType>('http://localhost').feed.$get
     expectTypeOf<InferResponseType<typeof call, 200>>().toMatchTypeOf<{ signedIn: boolean }>()
   })
+
+  it('infers the gated GET /me response (the profile identity)', () => {
+    const call = hc<AppType>('http://localhost').me.$get
+    expectTypeOf<InferResponseType<typeof call, 200>>().toMatchTypeOf<{
+      identity: { name: string; color: string }
+    }>()
+  })
+
+  it('infers the POST /posts write response (the created post)', () => {
+    const call = hc<AppType>('http://localhost').posts.$post
+    expectTypeOf<InferResponseType<typeof call, 200>>().toMatchTypeOf<{
+      post: { id: string; title: string }
+    }>()
+  })
+
+  it('infers the nested POST /posts/:postId/comments param', () => {
+    const call = hc<AppType>('http://localhost').posts[':postId'].comments.$post
+    expectTypeOf<InferRequestType<typeof call>>().toMatchTypeOf<{ param: { postId: string } }>()
+  })
 })

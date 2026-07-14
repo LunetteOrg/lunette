@@ -15,8 +15,13 @@ describe('the chain delivers only the public surface', () => {
     try {
       expect(Object.keys(app).sort()).toEqual([
         'access',
+        // the nonce generator + the signed cookies the auth handlers use
+        // (login sets pending, verify sets session, logout drops it).
+        'generateId',
         'getSession',
+        'pendingCookie',
         'profile',
+        'sessionCookie',
         'threads',
         'validateEmail',
       ])
@@ -86,6 +91,53 @@ describe('end-to-end through the real chain (only the transport faked)', () => {
       const reading = await app.threads.getPostForReading(postId, 'web', userId)
       expect(isError(reading)).toBe(false)
       expect((reading as { body: string }).body).toContain('[web/html]')
+    })
+  })
+})
+
+describe('teardown: dispose() closes the disposable (withDb)', () => {
+  it('a query after dispose fails — the pool was actually closed', async () => {
+    const { app, dispose } = await chain.build({ env })
+    // the db works before teardown
+    expect(await app.threads.listFeed('feed')).toEqual([])
+    await dispose()
+    // withDb's `finally { close() }` ran: the pool is gone, so a query now
+    // surfaces an infrastructure failure (a THROW), proving teardown happened.
+    await expect(app.threads.listFeed('feed')).rejects.toBeDefined()
+  })
+})
+
+describe('feature flag: RENDER_CACHE=off selects the no-op cache', () => {
+  // The flag flips a conditional-birth resource; the app stays fully functional
+  // — reads just render fresh every time (no cache row is ever written or read).
+  it('the content flow still works with the DB cache disabled', async () => {
+    const offEnv = parseEnv({ RENDER_CACHE: 'off' })
+    const sent: Mail[] = []
+    const fakeTransport: Transport = async (mail) => {
+      sent.push(mail)
+    }
+
+    await test(chain).run({ env: offEnv, transport: fakeTransport }, async (app) => {
+      await app.access.requestCode('nocache@b.c', 'n3')
+      const signin = await app.access.verifyCode('nocache@b.c', codeOf(sent[0]), 'n3', {
+        displayName: 'NoCache',
+        termsAccepted: true,
+      })
+      const userId = (signin as { userId: string }).userId
+
+      const post = await app.threads.publishPost({
+        authorId: userId,
+        title: 'Fresh',
+        body: 'Rendered every read',
+        status: 'published',
+      })
+      expect(isError(post)).toBe(false)
+
+      // Reads render through the no-op cache (always a miss → the fake renderer
+      // runs), so the output is present just as with the DB cache on.
+      const feed = await app.threads.listFeed('feed')
+      expect(feed.length).toBe(1)
+      expect(feed[0]?.excerpt.startsWith('[feed/html]')).toBe(true)
     })
   })
 })

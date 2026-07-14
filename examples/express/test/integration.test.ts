@@ -40,4 +40,29 @@ describe('example-app on Express — integration', () => {
 
     await close()
   })
+
+  it('drives the new reads / gated writes / logout through a real socket', async () => {
+    const { url, close } = await start()
+
+    // public read: unknown post → empty comment list
+    const comments = await fetch(`${url}/posts/nope/comments`)
+    expect(comments.status).toBe(200)
+    expect(await comments.json()).toEqual({ comments: [] })
+
+    // the session gate: anonymous reads/writes are 401
+    expect((await fetch(`${url}/me`)).status).toBe(401)
+    const post = await fetch(`${url}/posts`, {
+      method: 'POST',
+      body: JSON.stringify({ title: 'x', body: 'y' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(post.status).toBe(401)
+
+    // logout clears the session cookie and redirects (manual, don't follow)
+    const out = await fetch(`${url}/logout`, { method: 'POST', redirect: 'manual' })
+    expect(out.status).toBe(302)
+    expect(out.headers.get('set-cookie')).toMatch(/^session=;/)
+
+    await close()
+  })
 })

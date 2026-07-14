@@ -19,6 +19,12 @@ describe('example-app on tRPC — integration', () => {
       code: 'NOT_FOUND',
     })
 
+    // comments: a read with a route-shaped input, empty for an unknown post
+    expect(await caller.comments({ postId: 'nope' })).toEqual({ comments: [] })
+
+    // me: the session gate → a returned unauthorized abort becomes UNAUTHORIZED
+    await expect(caller.me({})).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+
     await dispose()
   })
 })

@@ -1,5 +1,5 @@
 import { initTRPC } from '@trpc/server'
-import { chain, feedFragment, postFragment } from '@lntt/example-app'
+import { chain, commentsFragment, feedFragment, identityFragment, postFragment } from '@lntt/example-app'
 import type { App } from '@lntt/example-app'
 import { toProcedure } from '@lntt/integration/trpc'
 
@@ -14,11 +14,15 @@ const t = initTRPC.context<Ctx>().create()
 
 // `toProcedure` consumes each fragment in ONE call — no per-guard annotations —
 // into a native `.input(schema).query(...)`, so the typed `AppRouter` / caller /
-// client is preserved. (Login is form-shaped, an HTTP concern, so it is not
-// exposed over RPC.)
+// client is preserved. Only fragments whose input IS the RPC payload map here:
+// the READS. The write/auth fragments read a form or JSON body off the HTTP
+// request (`ctx.request`), an HTTP concern with no meaning over RPC, so they
+// are NOT exposed here — exactly the feed/post/comments/me split.
 export const appRouter = t.router({
   feed: toProcedure(t.procedure, feedFragment),
   post: toProcedure(t.procedure, postFragment),
+  comments: toProcedure(t.procedure, commentsFragment),
+  me: toProcedure(t.procedure, identityFragment),
 })
 
 export type AppRouter = typeof appRouter

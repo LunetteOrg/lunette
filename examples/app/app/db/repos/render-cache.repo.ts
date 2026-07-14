@@ -15,6 +15,20 @@ const matches = (key: RenderCacheKey) =>
     eq(renderCache.surface, key.surface),
   )
 
+// The no-op cache the RENDER_CACHE=off flag selects: every read misses (so the
+// read-through leaves render fresh every time), every write is dropped. It has
+// NO db edge — the conditional-birth resource whose DB-backed sibling's layer
+// never runs when this one is chosen (mirrors the mailer transport split).
+export const noopRenderCache = (): RenderCacheRepository => ({
+  async get() {
+    return null
+  },
+  async getMany() {
+    return new Map()
+  },
+  async upsert() {},
+})
+
 export const renderCacheRepo = ({ db }: { db: Queryable }): RenderCacheRepository => ({
   async get(key) {
     try {

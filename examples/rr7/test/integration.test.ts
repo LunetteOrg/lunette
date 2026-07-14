@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { feedLoader, loginAction, pack, postLoader } from '../src/routes.ts'
+import {
+  commentsLoader,
+  feedLoader,
+  loginAction,
+  meLoader,
+  pack,
+  postLoader,
+  publishPostAction,
+  verifyAction,
+} from '../src/routes.ts'
 
 // Integration test: the real example app mounted as React Router loaders/actions.
 // `mount` builds the app once (in-memory PGlite) and yields the load context the
@@ -28,5 +37,44 @@ describe('example-app on React Router 7 — integration', () => {
     })
     expect(login.status).toBe(200)
     expect(await login.json()).toEqual({ ok: true })
+  })
+
+  it('drives the new comments loader / gated actions against the real chain', async () => {
+    const context = await pack.mount({})
+
+    const comments = await commentsLoader({
+      request: new Request('http://x/posts/nope/comments'),
+      params: { postId: 'nope' },
+      context,
+    })
+    expect(comments.status).toBe(200)
+    expect(await comments.json()).toEqual({ comments: [] })
+
+    // the session gate on a loader and an action
+    const me = await meLoader({ request: new Request('http://x/me'), params: {}, context })
+    expect(me.status).toBe(401)
+
+    const publish = await publishPostAction({
+      request: new Request('http://x/posts', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'x', body: 'y' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      params: {},
+      context,
+    })
+    expect(publish.status).toBe(401)
+
+    // verify with no pending cookie → 401
+    const verify = await verifyAction({
+      request: new Request('http://x/verify', {
+        method: 'POST',
+        body: JSON.stringify({ code: '123456' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      params: {},
+      context,
+    })
+    expect(verify.status).toBe(401)
   })
 })

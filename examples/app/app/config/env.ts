@@ -24,6 +24,12 @@ const EnvSchema = z
     // is present; otherwise the deterministic fake.
     RENDERER_PROJECT_ID: optional(z.string()),
 
+    // Feature flag — render cache: 'on' (DB-backed) by default; 'off' selects a
+    // no-op cache (every read a miss → rendered fresh, every write dropped).
+    // The conditional-birth resource whose DB layer is SKIPPED when off, exactly
+    // like the mailer transport is skipped when its key is absent.
+    RENDER_CACHE: z.enum(['on', 'off']).default('on'),
+
     // Feature flag — blobs: the real object store ONLY when ALL FIVE are
     // present (logical AND); otherwise the in-memory fake.
     BLOB_ENDPOINT: optional(z.string()),

@@ -5,7 +5,7 @@ import { withDb } from '../db/layer.ts'
 import { commentRepo } from '../db/repos/comment.repo.ts'
 import { otpRepo } from '../db/repos/otp.repo.ts'
 import { postRepo } from '../db/repos/post.repo.ts'
-import { renderCacheRepo } from '../db/repos/render-cache.repo.ts'
+import { noopRenderCache, renderCacheRepo } from '../db/repos/render-cache.repo.ts'
 import { sessionRepo } from '../db/repos/session.repo.ts'
 import { userRepo } from '../db/repos/user.repo.ts'
 import { blobs } from '../lib/blobs/index.ts'
@@ -29,11 +29,17 @@ import { sessionReader } from './session-reader.ts'
 // reach a route.
 export const chain = lunette<{ env: Env }>()
   .use(withDb)
-  .provide('generateId', () => () => randomUUID())
+  // Public: the auth handlers need a nonce id at the login step (pending-auth
+  // flow). The same generator the modules consume from Ctx, now on Pub too.
+  .expose('generateId', () => () => randomUUID())
   .provide('otpRepo', otpRepo)
   .provide('userRepo', userRepo)
   .provide('sessionRepo', sessionRepo)
-  .provide('renderCache', renderCacheRepo)
+  // Feature-flagged, conditional birth: the DB-backed cache when RENDER_CACHE is
+  // on, else a no-op cache — the DB repo is never even constructed when off.
+  .provide('renderCache', ({ env, db }) =>
+    env.RENDER_CACHE === 'on' ? renderCacheRepo({ db }) : noopRenderCache(),
+  )
   .provide('postRepo', postRepo)
   .provide('commentRepo', commentRepo)
   // the mail split: adapters are one file each behind the Transport port;
@@ -47,8 +53,10 @@ export const chain = lunette<{ env: Env }>()
   .provide(bind({ sendMail }))
   .provide('renderer', renderer)
   .provide('blobs', blobs)
-  .provide('sessionCookie', sessionCookie)
-  .provide('pendingCookie', pendingCookie)
+  // Public: the auth handlers read the pending cookie and set the session /
+  // pending cookies through the scope CookieSink (signing stays in the helper).
+  .expose('sessionCookie', sessionCookie)
+  .expose('pendingCookie', pendingCookie)
   .use(renderModule) // private infrastructure fragment: its Pub is wiring only
   .expose(accessModule) // public feature module
   .expose(profileModule)

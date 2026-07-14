@@ -1,5 +1,18 @@
 import { Hono } from 'hono'
-import { chain, feedFragment, loginFragment, parseEnv, postFragment } from '@lntt/example-app'
+import {
+  chain,
+  commentFragment,
+  commentsFragment,
+  feedFragment,
+  identityFragment,
+  loginFragment,
+  logoutFragment,
+  parseEnv,
+  postFragment,
+  publishPostFragment,
+  setPreferenceFragment,
+  verifyFragment,
+} from '@lntt/example-app'
 import { hono } from '@lntt/integration/hono'
 
 // Mount @lntt/example-app on Hono. The pack takes the CHAIN and owns build-once;
@@ -13,9 +26,19 @@ const w = hono(chain, (hostEnv) => ({
 
 export const app = new Hono()
   .use(w.mount())
+  // reads
   .get('/feed', ...w.handler(feedFragment))
   .get('/posts/:postId', ...w.handler(postFragment))
+  .get('/posts/:postId/comments', ...w.handler(commentsFragment))
+  .get('/me', ...w.handler(identityFragment))
+  // auth
   .post('/login', ...w.handler(loginFragment))
+  .post('/verify', ...w.handler(verifyFragment))
+  .post('/logout', ...w.handler(logoutFragment))
+  // writes (gated)
+  .post('/posts', ...w.handler(publishPostFragment))
+  .post('/posts/:postId/comments', ...w.handler(commentFragment))
+  .post('/me/preference', ...w.handler(setPreferenceFragment))
 
 // The type a Hono RPC client (`hc<AppType>()`) consumes — routes, params, and
 // the JSON each returns, all inferred from the fragments.
