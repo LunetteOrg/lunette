@@ -155,6 +155,33 @@ const requireSession = (
 // inline images (blobs), detect format, create the post, warm the render cache
 // — but the fragment sees ONE function. Body fields come off the request (the
 // hosts stream it in); the author is the gated session, never the client.
+// The shared write step: the SAME domain call + error mapping, fed by whichever
+// input channel the host uses — `.body` on the HTTP hosts, the `.input` payload
+// on tRPC. The two authorings below differ ONLY in where the fields come from
+// (`ctx.body` vs `ctx.params`); the guards and this step are shared, so the use
+// case lives once.
+type PublishFields = {
+  title?: string | undefined
+  body?: string | undefined
+  status?: 'draft' | 'published' | undefined
+}
+type PublishDeps = {
+  threads: { publishPost(input: PublishPostInput): Promise<Post | TaggedError> }
+}
+const runPublish = (
+  deps: PublishDeps,
+  authorId: string,
+  fields: PublishFields,
+): Promise<{ post: Post } | Abort> =>
+  deps.threads
+    .publishPost({
+      authorId,
+      title: fields.title ?? '',
+      body: fields.body ?? '',
+      status: fields.status ?? 'published',
+    })
+    .then((result) => (isError(result) ? abortFor(result) : { post: result }))
+
 export const publishPostFragment = fragment()
   // `.body` = the JSON body channel: validated onto `ctx.body`, HTTP-only.
   .body(
@@ -166,45 +193,71 @@ export const publishPostFragment = fragment()
   )
   .guard(readSession)
   .guard(requireSession)
-  .handle(
-    async (
-      deps: { threads: { publishPost(input: PublishPostInput): Promise<Post | TaggedError> } },
-      ctx,
-    ) => {
-      const result = await deps.threads.publishPost({
-        authorId: ctx.session.userId,
-        title: ctx.body.title ?? '',
-        body: ctx.body.body ?? '',
-        status: ctx.body.status ?? 'published',
-      })
-      return isError(result) ? abortFor(result) : { post: result }
-    },
+  .handle((deps: PublishDeps, ctx) => runPublish(deps, ctx.session.userId, ctx.body))
+
+// The tRPC-shaped write: the SAME use case as publishPostFragment, authored for
+// RPC. Its whole input is the payload (`.input`, not `.body`), so it carries NO
+// `body` capability and mounts on tRPC — as a MUTATION — while the auth guards
+// (which read only headers, so they work on tRPC too) and `runPublish` are
+// shared. Mounted with `toMutation`; the HTTP hosts keep the `.body` variant.
+export const publishPostProcedure = fragment()
+  .input(
+    z.object({
+      title: z.string(),
+      body: z.string(),
+      status: z.enum(['draft', 'published']).optional(),
+    }),
   )
+  .guard(readSession)
+  .guard(requireSession)
+  .handle((deps: PublishDeps, ctx) => runPublish(deps, ctx.session.userId, ctx.params))
 
 // ── write path: POST /posts/:postId/comments ────────────────────────────────
 // `.input` fixes the ROUTE param (`postId`); the body carries the comment.
 // composeComment prefetches the post/parent itself and RETURNS PostNotFound /
 // ParentCommentNotFound — mapped to 404 — or CommentBodyRequired → 422.
+type CommentFields = { body?: string | undefined; parentId?: string | undefined }
+type CommentDeps = {
+  threads: { composeComment(input: ComposeCommentInput): Promise<Comment | TaggedError> }
+}
+const runComment = (
+  deps: CommentDeps,
+  postId: string,
+  authorId: string,
+  fields: CommentFields,
+): Promise<{ comment: Comment } | Abort> =>
+  deps.threads
+    .composeComment({
+      postId,
+      authorId,
+      body: fields.body ?? '',
+      ...(fields.parentId !== undefined && { parentId: fields.parentId }),
+    })
+    .then((result) => (isError(result) ? abortFor(result) : { comment: result }))
+
 export const commentFragment = fragment()
   .input(z.object({ postId: z.string() })) // the ROUTE param
   .body(z.object({ body: z.string().optional(), parentId: z.string().optional() })) // the JSON body
   .guard(readSession)
   .guard(requireSession)
-  .handle(
-    async (
-      deps: {
-        threads: { composeComment(input: ComposeCommentInput): Promise<Comment | TaggedError> }
-      },
-      ctx,
-    ) => {
-      const result = await deps.threads.composeComment({
-        postId: ctx.params.postId,
-        authorId: ctx.session.userId,
-        body: ctx.body.body ?? '',
-        ...(ctx.body.parentId !== undefined && { parentId: ctx.body.parentId }),
-      })
-      return isError(result) ? abortFor(result) : { comment: result }
-    },
+  .handle((deps: CommentDeps, ctx) =>
+    runComment(deps, ctx.params.postId, ctx.session.userId, ctx.body),
+  )
+
+// The tRPC-shaped comment write: postId + body + parentId all ride the RPC
+// payload (`.input`), so it clears the capability gate and mounts as a mutation.
+export const commentProcedure = fragment()
+  .input(
+    z.object({
+      postId: z.string(),
+      body: z.string(),
+      parentId: z.string().optional(),
+    }),
+  )
+  .guard(readSession)
+  .guard(requireSession)
+  .handle((deps: CommentDeps, ctx) =>
+    runComment(deps, ctx.params.postId, ctx.session.userId, ctx.params),
   )
 
 // ── read path: GET /posts/:postId/comments (all four hosts) ──────────────────
@@ -249,24 +302,36 @@ export const identityFragment = fragment()
 // ── write path: POST /me/preference (gated) ─────────────────────────────────
 // The body's raw surface is normalised through the empty-deps leaf before the
 // write, so an out-of-range value falls back rather than reaching the repo.
+type PreferenceDeps = {
+  profile: {
+    resolveSurface(raw: string | null | undefined, fallback: Surface): Surface
+    setPreference(userId: string, surface: Surface): Promise<User>
+  }
+}
+const runSetPreference = (
+  deps: PreferenceDeps,
+  userId: string,
+  rawSurface: string | null | undefined,
+): Promise<{ locale: string | null }> => {
+  const surface = deps.profile.resolveSurface(rawSurface, 'web')
+  return deps.profile.setPreference(userId, surface).then((user) => ({ locale: user.locale }))
+}
+
 export const setPreferenceFragment = fragment()
   .body(z.object({ surface: z.string().optional() }))
   .guard(readSession)
   .guard(requireSession)
-  .handle(
-    async (
-      deps: {
-        profile: {
-          resolveSurface(raw: string | null | undefined, fallback: Surface): Surface
-          setPreference(userId: string, surface: Surface): Promise<User>
-        }
-      },
-      ctx,
-    ) => {
-      const surface = deps.profile.resolveSurface(ctx.body.surface, 'web')
-      const user = await deps.profile.setPreference(ctx.session.userId, surface)
-      return { locale: user.locale }
-    },
+  .handle((deps: PreferenceDeps, ctx) =>
+    runSetPreference(deps, ctx.session.userId, ctx.body.surface),
+  )
+
+// The tRPC-shaped preference write: the surface rides the RPC payload.
+export const setPreferenceProcedure = fragment()
+  .input(z.object({ surface: z.string() }))
+  .guard(readSession)
+  .guard(requireSession)
+  .handle((deps: PreferenceDeps, ctx) =>
+    runSetPreference(deps, ctx.session.userId, ctx.params.surface),
   )
 
 // ── auth: POST /verify — the transaction-window path + cookie set + redirect ─
@@ -283,7 +348,16 @@ const readPending = (
   deps.pendingCookie.read(ctx.request).then((pending) => (pending ? { pending } : unauthorized()))
 
 export const verifyFragment = fragment()
-  .body(z.object({ code: z.string().optional() }))
+  // A NEW user completes registration on the verify screen: `displayName` +
+  // `termsAccepted` ride the body alongside the code. An existing user (or a
+  // pending cookie that already carries registration) needs neither.
+  .body(
+    z.object({
+      code: z.string().optional(),
+      displayName: z.string().optional(),
+      termsAccepted: z.boolean().optional(),
+    }),
+  )
   .guard(readPending)
   .handle(
     async (
@@ -301,11 +375,21 @@ export const verifyFragment = fragment()
       },
       ctx,
     ) => {
+      // Registration comes from the pending cookie if login captured it, else
+      // from this request's body (the new-user completion path).
+      const registration: Omit<UserRegistration, 'email'> | undefined =
+        ctx.pending.registration ??
+        (ctx.body.termsAccepted
+          ? {
+              termsAccepted: true,
+              ...(ctx.body.displayName !== undefined && { displayName: ctx.body.displayName }),
+            }
+          : undefined)
       const result = await deps.access.verifyCode(
         ctx.pending.email,
         ctx.body.code ?? '',
         ctx.pending.nonce,
-        ctx.pending.registration,
+        registration,
       )
       if (isError(result)) return abortFor(result)
       deps.sessionCookie.apply(ctx.cookies, result.sessionId)

@@ -13,6 +13,7 @@ import { pendingCookie, sessionCookie } from '../lib/cookies.ts'
 import { httpTransport } from '../lib/mailer/http.ts'
 import { sendMail } from '../lib/mailer/index.ts'
 import { loggingTransport } from '../lib/mailer/logging.ts'
+import { outboxTransport } from '../lib/mailer/outbox.ts'
 import { renderer } from '../lib/renderer/index.ts'
 import { validateEmail } from '../lib/validate-email.ts'
 import { accessModule } from '../modules/access.ts'
@@ -48,7 +49,11 @@ export const chain = lunette<{ env: Env }>()
   // the KEYED resource (conditional birth, skippable: substituted in tests,
   // neither branch runs); the sending behaviour a bound leaf, private wiring.
   .provide('transport', ({ env }) =>
-    env.MAILER_API_KEY ? httpTransport(env.MAILER_API_KEY) : loggingTransport(),
+    env.MAILER_API_KEY
+      ? httpTransport(env.MAILER_API_KEY)
+      : env.DEV_MAIL_OUTBOX
+        ? outboxTransport() // dev/e2e: capture sent mail in memory (DEV_MAIL_OUTBOX)
+        : loggingTransport(),
   )
   .provide(bind({ sendMail }))
   .provide('renderer', renderer)

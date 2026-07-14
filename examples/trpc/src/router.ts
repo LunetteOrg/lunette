@@ -1,7 +1,16 @@
 import { initTRPC } from '@trpc/server'
-import { chain, commentsFragment, feedFragment, identityFragment, postFragment } from '@lntt/example-app'
+import {
+  chain,
+  commentProcedure,
+  commentsFragment,
+  feedFragment,
+  identityFragment,
+  postFragment,
+  publishPostProcedure,
+  setPreferenceProcedure,
+} from '@lntt/example-app'
 import type { App } from '@lntt/example-app'
-import { toProcedure } from '@lntt/integration/trpc'
+import { toMutation, toProcedure } from '@lntt/integration/trpc'
 
 export { chain }
 
@@ -19,10 +28,18 @@ const t = initTRPC.context<Ctx>().create()
 // request (`ctx.request`), an HTTP concern with no meaning over RPC, so they
 // are NOT exposed here — exactly the feed/post/comments/me split.
 export const appRouter = t.router({
+  // reads → queries
   feed: toProcedure(t.procedure, feedFragment),
   post: toProcedure(t.procedure, postFragment),
   comments: toProcedure(t.procedure, commentsFragment),
   me: toProcedure(t.procedure, identityFragment),
+  // value-returning WRITES → mutations. Each RPC-shaped fragment declares its
+  // whole input as the payload (`.input`, not `.body`), so it clears the
+  // capability gate and mounts here — the dedicated tRPC write path. The cookie/
+  // redirect writes (login/verify/logout) stay HTTP-only: no RPC meaning.
+  publishPost: toMutation(t.procedure, publishPostProcedure),
+  comment: toMutation(t.procedure, commentProcedure),
+  setPreference: toMutation(t.procedure, setPreferenceProcedure),
 })
 
 export type AppRouter = typeof appRouter

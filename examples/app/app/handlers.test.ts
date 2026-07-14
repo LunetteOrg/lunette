@@ -11,6 +11,7 @@ import type { PublishPostInput } from './use-cases/threads/publish-post.ts'
 import type { VerifyCodeResult } from './use-cases/access/verify-code.ts'
 import {
   commentFragment,
+  commentProcedure,
   commentsFragment,
   feedFragment,
   identityFragment,
@@ -18,7 +19,9 @@ import {
   logoutFragment,
   postFragment,
   publishPostFragment,
+  publishPostProcedure,
   setPreferenceFragment,
+  setPreferenceProcedure,
   verifyFragment,
 } from './handlers.ts'
 import { OtpInvalid, PostNotFound, PostTitleRequired } from './lib/errors.ts'
@@ -273,6 +276,46 @@ describe('publishPostFragment: gated write, domain error → 422', () => {
   })
 })
 
+describe('publishPostProcedure: the RPC-shaped write (input = payload, not body)', () => {
+  it('signed in + valid payload → { post }, author from the session', async () => {
+    let authorId = ''
+    const app = {
+      getSession: async (): Promise<Session | null> => aSession,
+      threads: {
+        publishPost: async (input: PublishPostInput): Promise<Post> => {
+          authorId = input.authorId
+          return { ...aPostRow, title: input.title }
+        },
+      },
+    }
+    // the input rides the params slot (the RPC payload), NOT the request body
+    const out = await runScope<RequestScope, typeof publishPostProcedure.schema, { post: Post }>(
+      publishPostProcedure,
+      app,
+      carrier,
+      { title: 'Hi', body: 'world' },
+    )
+    expect(out.ok).toBe(true)
+    if (out.ok) expect(out.value.post.title).toBe('Hi')
+    expect(authorId).toBe('u1')
+  })
+
+  it('anonymous → 401 (the same shared auth guards as the HTTP variant)', async () => {
+    const app = {
+      getSession: async (): Promise<Session | null> => null,
+      threads: { publishPost: async (): Promise<Post> => aPostRow },
+    }
+    const out = await runScope<RequestScope, typeof publishPostProcedure.schema, { post: Post }>(
+      publishPostProcedure,
+      app,
+      carrier,
+      { title: 'Hi', body: 'world' },
+    )
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.abort.intent).toMatchObject({ kind: 'status', status: 401 })
+  })
+})
+
 describe('commentFragment: route param + body, missing post → 404', () => {
   const aComment: Comment = {
     id: 'c1',
@@ -321,6 +364,90 @@ describe('commentFragment: route param + body, missing post → 404', () => {
     expect(out.ok).toBe(false)
     if (!out.ok)
       expect(out.abort.intent).toMatchObject({ kind: 'status', status: 404, body: { error: 'PostNotFound' } })
+  })
+})
+
+describe('commentProcedure / setPreferenceProcedure: RPC-shaped writes (input = payload)', () => {
+  const aComment: Comment = {
+    id: 'c1',
+    postId: 'p1',
+    authorId: 'u1',
+    parentId: null,
+    body: 'nice',
+    origFormat: 'text',
+    createdAt: new Date('2020-01-01'),
+  }
+  const aUser: User = {
+    id: 'u1',
+    email: 'a@b.c',
+    displayName: 'Ada',
+    locale: 'web',
+    createdAt: new Date('2020-01-01'),
+  }
+
+  it('commentProcedure: postId + body from the payload → { comment }', async () => {
+    let seen: ComposeCommentInput | null = null
+    const app = {
+      getSession: async (): Promise<Session | null> => aSession,
+      threads: {
+        composeComment: async (input: ComposeCommentInput): Promise<Comment> => {
+          seen = input
+          return aComment
+        },
+      },
+    }
+    const out = await runScope<RequestScope, typeof commentProcedure.schema, { comment: Comment }>(
+      commentProcedure,
+      app,
+      carrier,
+      { postId: 'p1', body: 'nice' },
+    )
+    expect(out.ok).toBe(true)
+    expect(seen).toMatchObject({ postId: 'p1', authorId: 'u1', body: 'nice' })
+  })
+
+  it('setPreferenceProcedure: surface from the payload → { locale }', async () => {
+    const app = {
+      getSession: async (): Promise<Session | null> => aSession,
+      profile: {
+        resolveSurface: (raw: string | null | undefined, fallback: Surface): Surface =>
+          (['web', 'feed', 'email'] as string[]).includes(raw ?? '') ? (raw as Surface) : fallback,
+        setPreference: async (_id: string, surface: Surface): Promise<User> => ({
+          ...aUser,
+          locale: surface,
+        }),
+      },
+    }
+    const out = await runScope<
+      RequestScope,
+      typeof setPreferenceProcedure.schema,
+      { locale: string | null }
+    >(setPreferenceProcedure, app, carrier, { surface: 'feed' })
+    expect(out).toEqual({ ok: true, value: { locale: 'feed' }, cookies: [] })
+  })
+
+  it('both gate anonymous callers → 401', async () => {
+    const app = {
+      getSession: async (): Promise<Session | null> => null,
+      threads: { composeComment: async (): Promise<Comment> => aComment },
+      profile: {
+        resolveSurface: (_r: string | null | undefined, f: Surface): Surface => f,
+        setPreference: async (): Promise<User> => aUser,
+      },
+    }
+    const c = await runScope<RequestScope, typeof commentProcedure.schema, { comment: Comment }>(
+      commentProcedure,
+      app,
+      carrier,
+      { postId: 'p1', body: 'x' },
+    )
+    expect(c.ok).toBe(false)
+    const p = await runScope<
+      RequestScope,
+      typeof setPreferenceProcedure.schema,
+      { locale: string | null }
+    >(setPreferenceProcedure, app, carrier, { surface: 'web' })
+    expect(p.ok).toBe(false)
   })
 })
 

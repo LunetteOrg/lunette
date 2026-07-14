@@ -149,3 +149,45 @@ export function toProcedure<
     return outcome.value
   })
 }
+
+// toMutation — the WRITE counterpart of `toProcedure`. Identical fold, but a
+// native `.mutation` (a POST over the RPC transport, not a cacheable GET), so a
+// value-returning write is exposed with the right RPC semantics and the client
+// calls it via `.mutate`. A write fragment authored for RPC declares its WHOLE
+// input as the payload (`.input`, never `.body`), so it carries NO `body`
+// capability and passes the same `CarrierGuard<Cap, never>` gate; a `.body`
+// fragment is still rejected here. Cookie/redirect writes stay HTTP-only — they
+// have no RPC meaning (a redirect already degrades under `abortToTRPCError`).
+export function toMutation<
+  TContext extends { request: Request },
+  TMeta,
+  TContextOverrides,
+  Need extends object,
+  S extends StandardSchemaV1,
+  R,
+  Cap extends Capability,
+>(
+  procedure: ProcedureBuilder<
+    TContext,
+    TMeta,
+    TContextOverrides,
+    UnsetMarker,
+    UnsetMarker,
+    UnsetMarker,
+    UnsetMarker,
+    false
+  >,
+  handler: Handler<Need, S, R, Cap> & CarrierGuard<Cap, never>,
+) {
+  return procedure.input(handler.schema).mutation(async (opts): Promise<R> => {
+    const ctx = opts.ctx as { request: Request }
+    const outcome = await runFold<RequestScope, R>(
+      handler,
+      ctx,
+      { request: ctx.request },
+      opts.input as object,
+    )
+    if (!outcome.ok) throw abortToTRPCError(outcome.abort)
+    return outcome.value
+  })
+}

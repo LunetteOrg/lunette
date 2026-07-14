@@ -25,6 +25,19 @@ describe('example-app on tRPC — integration', () => {
     // me: the session gate → a returned unauthorized abort becomes UNAUTHORIZED
     await expect(caller.me({})).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
 
+    // publishPost: the dedicated tRPC WRITE path (a mutation). Anonymous →
+    // UNAUTHORIZED (the shared auth guards run on tRPC too, reading the session
+    // cookie off the request headers). Its input is the RPC payload, not a body.
+    await expect(caller.publishPost({ title: 'Hi', body: 'world' })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+    await expect(caller.comment({ postId: 'p1', body: 'hi' })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+    await expect(caller.setPreference({ surface: 'web' })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+
     await dispose()
   })
 })
