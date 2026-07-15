@@ -1,5 +1,5 @@
 import { type Abort, unauthorized } from '@lntt/scope'
-import type { RequestHead, RequestScope } from '@lntt/scope'
+import type { RequestHead } from '@lntt/scope'
 import type { Session } from '../domain/access.ts'
 import type { PendingAuth, PendingCookie } from '../lib/cookies.ts'
 
@@ -13,7 +13,7 @@ import type { PendingAuth, PendingCookie } from '../lib/cookies.ts'
 // The session read that a hand-rolled loader would repeat — `const session =
 // await context.app.getSession(request)` at the top of every loader/action —
 // is ONE reusable guard here. It declares only `getSession`, reads the request
-// off the carrier, and enriches the bag with `{ session }`. Every fragment
+// off the carrier, and enriches the bag with `{ session }`. Every scope
 // below opens with it; none rewrites the session read.
 export const sessionGuard = (
   deps: { getSession: (request: RequestHead) => Promise<Session | null> },
@@ -27,7 +27,7 @@ export const sessionGuard = (
 // reusable by anonymous-friendly loaders (the feed) AND by gated ones.
 // Deps typed as `Record<never, never>` (empty, NO index signature) — NOT
 // `Record<string, never>`, whose `{ [k: string]: never }` index signature would
-// intersect into the fragment's `Need` and collapse every real dep to `never`,
+// intersect into the scope's `Need` and collapse every real dep to `never`,
 // making the chain's Pub unable to satisfy it (a silent adapter-side break).
 export const authGuard = (
   _deps: Record<never, never>,
@@ -39,6 +39,6 @@ export const authGuard = (
 // pending state — not a session — identifies the caller mid-sign-in.
 export const pendingGuard = (
   deps: { pendingCookie: Pick<PendingCookie, 'read'> },
-  ctx: RequestScope,
+  ctx: { request: RequestHead },
 ): Promise<{ pending: PendingAuth } | Abort> =>
   deps.pendingCookie.read(ctx.request).then((pending) => (pending ? { pending } : unauthorized()))

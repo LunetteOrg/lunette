@@ -1,25 +1,25 @@
-import { fragment } from '@lntt/scope'
+import { scope } from '@lntt/scope'
 import {
   chain,
-  commentFragment,
-  commentsFragment,
-  identityFragment,
+  commentScope,
+  commentsScope,
+  identityScope,
   feedGuard,
-  loginFragment,
-  logoutFragment,
+  loginScope,
+  logoutScope,
   parseEnv,
-  postFragment,
-  publishPostFragment,
-  setPreferenceFragment,
+  postScope,
+  publishPostScope,
+  setPreferenceScope,
   feedHandler,
-  verifyFragment,
+  verifyScope,
 } from '@lntt/example-app'
 import type { Env } from '@lntt/example-app'
 import { reactRouter } from '@lntt/integration/react-router'
 
 // Mount @lntt/example-app on React Router 7. Routing is external (file-based);
 // the pack gives `mount` (the getLoadContext-shaped build-once step) and
-// `toLoader`/`toAction`, which turn the app's fragments into RR7 loaders/actions.
+// `toLoader`/`toAction`, which turn the app's scopes into RR7 loaders/actions.
 //
 // `makePack` is the FACTORY: a fresh build-once pack plus every loader/action,
 // optionally seeded with a caller-supplied `env` (e.g. DEV_MAIL_OUTBOX for an
@@ -32,20 +32,20 @@ export const makePack = (env?: Env) => {
     pack,
     // reads → loaders
     // The feed loader is composed INLINE here to show the single-host idiom — a
-    // real app has one host and composes at the wiring, so no shared-fragment
-    // module is needed. The shared `*Fragment` imports below are the multi-host
-    // portability device; `feedFragment` still ships as their documented form.
-    feedLoader: pack.toLoader(fragment().guard(feedGuard).handle(feedHandler)),
-    postLoader: pack.toLoader(postFragment),
-    commentsLoader: pack.toLoader(commentsFragment),
-    meLoader: pack.toLoader(identityFragment),
+    // real app has one host and composes at the wiring, so no shared-scope
+    // module is needed. The shared `*Scope` imports below are the multi-host
+    // portability device; `feedScope` still ships as their documented form.
+    feedLoader: pack.toLoader(scope().guard(feedGuard).handle(feedHandler)),
+    postLoader: pack.toLoader(postScope),
+    commentsLoader: pack.toLoader(commentsScope),
+    meLoader: pack.toLoader(identityScope),
     // writes/auth → actions
-    loginAction: pack.toAction(loginFragment),
-    verifyAction: pack.toAction(verifyFragment),
-    logoutAction: pack.toAction(logoutFragment),
-    publishPostAction: pack.toAction(publishPostFragment),
-    commentAction: pack.toAction(commentFragment),
-    setPreferenceAction: pack.toAction(setPreferenceFragment),
+    loginAction: pack.toAction(loginScope),
+    verifyAction: pack.toAction(verifyScope),
+    logoutAction: pack.toAction(logoutScope),
+    publishPostAction: pack.toAction(publishPostScope),
+    commentAction: pack.toAction(commentScope),
+    setPreferenceAction: pack.toAction(setPreferenceScope),
   }
 }
 

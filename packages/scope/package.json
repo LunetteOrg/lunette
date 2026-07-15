@@ -1,11 +1,14 @@
 {
   "name": "@lntt/scope",
   "version": "0.0.0",
-  "description": "The host-agnostic scope runtime for @lntt/wire: a fragment (guard/leaf) model with a Standard-Schema input contract, run as a typed fold. Framework-free — the host integrations live in @lntt/integration.",
+  "description": "The host-agnostic scope runtime for @lntt/wire: a scope (guard/leaf) model with a Standard-Schema input contract, run as a typed fold. Framework-free — the host integrations live in @lntt/integration; carrier extensions ship as tree-shakable subpaths (./request).",
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./request": "./src/request.ts",
+    "./body": "./src/body.ts",
+    "./cookies": "./src/cookies.ts"
   },
   "scripts": {
     "test": "vitest run",

@@ -1,6 +1,6 @@
 // LOAD-BEARING RPC PROOF for the Hono host: assembling `courseHandler` through
 // the real `hono` pack with NATIVE chaining preserves `hc<typeof app>()` fully
-// typed — the request INPUT (validated param, from the fragment's schema) and
+// typed — the request INPUT (validated param, from the scope's schema) and
 // the response OUTPUT@200 (the leaf's R via `c.json`), both exact, not
 // `unknown`. If this file stops compiling, the pack has lost RPC.
 
@@ -17,7 +17,7 @@ type Pub = Awaited<ReturnType<typeof chain.build>>['app']
 const w = hono(chain, () => ({ env: {} as Env }))
 
 // The whole point: the route is built with Hono's own chaining + a native
-// validator fed by the fragment's schema (via `wire`). `typeof app` therefore
+// validator fed by the scope's schema (via `wire`). `typeof app` therefore
 // carries the accumulated route schema that `hc` reads.
 const app = new Hono<WireEnv<Pub>>()
   .use(w.mount())
@@ -26,7 +26,7 @@ const app = new Hono<WireEnv<Pub>>()
 export type AppType = typeof app
 
 describe('Hono RPC preservation — hc<typeof app>() is fully typed', () => {
-  it('recovers the request INPUT from the fragment schema', () => {
+  it('recovers the request INPUT from the scope schema', () => {
     const call = hc<AppType>('http://localhost').courses[':courseId'].$get
     expectTypeOf<InferRequestType<typeof call>>().toEqualTypeOf<{ param: { courseId: string } }>()
   })

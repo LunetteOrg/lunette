@@ -1,4 +1,4 @@
-// The deps-vs-Pub brand. At the adapter, `Need` (the fragment's app
+// The deps-vs-Pub brand. At the adapter, `Need` (the scope's app
 // requirement) and `Pub` (the chain's public surface) are two independent
 // inferred generics with no shared annotated slot — contravariance cannot
 // relate them, so a brand is required (spike 1). The conditional vanishes on
@@ -7,7 +7,7 @@
 // assignable — a compile error at the `to*`/registrar line naming the gap).
 //
 // `Pub extends Need` accepts a SUPERSET Pub — a chain that exposes more than a
-// fragment requires is fine; extra singletons are ignored. Under
+// scope requires is fine; extra singletons are ignored. Under
 // exactOptionalPropertyTypes the failure surfaces as TS2379 (missing branded
 // property), not TS2345, but it still lands on the handler argument.
 export type DepGuard<Pub, Need> = Pub extends Need
@@ -15,11 +15,11 @@ export type DepGuard<Pub, Need> = Pub extends Need
   : { readonly __ERROR_chain_Pub_missing_deps: Need }
 
 // The carrier-capability brand — the same mechanism on the carrier axis. `Cap`
-// is the set of capabilities the fragment requires (e.g. `'body'`); `HostCaps`
+// is the set of capabilities the scope requires (e.g. `'body'`); `HostCaps`
 // is what the target host's carrier provides. When `Cap ⊆ HostCaps` the
 // conditional vanishes (`X & unknown = X`) and the handler is accepted; else it
 // becomes an unsatisfiable branded object naming the missing capability, so the
-// mount (`to*`/registrar) is a compile error — e.g. a body-reading fragment on
+// mount (`to*`/registrar) is a compile error — e.g. a body-reading scope on
 // tRPC (no readable body) is rejected at `toProcedure(...)`, before runtime.
 export type CarrierGuard<Cap, HostCaps> = [Exclude<Cap, HostCaps>] extends [never]
   ? unknown

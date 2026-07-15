@@ -3,7 +3,7 @@ import expressApp, { type Express } from 'express'
 import { describe, it } from 'vitest'
 import { chain, type Env } from './fixture/chain.ts'
 import { courseHandler } from './fixture/handlers.ts'
-import { fragment } from '@lntt/scope'
+import { scope } from '@lntt/scope'
 import { express as expressPack } from '../src/express.ts'
 import { hono, type WireEnv } from '../src/hono.ts'
 import { reactRouter } from '../src/react-router.ts'
@@ -14,9 +14,9 @@ const rr = reactRouter(chain, (env) => ({ env: env as Env }))
 const ho = hono(chain, () => ({ env: {} as Env }))
 const ex = expressPack(chain, () => ({ env: {} as Env }))
 
-// A fragment requiring a repo the chain's Pub does NOT expose — the deps axis.
+// A scope requiring a repo the chain's Pub does NOT expose — the deps axis.
 // Param-less, so its schema is the unit schema (P = {}).
-const needsBilling = fragment()
+const needsBilling = scope()
   .guard((app: { billingRepo: { charge(): void } }, _ctx) => {
     app.billingRepo.charge()
     return { charged: true }
@@ -35,7 +35,7 @@ describe('adapter contract — deps by brand (Need ⊆ Pub) at each call site', 
     // courseHandler's Need (session/admin/course repos) ⊆ Pub → accepted
     rr.toLoader(courseHandler)
     // needsBilling requires billingRepo, absent from Pub → DepGuard brand bites
-    // @ts-expect-error — chain Pub is missing the fragment's required deps
+    // @ts-expect-error — chain Pub is missing the scope's required deps
     rr.toLoader(needsBilling)
   })
 
@@ -44,7 +44,7 @@ describe('adapter contract — deps by brand (Need ⊆ Pub) at each call site', 
     // matching deps → the tuple spreads into Hono's native `.get`
     app.get('/courses/:courseId', ...ho.handler(courseHandler))
     // missing dep is caught at `wire`, independent of the terminal's RPC I
-    // @ts-expect-error — chain Pub is missing the fragment's required deps
+    // @ts-expect-error — chain Pub is missing the scope's required deps
     ho.handler(needsBilling)
   })
 
@@ -55,7 +55,7 @@ describe('adapter contract — deps by brand (Need ⊆ Pub) at each call site', 
     // `runScope` (a bad/missing param → a returned 422).
     app.get('/courses/:courseId', ex.handler(courseHandler))
     // missing dep is caught at `handler`, independent of the route path
-    // @ts-expect-error — chain Pub is missing the fragment's required deps
+    // @ts-expect-error — chain Pub is missing the scope's required deps
     ex.handler(needsBilling)
   })
 })

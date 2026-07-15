@@ -4,7 +4,7 @@ import { describe, expectTypeOf, it } from 'vitest'
 import type { AppType } from '../src/server.ts'
 
 // The payoff of mounting on Hono natively: a typed RPC client. `hc<AppType>()`
-// infers each route's params and its JSON response from the fragments — no
+// infers each route's params and its JSON response from the scopes — no
 // duplicated client types, no codegen.
 describe('hc<AppType>() — the typed client survives the mount', () => {
   it('infers the /posts/:postId param and its response shape', () => {

@@ -31,7 +31,7 @@ export type RenderCacheRepository = {
 export type RenderItem = { id: string; text: string }
 
 // The shapes of the render leaves once bound — these are the deps threads
-// injects (the render fragment's Pub feeding the threads fragment's Seed).
+// injects (the render scope's Pub feeding the threads scope's Seed).
 export type RenderOne = (
   contentType: string,
   contentId: string,

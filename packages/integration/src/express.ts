@@ -5,8 +5,9 @@ import type {
   Response as ExRes,
 } from 'express'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Capability, CarrierGuard, DepGuard, Handler, Outcome, RequestScope } from '@lntt/scope'
-import { fragment, runScope } from '@lntt/scope'
+import type { Capability, CarrierGuard, DepGuard, Handler, Outcome, RequestCarrier } from '@lntt/scope'
+import { scope, runScope } from '@lntt/scope'
+import { request } from '@lntt/scope/request'
 import { serializeCookie } from './http-codec.ts'
 
 type PubOf<C> = C extends { build: (...a: never[]) => Promise<{ app: infer A }> } ? A : never
@@ -62,7 +63,7 @@ const renderExpress = (res: ExRes, outcome: Outcome<unknown>): void => {
 // The built app is attached to the express request by the mount middleware.
 type WireReq = ExReq & { __wireApp?: unknown }
 
-// Express pack. Takes the CHAIN, owns build-once, exposes the shared fragment
+// Express pack. Takes the CHAIN, owns build-once, exposes the shared scope
 // surface, a `mount` middleware, a per-handler `handler` factory, and
 // `dispose`. Node has no per-request env — the seed is static (captured at
 // startup), so `seedFrom` takes no argument.
@@ -72,7 +73,7 @@ export function express<C extends Lunette<any, any, any>>(
 ) {
   type Pub = PubOf<C>
   const { ensure, dispose } = buildOnce(chain)
-  const base = fragment()
+  const base = scope().extend(request)
 
   // mount = the middleware registered ONCE. Ensures the build and attaches the
   // app to the request; the seed is static.
@@ -88,15 +89,15 @@ export function express<C extends Lunette<any, any, any>>(
   // are validated at RUNTIME by `runScope` (a bad/missing param → a RETURNED
   // 422 abort, which `renderExpress` renders as 4xx).
   // Express streams the request body into the Web Request, so it PROVIDES the
-  // `body` capability (`CarrierGuard<Cap, 'body'>` accepts body/form fragments).
+  // `body` capability (`CarrierGuard<Cap, 'body' | 'cookies'>` accepts body/form scopes).
   const handler =
     <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
-      h: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body'>,
+      h: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body' | 'cookies'>,
     ): RequestHandler =>
     async (req: ExReq, res: ExRes): Promise<void> =>
       renderExpress(
         res,
-        await runScope<RequestScope, S, R>(
+        await runScope<RequestCarrier, S, R>(
           h,
           (req as WireReq).__wireApp as object,
           { request: toWebRequest(req) },

@@ -177,7 +177,7 @@ plus the tRPC wrappers — takes the **chain** (App **inferred**, no manual
 `typeof`), owns build-once, and hands back that host's surface. `mount` is
 the framework middleware registered once: it seeds the memoized build from
 the host context and stashes the built app there for the per-handler
-functions to read back. The handler is an abstract **fragment** — it
+functions to read back. The handler is an abstract **scope** — it
 declares its input with ONE `.input(schema)`, and each guard/leaf is
 `(deps, ctx)`. The pack reconciles the handler's `deps` against the chain's
 `Pub` and its params against the route, at compile time, at the adapter.
@@ -186,7 +186,7 @@ declares its input with ONE `.input(schema)`, and each guard/leaf is
 // example.ts — one handler, abstract (bound to NO app), reused by every host
 export const courseSchema = z.object({ courseId: z.string() })
 
-const authGuard = ({ sessionRepo }: { sessionRepo: SessionRepo }, ctx: RequestScope) =>
+const authGuard = ({ sessionRepo }: { sessionRepo: SessionRepo }, ctx: RequestCarrier) =>
   authenticate(sessionRepo, ctx.request)                  // enrich { session } or return Abort
 
 const adminGuard = ({ adminRepo }: { adminRepo: AdminRepo }, ctx: { session: Session }) =>
@@ -202,7 +202,7 @@ const courseGuard = (
 const courseLeaf = ({ courseView }: { courseView: CourseView }, ctx: { course: Course }) =>
   courseView.detail(ctx.course)
 
-export const courseHandler = fragment()
+export const courseHandler = scope().extend(request)
   .input(courseSchema)
   .guard(authGuard)
   .guard(adminGuard)
@@ -252,7 +252,7 @@ client survive the model end to end, input AND output.
 Sparred out and then verified against the prototype (now `@lntt/scope` + `@lntt/integration`,
 four real hosts). These are the verdicts the real packages implement.
 
-- **`.input(schema)` — the fragment's ONE input contract.** A fragment
+- **`.input(schema)` — the scope's ONE input contract.** A scope
   declares its input with a single Standard Schema
   ([standardschema.dev](https://standardschema.dev) v1 — zod, Valibot and
   ArkType all implement it; the core types depend only on
@@ -263,10 +263,10 @@ four real hosts). These are the verdicts the real packages implement.
   runtime validation); (c) runtime coercion + validation → a RETURNED **422
   domain abort** on failure, never a throw (a bad input is a domain outcome,
   decision 14). `.input` is reachable only as the FIRST call and fixes the
-  schema once — "one input contract per fragment", enforced at the type level.
+  schema once — "one input contract per scope", enforced at the type level.
   This REPLACES the earlier "params typed by per-guard annotation": one schema
   is the single source of truth, and it is the same object the native
-  validators consume, so the fragment and the host's validator cannot diverge.
+  validators consume, so the scope and the host's validator cannot diverge.
 - **Handlers are `(deps, ctx)`; the leaf declares its own deps.** Both guard
   and leaf take two arguments. `deps` is the handler's OWN app requirement,
   declared inline and structural (`{ sessionRepo: SessionRepo }`, not a `Pick`
@@ -280,8 +280,8 @@ four real hosts). These are the verdicts the real packages implement.
   cross-cutting concerns (authentication, authorization, resource
   extraction/prefetch); the leaf calls use cases. `guard` returns
   `Enrich | Abort`; the leaf returns `Result | Abort`.
-- **Handler = fragment, checked at the adapter.** The handler is kept ABSTRACT
-  (a fragment bound to NO concrete app). Its requirement kinds are checked when
+- **Handler = scope, checked at the adapter.** The handler is kept ABSTRACT
+  (a scope bound to NO concrete app). Its requirement kinds are checked when
   it meets the adapter: app **deps** against the chain's `Pub` (by a brand,
   `DepGuard`), and route **params** against the host's own route type. A
   missing dep or a wrong param name is a compile error AT the adapter, not at
@@ -297,13 +297,13 @@ four real hosts). These are the verdicts the real packages implement.
   request window (outer) and a transaction window (inner) compose only through
   the error convention. This is **decision 33**.
 - **Per-handler model EVERYWHERE — no central registrar.** Each host has ONE
-  function that consumes a fragment, used with the host's NATIVE routing. This
+  function that consumes a scope, used with the host's NATIVE routing. This
   is what lets DIFFERENT CHAINS coexist in one app: each pack's `mount` stashes
   its built app under a distinct context key, and each route picks its chain
   via the per-handler function. The forms differ per host by necessity (each
   framework's type-level routing differs):
   - **Hono** — `app.get(path, ...w.handler(handler))`: native chaining, a native
-    validator (from the fragment's schema) and `c.json`, which preserves
+    validator (from the scope's schema) and `c.json`, which preserves
     `hc<typeof app>()` fully typed (input + output). The spread injects
     `[validator, terminalHandler]`.
   - **Express** — `app.get(path, w.handler(handler))`: a per-handler
@@ -315,24 +315,24 @@ four real hosts). These are the verdicts the real packages implement.
     the route module; routing is external (file-based, RR7 typegen types the
     params); runtime validation via the schema.
   - **tRPC** — `toProcedure(t.procedure, handler)`: ONE call, NO annotations. It
-    consumes the whole fragment into a native `t.procedure.input(schema)
+    consumes the whole scope into a native `t.procedure.input(schema)
     .query(resolver)`, where the resolver runs OUR fold (guards inside), throws
     `TRPCError` on abort, and returns `R`. tRPC infers input from `.input` and
     output from the resolver's `R`, so the typed `AppRouter` / caller / client
     is preserved — VERIFIED (type-level load-bearing + runtime). The lower-level
     `guard` / `leaf` wrappers stay exported for hand-assembled procedures.
-    Honest caveat: a RequestScope fragment consumed by tRPC needs the tRPC
+    Honest caveat: a RequestCarrier scope consumed by tRPC needs the tRPC
     context to provide the carrier's fields (e.g. a `request`) — natural for
     tRPC-over-HTTP.
 - **RPC preservation is the crux.** Both `hc<typeof app>()` (Hono) and the tRPC
   typed client survive the model end to end (input AND output), verified
   adversarially with degrade checks. The mechanism: NEVER wrap the router;
   contribute only the terminal handler / procedure into the host's native
-  assembly, sharing ONE schema (from the fragment) so the native validator and
-  the fragment cannot diverge.
+  assembly, sharing ONE schema (from the scope) so the native validator and
+  the scope cannot diverge.
 - **`to*` handler surface — fluent stack.** `guard` composes a stack fluently
   (one intersection per step, like the boot chain — the tuple-accumulation of a
-  pure variadic is the hard, costly path); the composed fragment passes as ONE
+  pure variadic is the hard, costly path); the composed scope passes as ONE
   argument to the per-handler function. Proven in the prototype.
 - **Output channel — mutable `ctx.cookies` sink.** The leaf's RETURN stays the
   domain result; cookies ride an opt-in sink the codec reads back (not a
@@ -343,7 +343,7 @@ four real hosts). These are the verdicts the real packages implement.
   missing env is infra → throw). No core verb, no third slot. Confirmed by the
   prototype finding: `guard` is a typed fold over wire, not a wire layer.
 - **Packaging — `@lntt/scope` + `@lntt/integration/*`.** The plan for the real
-  packages: `@lntt/scope` is the framework-free core (fragment, `.input`,
+  packages: `@lntt/scope` is the framework-free core (scope, `.input`,
   guard/handle, `runFold`/`runScope`, abort, `Outcome`, `DepGuard`; only the
   `@standard-schema/spec` type-dep). `@lntt/integration` is ONE package with
   tree-shakable SUBPATHS — `@lntt/integration/hono`, `/express`,
@@ -357,8 +357,8 @@ four real hosts). These are the verdicts the real packages implement.
   proven facet (message-bus `ack/nack/dead-letter`); the design position is
   closed. Building a listener adapter waits for #10's real bus case
   (principle 5); the remaining work is the input-payload generalization
-  (`Request` → `Message`), for which `fragmentFor` already swaps the carrier
-  (`JobScope`) and `runJob` reruns the same `runFold`.
+  (`Request` → `Message`), for which a `scope(bus)` profile swaps the carrier
+  (`JobCarrier`) and `runJob` reruns the same `runFold`.
 - **Perf: measured, gate cleared.** Feeding the whole app `Pub` as the scope
   chain's seed, once per route, was the one untested assumption. Spike
   (`test/limits/scope-reseed.spike.*`, a ~15-layer app):

@@ -7,10 +7,10 @@ import type { Env } from '../config/env.ts'
 // db row exists for the pending-auth flow before the code is confirmed.
 export type Cookie<T> = {
   // Reads only the cookie header → typed on the headless `RequestHead` a
-  // fragment exposes on `ctx.request` (the body is off-limits to a guard).
+  // scope exposes on `ctx.request` (the body is off-limits to a guard).
   read(request: RequestHead): Promise<T | null>
   write(value: T): string // a Set-Cookie header value
-  // The bridge to the scope `CookieSink`: a fragment sets/clears a signed
+  // The bridge to the scope `CookieSink`: a scope sets/clears a signed
   // cookie through the sink without knowing its name, secret or attributes —
   // `app.sessionCookie.apply(ctx.cookies, id)` / `.drop(ctx.cookies)`. Signing
   // and the name stay here; the sink owns Path/Max-Age/HttpOnly serialization.

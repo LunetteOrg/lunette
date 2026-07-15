@@ -1,7 +1,7 @@
 # @lntt/integration
 
 Host adapters for [`@lntt/scope`](../scope): wire's scope runtime as a **guest**
-of the framework that holds the request. One fragment (guard/leaf) model runs
+of the framework that holds the request. One scope (guard/leaf) model runs
 unchanged across every host — only the adapter and the outcome codec differ.
 
 Tree-shakable per-host subpaths; import only what you use. Each framework is an
@@ -17,7 +17,7 @@ Tree-shakable per-host subpaths; import only what you use. Each framework is an
 Wire is a guest: it never wraps the router. Each pack takes the **chain** (not a
 built app), owns build-once (`mount`, memoized per isolate, seeded from the host
 context — `process.env` on Node, `c.env` on a Worker), and gives you ONE function
-that consumes a fragment, used with the host's **native** routing. Different
+that consumes a scope, used with the host's **native** routing. Different
 chains can serve routes in the same app (each `mount` stashes its app under its
 own key).
 

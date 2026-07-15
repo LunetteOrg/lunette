@@ -11,11 +11,11 @@ import {
 } from '../use-cases/render/render-cache.ts'
 
 // The render mini-app, written as a CHAIN OF EXPOSES (see
-// docs/patterns/feature-modules.md): a fragment that REQUIRES its
+// docs/patterns/feature-modules.md): a scope that REQUIRES its
 // infrastructure (renderCache + renderer) via its Seed and wires the cache
 // leaves. The host mounts it privately (use), so its leaves live in Ctx as
 // wiring for threads but stay off the public surface — flat, no .as(): the
-// threads fragment consumes these keys by name. The DOUBLE-BIND is two
+// threads scope consumes these keys by name. The DOUBLE-BIND is two
 // steps: one factory record, bound twice — the rich body path and the plain
 // title path — proving alias = a provide.
 export const renderModule = lunette<{

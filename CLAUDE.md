@@ -10,8 +10,12 @@ the `errore` library (errors as values) applied to DI.
 ```
 .                       THIS monorepo (npm org: lntt) — the product
   packages/wire         @lntt/wire   the core (runtime + type tests)
-  packages/scope        @lntt/scope  the host-agnostic scope runtime (fragment/
-                        guard/leaf, .input, the fold) — framework-free
+  packages/scope        @lntt/scope  the host-agnostic scope runtime (scope/
+                        guard/leaf, .input, the fold) — framework-free; carrier
+                        capabilities ship as tree-shakable subpaths, each mapping
+                        to the hosts that support it ("./request" ctx.request, no
+                        cap → tRPC too; "./body" .body/.form, cap 'body'; "./cookies"
+                        the sink, cap 'cookies') — the core names none
   packages/integration  @lntt/integration  host adapters as tree-shakable
                         subpaths ("./hono", "./express", "./react-router",
                         "./trpc") — wire as a guest, per-host native routing
@@ -19,7 +23,7 @@ the `errore` library (errors as values) applied to DI.
                         their stories live in the tracker
   examples/             example apps USING the shipped packages (IN review
                         scope): examples/app is the broad issue-1 app (its use
-                        cases as @lntt/scope fragments); per-host entries mount
+                        cases as @lntt/scope scopes); per-host entries mount
                         it via @lntt/integration/*
   research/             live research prototypes (prior art, not products) —
                         PoC code proving out @lntt/wire's behaviour and DX,
@@ -78,7 +82,11 @@ the tracker when relevant — never from here.
 - **Vocabulary**: chain · layer · bare/bound leaf · binder (`bind(record)`,
   apply = fixed deps, `.with` = per call, `.by` = per call keyed) · window
   · opener (window arg 1) · bridge (window arg 2) · bag · guard · seed ·
-  fragment · dialect.
+  scope (`scope()` agnostic, `.extend(ext)` injects carriers) · carrier
+  (`RequestCarrier`/`JobCarrier`) · scope extension (a composable unit in a
+  tree-shakable subpath — `request` read-only, `body`, `cookies` — each declaring
+  ctx/methods/deps/capability; the core names none; `.extend` gates collisions,
+  §4) · capability (`'body'`/`'cookies'`, gated at mount per host, §34) · dialect.
 - **Tests**: vitest with typecheck (`*.test-d.ts` included via the
   `typecheck` block in each `vitest.config.ts`; `pnpm typecheck` runs
   `tsc --noEmit` and is the separate gate). Always verify by running:

@@ -29,7 +29,7 @@ describe('the chain delivers only the public surface', () => {
       const opaque = app as Record<string, unknown>
       expect(opaque.db).toBeUndefined()
       expect(opaque.otpRepo).toBeUndefined()
-      expect(opaque.getRendered).toBeUndefined() // render fragment mounted privately
+      expect(opaque.getRendered).toBeUndefined() // render scope mounted privately
     } finally {
       await dispose()
     }

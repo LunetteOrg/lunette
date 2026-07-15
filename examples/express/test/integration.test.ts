@@ -5,7 +5,7 @@ import { makeApp } from '../src/server.ts'
 
 // Integration test: the real example app mounted on a real Express server,
 // driven over an actual HTTP socket with `fetch`. Complements the app's unit
-// tests (fragments with fake deps).
+// tests (scopes with fake deps).
 const start = async () => {
   const server = createServer(makeApp())
   await new Promise<void>((resolve) => server.listen(0, resolve))

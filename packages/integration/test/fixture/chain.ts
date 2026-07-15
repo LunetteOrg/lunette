@@ -11,5 +11,5 @@ export interface Env {
 // scope plus the guards' typed enrichments (see scope/kit.ts).
 export const chain = lunette<{ env: Env }>().expose(() => makeRepos())
 
-// The app Pub, inferred — what `scopeFor` binds to.
+// The app Pub, inferred — what a scope's Need is reconciled against at the mount.
 export type App = Awaited<ReturnType<typeof chain.build>>['app']

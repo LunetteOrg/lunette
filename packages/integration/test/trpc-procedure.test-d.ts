@@ -1,13 +1,14 @@
-// LOAD-BEARING RPC PROOF for `toProcedure`: consuming a whole fragment Handler
+// LOAD-BEARING RPC PROOF for `toProcedure`: consuming a whole scope Handler
 // in ONE call — with ZERO annotations — still preserves a fully typed caller.
-// The procedure's INPUT is inferred from the fragment's schema and its awaited
+// The procedure's INPUT is inferred from the scope's schema and its awaited
 // OUTPUT from the leaf's R. If this file stops compiling, `toProcedure` has lost
 // RPC inference.
 
 import { initTRPC } from '@trpc/server'
 import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
-import { fragment } from '@lntt/scope'
+import { scope } from '@lntt/scope'
+import { body } from '@lntt/scope/body'
 import { courseHandler } from './fixture/handlers.ts'
 import type { App } from './fixture/chain.ts'
 import { toMutation, toProcedure } from '../src/trpc.ts'
@@ -37,8 +38,8 @@ describe('toMutation — a write procedure, typed client preserved, gate holds',
     expectTypeOf(out).toEqualTypeOf<{ id: string; title: string }>()
   })
 
-  it('a .body fragment cannot mount as a mutation either — the gate applies', () => {
-    const writeFrag = fragment()
+  it('a .body scope cannot mount as a mutation either — the gate applies', () => {
+    const writeFrag = scope().extend(body)
       .body(z.object({ x: z.string() }))
       .handle((_d: {}, ctx) => ({ x: ctx.body.x }))
     // @ts-expect-error host missing capability 'body' — the gate applies to toMutation too

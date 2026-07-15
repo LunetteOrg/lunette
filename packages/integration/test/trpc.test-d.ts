@@ -1,4 +1,4 @@
-// LOAD-BEARING RPC PROOF for the tRPC host: the fragment → tRPC procedure
+// LOAD-BEARING RPC PROOF for the tRPC host: the scope → tRPC procedure
 // preserves a fully typed AppRouter and caller END TO END — the procedure's
 // INPUT is the schema type and its awaited OUTPUT is the leaf type, inferred, on
 // both the router inference helpers (what a typed client reads) and a concrete

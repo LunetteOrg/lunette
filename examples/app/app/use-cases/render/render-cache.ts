@@ -11,7 +11,7 @@ import type { RenderFormat, Renderer } from '../../lib/renderer/index.ts'
 
 const CONCURRENCY = 6
 
-// One deps shape backs three leaves; the render fragment binds it TWICE — once
+// One deps shape backs three leaves; the render scope binds it TWICE — once
 // with {format:'html', sanitize: sanitizeRich} (body), once with
 // {format:'text', sanitize: identity} (title) — to yield the body- and
 // title-path variants. That double-bind is the headline replica detail.

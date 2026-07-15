@@ -9,8 +9,10 @@ import type {
   SessionRepo,
 } from './domain.ts'
 import { type Abort, forbidden, notFound, redirect, unauthorized } from '@lntt/scope'
-import { fragment } from '@lntt/scope'
-import type { RequestHead, RequestScope } from '@lntt/scope'
+import { scope } from '@lntt/scope'
+import { request } from '@lntt/scope/request'
+import { cookies } from '@lntt/scope/cookies'
+import type { CookieSink, RequestHead } from '@lntt/scope'
 
 // One guard/leaf model, reused by every host adapter (React Router, Hono,
 // Express) AND the bus. The point of the prototype: the same handlers cross
@@ -22,8 +24,8 @@ import type { RequestHead, RequestScope } from '@lntt/scope'
 // schema feeds every host's native validator (Hono `sValidator`, tRPC
 // `.input`, our RR7/Express/bus runtime validation).
 
-// The fragment's input contracts. `courseId` stays a string (the RPC input the
-// typed client reconstructs); coercion is demonstrated in the fragment-input
+// The scope's input contracts. `courseId` stays a string (the RPC input the
+// typed client reconstructs); coercion is demonstrated in the scope-input
 // probe with `z.coerce.number()`.
 export const courseSchema = z.object({ courseId: z.string() })
 export const loginSchema = z.object({ as: z.string().optional() })
@@ -60,14 +62,14 @@ export const shapeCourse = (course: Course): { id: string; title: string } => ({
   title: course.title,
 })
 
-// ── The fragment-shaped guard/leaf consts (HTTP/bus hosts) ──────────────────
+// ── The scope-shaped guard/leaf consts (HTTP/bus hosts) ──────────────────
 // Named so RR7/Hono/Express/bus build `courseHandler` from them, and the tRPC
 // procedure reuses the SAME decision functions above.
 // Each guard/leaf is `(deps, ctx)`: `deps` is its inline, structural app
 // requirement (no `Pick` from a global), `ctx` the carrier + validated
 // `params` + prior enrichments. The guards read repos for auth/prefetch; the
 // leaf declares a use-case service and calls it.
-export const authGuard = ({ sessionRepo }: { sessionRepo: SessionRepo }, ctx: RequestScope) =>
+export const authGuard = ({ sessionRepo }: { sessionRepo: SessionRepo }, ctx: { request: RequestHead }) =>
   authenticate(sessionRepo, ctx.request)
 
 export const adminGuard = (
@@ -90,7 +92,7 @@ export const courseLeaf = (
 // The ownership + prefetch stack: authenticate, resolve the admin, then
 // prefetch the course and check ownership — enriching or short-circuiting. The
 // leaf consumes the prefetched enrichment — no repo, no refetch.
-export const courseHandler = fragment()
+export const courseHandler = scope().extend(request)
   .input(courseSchema)
   .guard(authGuard)
   .guard(adminGuard)
@@ -101,10 +103,10 @@ export const courseHandler = fragment()
 // param `{ as?: string }` now comes from the `.input` schema.
 export const loginLeaf = (
   _deps: {},
-  ctx: RequestScope & { params: { as?: string | undefined } },
+  ctx: { cookies: CookieSink; params: { as?: string | undefined } },
 ): Abort => {
   ctx.cookies.set('sid', ctx.params.as ?? 'u-admin', { httpOnly: true, path: '/' })
   return redirect('/dashboard')
 }
 
-export const loginHandler = fragment().input(loginSchema).handle(loginLeaf)
+export const loginHandler = scope().extend(cookies).input(loginSchema).handle(loginLeaf)

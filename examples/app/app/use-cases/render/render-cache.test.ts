@@ -7,7 +7,7 @@ import {
 import type { Renderer } from '../../lib/renderer/index.ts'
 import { renderModule } from '../../modules/render.ts'
 
-// Seed-as-mock-boundary (decision 21): run the render fragment with a seed of
+// Seed-as-mock-boundary (decision 21): run the render scope with a seed of
 // fakes. The real db-backed render cache is NEVER created — the seed IS the
 // mock. The seeded records decide every cache hit; misses fall through to the
 // fake renderer, where the body/title double-bind is directly observable
@@ -42,7 +42,7 @@ const fakeRenderer: Renderer = {
   },
 }
 
-describe('render fragment via the seed boundary', () => {
+describe('render scope via the seed boundary', () => {
   it('a seeded record is a cache hit; a miss renders through the provider', async () => {
     const renderCache = seededCache([
       { contentType: 'post-body', contentId: 'p1', surface: 'web', output: 'CACHED', source: 'upfront' },

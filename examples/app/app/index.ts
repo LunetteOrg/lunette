@@ -1,6 +1,6 @@
 // The public surface of @lntt/example-app: the built chain (and its App type),
-// the host env type, and the host-agnostic fragments. The per-host entry
-// packages (e.g. examples/rr7) import from here to wire the fragments into a
+// the host env type, and the host-agnostic scopes. The per-host entry
+// packages (e.g. examples/rr7) import from here to wire the scopes into a
 // concrete host.
 export { chain } from './bootstrap/chain.ts'
 export type { App } from './bootstrap/chain.ts'
@@ -11,22 +11,22 @@ export type { Env } from './config/env.ts'
 export { outbox } from './lib/mailer/outbox.ts'
 export type { Mail } from './lib/mailer/index.ts'
 export {
-  commentFragment,
+  commentScope,
   commentProcedure,
-  commentsFragment,
-  feedFragment,
-  identityFragment,
+  commentsScope,
+  feedScope,
+  identityScope,
   feedGuard,
-  loginFragment,
-  logoutFragment,
-  postFragment,
-  publishPostFragment,
+  loginScope,
+  logoutScope,
+  postScope,
+  publishPostScope,
   publishPostProcedure,
-  setPreferenceFragment,
+  setPreferenceScope,
   setPreferenceProcedure,
   feedHandler,
-  verifyFragment,
+  verifyScope,
 } from './handlers.ts'
 // `feedGuard` + `feedHandler` (exported above) are the feed's pure pieces, so a
 // single host can compose the feed route INLINE (the single-host idiom) instead
-// of importing `feedFragment`.
+// of importing `feedScope`.

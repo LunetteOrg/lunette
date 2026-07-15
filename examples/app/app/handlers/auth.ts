@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { type Abort, type CookieSink, httpError, redirect } from '@lntt/scope'
-import type { RequestScope } from '@lntt/scope'
 import type { UserRegistration } from '../domain/access.ts'
 import type { PendingAuth, PendingCookie, SessionCookie } from '../lib/cookies.ts'
 import { isError, type TaggedError } from '../lib/errors.ts'
@@ -33,7 +32,7 @@ export const loginGuard = async (
 }
 
 // The login `.form` schema (design A: the multipart/urlencoded body channel).
-// The composed `loginFragment` in ../handlers.ts lands the validated form on
+// The composed `loginScope` in ../handlers.ts lands the validated form on
 // `ctx.form`, carrying the `body` capability so it mounts on the HTTP hosts but
 // NOT on tRPC (compile-gated).
 export const loginForm = z.object({ email: z.string() })
@@ -49,8 +48,8 @@ export const loginForm = z.object({ email: z.string() })
 // `verifyCode` (a wrong code RETURNS OtpInvalid → 401, a db failure THROWS →
 // 5xx), and on success sets the session cookie, drops the pending cookie, and
 // RETURNS a redirect. Named + typed, so the registration merge and the
-// cookie/redirect side-effects are unit-testable — even though `verifyFragment`
-// ALSO keeps its `runScope` tests (its fold interaction is fragment-specific).
+// cookie/redirect side-effects are unit-testable — even though `verifyScope`
+// ALSO keeps its `runScope` tests (its fold interaction is scope-specific).
 export const verifyHandler = async (
   deps: {
     access: {
@@ -105,10 +104,10 @@ export const verifyBody = z.object({
 // ── auth: POST /logout ──────────────────────────────────────────────────────
 // Drops the session cookie through the sink and redirects. No app dependency
 // beyond the cookie helper — the server keeps no session row to revoke here. A
-// leaf, so the composed `logoutFragment` in ../handlers.ts is thin wiring.
+// leaf, so the composed `logoutScope` in ../handlers.ts is thin wiring.
 export const logoutHandler = (
   deps: { sessionCookie: Pick<SessionCookie, 'drop'> },
-  ctx: RequestScope,
+  ctx: { cookies: CookieSink },
 ): Abort => {
   deps.sessionCookie.drop(ctx.cookies)
   return redirect('/')

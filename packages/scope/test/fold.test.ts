@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { forbidden, notFound, unauthorized } from '../src/abort.ts'
-import { fragment } from '../src/fragment.ts'
+import { scope } from '../src/scope.ts'
+import { request } from '../src/request.ts'
+import { body } from '../src/body.ts'
+import { cookies } from '../src/cookies.ts'
 import { runFold } from '../src/run-fold.ts'
-import type { RequestScope } from '../src/scope.ts'
+import type { RequestCarrier } from '../src/carrier.ts'
 import { makeRepos, type Repos } from './domain.ts'
 
 // The core fold, driven directly with a PLAIN app object — no host, no chain
@@ -14,7 +17,8 @@ const bearer = (userId: string) =>
   new Request('http://x/', { headers: { authorization: `Bearer ${userId}` } })
 
 const schema = z.object({ courseId: z.string() })
-const ownedCourse = fragment()
+// Reads `ctx.request` for the session → the `request` profile.
+const ownedCourse = scope().extend(request)
   .input(schema)
   .guard((deps: Pick<Repos, 'sessionRepo'>, ctx) => {
     const session = deps.sessionRepo.get(ctx.request)
@@ -32,9 +36,9 @@ const ownedCourse = fragment()
   // the leaf declares its own use-case service and delegates
   .handle((deps: Pick<Repos, 'courseView'>, ctx) => deps.courseView.detail(ctx.course))
 
-describe('the fragment fold at runtime', () => {
-  const run = (request: Request, params: { courseId: string }) =>
-    runFold<RequestScope, { id: string; title: string }>(ownedCourse, app, { request }, params)
+describe('the scope fold at runtime', () => {
+  const run = (req: Request, params: { courseId: string }) =>
+    runFold<RequestCarrier, { id: string; title: string }>(ownedCourse, app, { request: req }, params)
 
   it('accumulates enrichments then runs the leaf; short-circuits on abort', async () => {
     const ok = await run(bearer('u-admin'), { courseId: 'c1' })
@@ -54,11 +58,12 @@ describe('the fragment fold at runtime', () => {
   })
 
   it('the cookie sink collects Set-Cookie without changing the leaf return', async () => {
-    const handler = fragment().handle((_deps: {}, ctx) => {
+    // Sets a cookie → the `cookies` extension brings the sink.
+    const handler = scope().extend(cookies).handle((_deps: {}, ctx) => {
       ctx.cookies.set('sid', 'abc', { httpOnly: true })
       return { ok: true }
     })
-    const out = await runFold<RequestScope, { ok: boolean }>(
+    const out = await runFold<RequestCarrier, { ok: boolean }>(
       handler,
       {},
       { request: new Request('http://x/') },
@@ -71,7 +76,7 @@ describe('the fragment fold at runtime', () => {
 
   it('.body parses + validates the JSON body into ctx.body; a bad body → 422', async () => {
     const bodySchema = z.object({ title: z.string() })
-    const handler = fragment()
+    const handler = scope().extend(body)
       .body(bodySchema)
       .handle((_deps: {}, ctx) => ({ echoed: ctx.body.title }))
     const jsonReq = (body: unknown) =>
@@ -81,7 +86,7 @@ describe('the fragment fold at runtime', () => {
         headers: { 'content-type': 'application/json' },
       })
 
-    const ok = await runFold<RequestScope, { echoed: string }>(
+    const ok = await runFold<RequestCarrier, { echoed: string }>(
       handler,
       {},
       { request: jsonReq({ title: 'Hello' }) },
@@ -90,7 +95,7 @@ describe('the fragment fold at runtime', () => {
     expect(ok).toEqual({ ok: true, value: { echoed: 'Hello' }, cookies: [] })
 
     // a body missing the required field is a RETURNED 422 (the error convention)
-    const bad = await runFold<RequestScope, { echoed: string }>(
+    const bad = await runFold<RequestCarrier, { echoed: string }>(
       handler,
       {},
       { request: jsonReq({ nope: 1 }) },
@@ -102,12 +107,12 @@ describe('the fragment fold at runtime', () => {
 
   it('.form parses + validates the form body into ctx.form', async () => {
     const formSchema = z.object({ email: z.string() })
-    const handler = fragment()
+    const handler = scope().extend(body)
       .form(formSchema)
       .handle((_deps: {}, ctx) => ({ to: ctx.form.email }))
     const fd = new FormData()
     fd.set('email', 'user@example.com')
-    const out = await runFold<RequestScope, { to: string }>(
+    const out = await runFold<RequestCarrier, { to: string }>(
       handler,
       {},
       { request: new Request('http://x/', { method: 'POST', body: fd }) },
@@ -116,4 +121,3 @@ describe('the fragment fold at runtime', () => {
     expect(out).toEqual({ ok: true, value: { to: 'user@example.com' }, cookies: [] })
   })
 })
-

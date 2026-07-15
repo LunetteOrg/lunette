@@ -1,7 +1,7 @@
 // Shared fixtures for the colocated handler tests. NOT a test file — the pure
 // tests in each `handlers/*.test.ts` import the domain rows they need from here,
 // so a shape tweak lands in one place. `jsonPost` builds a POST carrier for the
-// (few) tests that still drive a fragment through the fold (verify).
+// (few) tests that still drive a scope through the fold (verify).
 
 import type { Session, User } from '../domain/access.ts'
 import type { ProfileIdentity } from '../domain/profile.ts'
@@ -65,7 +65,7 @@ export const anIdentity: ProfileIdentity = {
   surfaceOptions: ['web', 'feed', 'email'],
 }
 
-// A JSON POST carrier: the write fragments read the body off `ctx.request`.
+// A JSON POST carrier: the write scopes read the body off `ctx.request`.
 export const jsonPost = (body: unknown): { request: Request } => ({
   request: new Request('http://x', {
     method: 'POST',

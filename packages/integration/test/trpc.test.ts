@@ -1,4 +1,4 @@
-// Runtime proof for the tRPC host: the fragment's decision functions
+// Runtime proof for the tRPC host: the scope's decision functions
 // (authenticate/resolveAdmin/resolveCourse/shapeCourse — the SAME consts the
 // HTTP/bus hosts use) re-expressed as ONE tRPC procedure. A domain Abort
 // surfaces as a specific 4xx TRPCError, an infra throw stays
@@ -15,7 +15,7 @@ type App = Repos
 type In = InputOf<typeof courseSchema>
 const t = initTRPC.context<App>().create()
 
-// The fragment mapped natively: `.input` = the schema, each `.use` = a guard,
+// The scope mapped natively: `.input` = the schema, each `.use` = a guard,
 // `.query` = the leaf. ctx accumulates App → +session → +admin → +course. The
 // session guard reads a fixed request (the caller's sessionRepo ignores it).
 const courseProcedure = t.procedure
@@ -65,7 +65,7 @@ function callerAs(userId: string | null): ReturnType<typeof createCaller> {
   })
 }
 
-describe('fragment → tRPC procedure', () => {
+describe('scope → tRPC procedure', () => {
   it('happy path returns the leaf value', async () => {
     const caller = callerAs('u-admin')
     const out = await caller.courses.get({ courseId: 'c1' })

@@ -1,23 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { forbidden } from '../src/abort.ts'
-import { fragment } from '../src/fragment.ts'
+import { scope } from '../src/scope.ts'
 import { runScope } from '../src/run-fold.ts'
-import type { RequestScope } from '../src/scope.ts'
+import type { RequestCarrier } from '../src/carrier.ts'
 
-// The fragment's schema drives runtime coercion + validation through `runScope`
+// The scope's schema drives runtime coercion + validation through `runScope`
 // — the convenience the non-native hosts (RR7, Express, bus) use: validate →
 // (422 abort on failure) → fold.
 const params = z.object({ courseId: z.coerce.number(), tab: z.string().optional() })
 const req = new Request('http://x/')
 
-describe('fragment .input(schema) — runtime coercion + abort', () => {
+describe('scope .input(schema) — runtime coercion + abort', () => {
   it('coerces "42" → 42 on success and hands the leaf the typed params', async () => {
-    const h = fragment()
+    const h = scope()
       .input(params)
       .handle((_deps: {}, ctx) => ({ doubled: ctx.params.courseId * 2 }))
 
-    const out = await runScope<RequestScope, typeof params, { doubled: number }>(
+    const out = await runScope<RequestCarrier, typeof params, { doubled: number }>(
       h,
       {},
       { request: req },
@@ -28,13 +28,13 @@ describe('fragment .input(schema) — runtime coercion + abort', () => {
   })
 
   it('a validation failure is a RETURNED 422 abort, never a throw', async () => {
-    const h = fragment()
+    const h = scope()
       .input(params)
       .handle((_deps: {}, ctx) => ({ id: ctx.params.courseId }))
 
     // "abc" cannot coerce to a number → the Standard-Schema validate reports
     // issues → a RETURNED domain abort with status 422 (a client error).
-    const out = await runScope<RequestScope, typeof params, { id: number }>(
+    const out = await runScope<RequestCarrier, typeof params, { id: number }>(
       h,
       {},
       { request: req },
@@ -46,7 +46,7 @@ describe('fragment .input(schema) — runtime coercion + abort', () => {
 
   it('threads coerced params through guards; a guard abort short-circuits', async () => {
     const seen: number[] = []
-    const h = fragment()
+    const h = scope()
       .input(params)
       .guard((_deps: {}, ctx) => {
         seen.push(ctx.params.courseId)
@@ -54,7 +54,7 @@ describe('fragment .input(schema) — runtime coercion + abort', () => {
       })
       .handle((_deps: {}, ctx) => ({ courseId: ctx.params.courseId, positive: ctx.positive }))
 
-    const ok = await runScope<RequestScope, typeof params, { courseId: number; positive: true }>(
+    const ok = await runScope<RequestCarrier, typeof params, { courseId: number; positive: true }>(
       h,
       {},
       { request: req },
@@ -63,7 +63,7 @@ describe('fragment .input(schema) — runtime coercion + abort', () => {
     expect(ok).toEqual({ ok: true, value: { courseId: 7, positive: true }, cookies: [] })
     expect(seen).toEqual([7]) // guard saw the coerced number, not "7"
 
-    const denied = await runScope<RequestScope, typeof params, { courseId: number; positive: true }>(
+    const denied = await runScope<RequestCarrier, typeof params, { courseId: number; positive: true }>(
       h,
       {},
       { request: req },
@@ -75,7 +75,7 @@ describe('fragment .input(schema) — runtime coercion + abort', () => {
 
   it('validation runs BEFORE any guard — a bad param never reaches the stack', async () => {
     let guardRan = false
-    const h = fragment()
+    const h = scope()
       .input(params)
       .guard((_deps: {}, _ctx) => {
         guardRan = true
@@ -83,7 +83,7 @@ describe('fragment .input(schema) — runtime coercion + abort', () => {
       })
       .handle(() => ({ done: true }))
 
-    const out = await runScope<RequestScope, typeof params, { done: boolean }>(
+    const out = await runScope<RequestCarrier, typeof params, { done: boolean }>(
       h,
       {},
       { request: req },

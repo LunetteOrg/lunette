@@ -1,4 +1,4 @@
-// Runtime proof for `toProcedure`: a whole fragment Handler (courseHandler —
+// Runtime proof for `toProcedure`: a whole scope Handler (courseHandler —
 // authenticate/resolveAdmin/resolveCourse/shapeCourse) folded into ONE native
 // tRPC procedure in a single call. The carrier `request` rides in ctx; a domain
 // Abort surfaces as a specific 4xx TRPCError, the happy path returns the leaf
@@ -23,7 +23,7 @@ async function callerFor(authorization: string) {
   return createCaller({ ...app, request } satisfies Ctx)
 }
 
-describe('toProcedure — fragment → tRPC procedure, one call', () => {
+describe('toProcedure — scope → tRPC procedure, one call', () => {
   it('owner → the leaf value', async () => {
     const caller = await callerFor('Bearer u-admin')
     const out = await caller.courses.get({ courseId: 'c1' })

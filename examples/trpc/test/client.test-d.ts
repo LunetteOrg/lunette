@@ -1,5 +1,5 @@
 // The typed client survives the dedicated tRPC WRITE path. `publishPost` is a
-// mutation whose INPUT is inferred from the RPC-shaped fragment's `.input`
+// mutation whose INPUT is inferred from the RPC-shaped scope's `.input`
 // schema and whose OUTPUT is the leaf's R — the same end-to-end inference the
 // read procedures get, now for a write.
 

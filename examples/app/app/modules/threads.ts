@@ -20,7 +20,7 @@ import { publishPost } from '../use-cases/threads/publish-post.ts'
 // infrastructure into the leaves' function-shaped language, once — every
 // step below binds point-free (the binder is a provider: the ctx IS the
 // deps). Its Seed mixes repos, services and — crucially — the render leaves
-// (the render fragment's Pub feeding this fragment's Seed, checked at the
+// (the render scope's Pub feeding this scope's Seed, checked at the
 // mount point). The author leaves are the first exposed step, so the
 // composed read leaves take them from the ctx: composition is step order,
 // type-checked (move a read step above the authors step and the module does

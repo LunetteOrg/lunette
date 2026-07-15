@@ -1,15 +1,15 @@
 import { isAbort, runScope } from '@lntt/scope'
-import type { CookieSink, RequestScope, SetCookie } from '@lntt/scope'
+import type { CookieSink, RequestCarrier, SetCookie } from '@lntt/scope'
 import { describe, expect, it } from 'vitest'
 import type { PendingAuth } from '../lib/cookies.ts'
 import { OtpInvalid } from '../lib/errors.ts'
 import type { VerifyCodeResult } from '../use-cases/access/verify-code.ts'
 import { loginGuard, verifyHandler } from './auth.ts'
-import { verifyFragment } from '../handlers.ts'
+import { verifyScope } from '../handlers.ts'
 import { jsonPost } from './fixtures.ts'
 
 // The auth handlers as PURE functions plus — for `verify` alone — the thinner
-// `runScope` INTEGRATION check. The verify fold interaction is fragment-specific
+// `runScope` INTEGRATION check. The verify fold interaction is scope-specific
 // (abort mapping + session cookie set + pending cookie dropped + redirect, all
 // in ONE fold), so it is proven end-to-end here as well as per pure leaf. The
 // generic fold mechanics stay proven once in @lntt/scope.
@@ -131,11 +131,11 @@ describe('verifyHandler: wrong code → 401, ok → session set + pending droppe
   })
 })
 
-// KEPT at the `runScope` level: verify's fold interaction is fragment-specific
+// KEPT at the `runScope` level: verify's fold interaction is scope-specific
 // (the pending gate short-circuits before the leaf; the leaf's cookie writes and
 // redirect ride the outcome). These prove the WIRING, complementing the pure
 // `verifyHandler` tests above.
-describe('verifyFragment: no pending → 401, wrong code → 401, ok → redirect + cookies', () => {
+describe('verifyScope: no pending → 401, wrong code → 401, ok → redirect + cookies', () => {
   const pending: PendingAuth = { email: 'user@example.com', nonce: 'n1', returnTo: '/home' }
 
   it('no pending cookie → 401, verifyCode never runs', async () => {
@@ -150,8 +150,8 @@ describe('verifyFragment: no pending → 401, wrong code → 401, ok → redirec
       },
       sessionCookie: { apply: (): void => {} },
     }
-    const out = await runScope<RequestScope, typeof verifyFragment.schema, never>(
-      verifyFragment,
+    const out = await runScope<RequestCarrier, typeof verifyScope.schema, never>(
+      verifyScope,
       app,
       jsonPost({ code: '123456' }),
       {},
@@ -167,8 +167,8 @@ describe('verifyFragment: no pending → 401, wrong code → 401, ok → redirec
       access: { verifyCode: async (): Promise<VerifyCodeResult | OtpInvalid> => new OtpInvalid() },
       sessionCookie: { apply: (): void => {} },
     }
-    const out = await runScope<RequestScope, typeof verifyFragment.schema, never>(
-      verifyFragment,
+    const out = await runScope<RequestCarrier, typeof verifyScope.schema, never>(
+      verifyScope,
       app,
       jsonPost({ code: 'wrong' }),
       {},
@@ -198,8 +198,8 @@ describe('verifyFragment: no pending → 401, wrong code → 401, ok → redirec
           sink.set('session', `signed:${id}`, { path: '/', httpOnly: true, maxAge: 60 }),
       },
     }
-    const out = await runScope<RequestScope, typeof verifyFragment.schema, never>(
-      verifyFragment,
+    const out = await runScope<RequestCarrier, typeof verifyScope.schema, never>(
+      verifyScope,
       app,
       jsonPost({ code: '123456' }),
       {},

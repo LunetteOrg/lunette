@@ -1,7 +1,7 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { type Abort, isAbort } from './abort.ts'
-import type { Handler } from './fragment.ts'
-import type { CookieSink, Outcome, SetCookie } from './scope.ts'
+import type { Handler } from './scope.ts'
+import type { CookieSink, Outcome, SetCookie } from './carrier.ts'
 import { validateInput } from './validate.ts'
 
 // The guard fold, shared by every host pack. It is a dialect fold over wire,
@@ -11,12 +11,12 @@ import { validateInput } from './validate.ts'
 // never sees it. The cookie sink is created per invocation.
 // `handler` is narrowed to its runtime fields only: the phantom `Need`/`R`
 // markers make `Handler` invariant, so a `Handler<Need, S, R>` from any
-// fragment would not be assignable to a fixed `Handler<object, …, R>` — picking
+// scope would not be assignable to a fixed `Handler<object, …, R>` — picking
 // `guards`/`leaf` (which never depend on `Need`/`S`) sidesteps that.
-export async function runFold<S extends { cookies: CookieSink }, R>(
-  handler: Pick<Handler<object, StandardSchemaV1, R>, 'guards' | 'leaf' | 'bodySchema' | 'formSchema'>,
+export async function runFold<Carrier extends object, R>(
+  handler: Pick<Handler<object, StandardSchemaV1, R>, 'guards' | 'leaf' | 'prepare'>,
   app: object,
-  carrier: Omit<S, 'cookies'>,
+  carrier: Carrier,
   params: object,
 ): Promise<Outcome<R>> {
   const pending: SetCookie[] = []
@@ -24,31 +24,21 @@ export async function runFold<S extends { cookies: CookieSink }, R>(
     set: (name, value, options = {}) => pending.push({ name, value, options }),
   }
 
-  // Declared body channels (design A): parse + validate the request body into
-  // `ctx.body` / `ctx.form`. A malformed/invalid body is a RETURNED 422 abort
-  // (the error convention), never a throw. Touched ONLY when the fragment
-  // declared `.body`/`.form`, so param-only and bus fragments are untouched.
-  // The runtime carrier holds a full `Request` even though the fragment's
-  // `ctx.request` type is the headless `RequestHead`.
-  const bodyBag: { body?: unknown; form?: unknown } = {}
-  const req = (carrier as { request?: Request }).request
-  if (handler.bodySchema) {
-    const raw = req ? await req.json().catch(() => undefined) : undefined
-    const v = await validateInput(handler.bodySchema, raw)
-    if (!v.ok) return { ok: false, abort: v.abort, cookies: pending }
-    bodyBag.body = v.params
-  }
-  if (handler.formSchema) {
-    const raw = req ? Object.fromEntries(await req.formData()) : undefined
-    const v = await validateInput(handler.formSchema, raw)
-    if (!v.ok) return { ok: false, abort: v.abort, cookies: pending }
-    bodyBag.form = v.params
+  // Extension-contributed PREPARE steps run FIRST, over the raw carrier: each
+  // enriches the ctx (e.g. the `body` extension parses the request body into
+  // `ctx.body` / `ctx.form`) or RETURNS a 422 abort (the error convention). The
+  // fold does not know what they do — param-only/bus scopes have none.
+  const prep: Record<string, unknown> = {}
+  for (const step of handler.prepare ?? []) {
+    const out = await step(carrier)
+    if (isAbort(out)) return { ok: false, abort: out as Abort, cookies: pending }
+    Object.assign(prep, out)
   }
 
   // `ctx` merges the carrier, the cookie sink, the validated params, and the
-  // declared body/form. Guards and the leaf both read `(app, ctx)`; enrichments
+  // prepare enrichments. Guards and the leaf both read `(app, ctx)`; enrichments
   // accumulate into ctx.
-  const ctx = { ...carrier, cookies, params, ...bodyBag }
+  const ctx = { ...carrier, cookies, params, ...prep }
 
   let enrich: Record<string, unknown> = {}
   for (const g of handler.guards) {
@@ -64,19 +54,15 @@ export async function runFold<S extends { cookies: CookieSink }, R>(
   return { ok: true, value: result as R, cookies: pending }
 }
 
-// Validate the raw params against the fragment's schema (→ a RETURNED 422 abort
+// Validate the raw params against the scope's schema (→ a RETURNED 422 abort
 // on failure), THEN fold. Used by the hosts WITHOUT a native validator (RR7,
 // Express, bus); Hono and tRPC validate natively with the SAME schema and pass
 // already-parsed params straight to `runFold`. `schema` joins the Pick so the
 // validation and the fold share one object by construction.
-export async function runScope<
-  Carrier extends { cookies: CookieSink },
-  Sch extends StandardSchemaV1,
-  R,
->(
-  handler: Pick<Handler<object, Sch, R>, 'guards' | 'leaf' | 'schema' | 'bodySchema' | 'formSchema'>,
+export async function runScope<Carrier extends object, Sch extends StandardSchemaV1, R>(
+  handler: Pick<Handler<object, Sch, R>, 'guards' | 'leaf' | 'schema' | 'prepare'>,
   app: object,
-  carrier: Omit<Carrier, 'cookies'>,
+  carrier: Carrier,
   raw: unknown,
 ): Promise<Outcome<R>> {
   const v = await validateInput(handler.schema, raw)

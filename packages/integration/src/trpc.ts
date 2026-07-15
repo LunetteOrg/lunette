@@ -25,7 +25,7 @@ import type {
   StandardSchemaV1,
   UnsetMarker,
 } from '@trpc/server/unstable-core-do-not-import'
-import type { Abort, Capability, CarrierGuard, Handler, OutputOf, RequestScope } from '@lntt/scope'
+import type { Abort, Capability, CarrierGuard, Handler, OutputOf, RequestCarrier } from '@lntt/scope'
 import { isAbort, runFold } from '@lntt/scope'
 
 // The schema OUTPUT is the ctx.input type — the SAME projection guards and leaf
@@ -64,7 +64,7 @@ export function abortToTRPCError(abort: Abort): TRPCError {
 // `Abort` (thrown). `Ctx` is annotated at each `.use` step (the honest
 // limitation — see §3.4 of the round blueprint: tRPC cannot infer the
 // accumulated ctx from a pre-applied wrapper; reuse is at the guard-FUNCTION
-// level, feeding the same consts here and to `fragment().input(s).guard(...)`).
+// level, feeding the same consts here and to `scope().input(s).guard(...)`).
 export function guard<Ctx, In, E extends object>(
   run: (deps: Ctx & { readonly input: In }) => Promise<E | Abort> | E | Abort,
 ): MiddlewareFunction<Ctx, object, object, E, In> {
@@ -88,9 +88,9 @@ export function leaf<Ctx, In, R>(
   }
 }
 
-// toProcedure — the whole-fragment shortcut. `guard`/`leaf` above wrap ONE
+// toProcedure — the whole-scope shortcut. `guard`/`leaf` above wrap ONE
 // decision each and are folded into a native procedure BY HAND with per-step
-// ctx annotations; `toProcedure` consumes an entire fragment `Handler` in ONE
+// ctx annotations; `toProcedure` consumes an entire scope `Handler` in ONE
 // call, with ZERO annotations, and STILL preserves the typed client. The
 // resolver runs OUR fold inside a native `.input(schema).query(resolver)`, so
 // tRPC infers the procedure INPUT from `.input(handler.schema)` and the OUTPUT
@@ -103,8 +103,8 @@ export function leaf<Ctx, In, R>(
 // `(() => …) | QueryProcedure`, which `t.router({...})` rejects. Fixing the
 // markers keeps `.input(schema).query(resolver)` returning a clean
 // `QueryProcedure<{ input: InferInput<S>; output: R }>`, so `hc`/`createCaller`
-// inference survives. The context is constrained to carry the fragment's
-// carrier field(s) — for the HTTP `RequestScope` fragment that is `request` —
+// inference survives. The context is constrained to carry the scope's
+// carrier field(s) — for the HTTP `RequestCarrier` scope that is `request` —
 // so the resolver reads `ctx.request` and builds the carrier from it. A
 // RETURNED domain Abort becomes a THROWN TRPCError (the convention-translation
 // point); an actual throw stays infrastructure (INTERNAL_SERVER_ERROR).
@@ -128,7 +128,7 @@ export function toProcedure<
     false
   >,
   // tRPC has ONE JSON `input`, no separate readable body — its carrier provides
-  // NO capabilities (`CarrierGuard<Cap, never>`). A fragment that declared
+  // NO capabilities (`CarrierGuard<Cap, never>`). A scope that declared
   // `.body`/`.form` (Cap ⊇ 'body') is a COMPILE ERROR here, at the mount site,
   // naming the missing capability — instead of silently reading an empty body.
   handler: Handler<Need, S, R, Cap> & CarrierGuard<Cap, never>,
@@ -139,7 +139,7 @@ export function toProcedure<
     // but a generic override could in principle re-type it, so read it through a
     // local view. `input` is the schema OUTPUT (`OutputOf<S>`).
     const ctx = opts.ctx as { request: Request }
-    const outcome = await runFold<RequestScope, R>(
+    const outcome = await runFold<RequestCarrier, R>(
       handler,
       ctx,
       { request: ctx.request },
@@ -153,10 +153,10 @@ export function toProcedure<
 // toMutation — the WRITE counterpart of `toProcedure`. Identical fold, but a
 // native `.mutation` (a POST over the RPC transport, not a cacheable GET), so a
 // value-returning write is exposed with the right RPC semantics and the client
-// calls it via `.mutate`. A write fragment authored for RPC declares its WHOLE
+// calls it via `.mutate`. A write scope authored for RPC declares its WHOLE
 // input as the payload (`.input`, never `.body`), so it carries NO `body`
 // capability and passes the same `CarrierGuard<Cap, never>` gate; a `.body`
-// fragment is still rejected here. Cookie/redirect writes stay HTTP-only — they
+// scope is still rejected here. Cookie/redirect writes stay HTTP-only — they
 // have no RPC meaning (a redirect already degrades under `abortToTRPCError`).
 export function toMutation<
   TContext extends { request: Request },
@@ -181,7 +181,7 @@ export function toMutation<
 ) {
   return procedure.input(handler.schema).mutation(async (opts): Promise<R> => {
     const ctx = opts.ctx as { request: Request }
-    const outcome = await runFold<RequestScope, R>(
+    const outcome = await runFold<RequestCarrier, R>(
       handler,
       ctx,
       { request: ctx.request },

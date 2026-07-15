@@ -1,4 +1,4 @@
-import type { RequestHead } from '../src/scope.ts'
+import type { RequestHead } from '../src/carrier.ts'
 
 // The domain the scope-runtime prototype exercises: an ownership + prefetch
 // guard. Sessions come from a bearer token, admins from the session's user,
@@ -20,7 +20,7 @@ export interface Course {
 }
 
 export interface SessionRepo {
-  // Reads only the headers — typed on the headless `RequestHead` the fragment
+  // Reads only the headers — typed on the headless `RequestHead` the scope
   // exposes (body access is the `.body`/`.form` channels' job, not a guard's).
   get(request: RequestHead): Session | null
 }

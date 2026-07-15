@@ -1,22 +1,22 @@
 import { isAbort } from '@lntt/scope'
-import type { RequestHead, RequestScope } from '@lntt/scope'
+import type { RequestHead, RequestCarrier } from '@lntt/scope'
 import { describe, expect, it } from 'vitest'
 import type { Session } from '../domain/access.ts'
 import type { PendingAuth } from '../lib/cookies.ts'
 import { pendingGuard, sessionGuard, authGuard } from './guards.ts'
 import { aSession } from './fixtures.ts'
 
-// `pendingGuard` reads `ctx.request` only, but its signature declares the full
-// `RequestScope`; this minimal carrier (a no-op cookie sink) satisfies it.
-const carrier = (request: Request): RequestScope => ({ request, cookies: { set: () => {} } })
+// `pendingGuard`/`sessionGuard` read `ctx.request` — the `RequestCarrier` is just
+// the headless request (the cookie sink is `runFold`'s, not the carrier's).
+const carrier = (request: Request): RequestCarrier => ({ request })
 
 // The shared guards as PURE, named functions: call them with a fake dep + a bag,
 // assert the enrichment or the abort. No `runScope`, no carrier, no fold — the
 // fold's guard-order/short-circuit behaviour is proven once in @lntt/scope, so
 // here we prove only what THIS guard computes.
 
-describe('authGuard: the session gate every gated fragment shares', () => {
-  // ONE test of the gate replaces every per-fragment "anonymous → 401" case:
+describe('authGuard: the session gate every gated scope shares', () => {
+  // ONE test of the gate replaces every per-scope "anonymous → 401" case:
   // the gate is identical wherever it sits, so it is proven once here.
   it('present session → narrows to { session }', () => {
     expect(authGuard({}, { session: aSession })).toEqual({ session: aSession })

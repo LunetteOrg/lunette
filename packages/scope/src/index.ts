@@ -1,25 +1,23 @@
-// The host-agnostic scope surface. Everything a host pack re-exports lives
-// here: the fragment entry points, the carrier shapes, the fold, the input
-// schema projections, and the adapter brand. `scopeFor` is kept as the
-// primitive for code that wants the shared `{ guard, handle, input }` surface
-// without committing to a host — it is bound to nothing but the HTTP carrier
-// default. The host packs re-export the same starting surface.
+// The host-agnostic scope core. `scope()` is the carrier-agnostic base
+// (`.input`/`.guard`/`.handle`); carrier capabilities live in tree-shakable
+// subpaths, imported ONLY when needed — `@lntt/scope/request` (`ctx.request`),
+// `.../body` (`.body`/`.form`), `.../cookies` (the sink). This barrel carries the
+// entry, the extension SPI, the carrier shapes, the fold, the input schema
+// projections, and the adapter brand.
 
-import { fragment } from './fragment.ts'
-
-export { fragment, fragmentFor } from './fragment.ts'
-export type { Fragment, FragmentStart, Handler } from './fragment.ts'
+export { scope } from './scope.ts'
+export type { Scope, ScopeExtension, ScopeExtensionValue, Prepare, Handler } from './scope.ts'
 export type {
   Capability,
   CookieOptions,
   CookieSink,
-  JobScope,
+  JobCarrier,
   Message,
   Outcome,
   RequestHead,
-  RequestScope,
+  RequestCarrier,
   SetCookie,
-} from './scope.ts'
+} from './carrier.ts'
 export { forbidden, httpError, isAbort, notFound, redirect, unauthorized } from './abort.ts'
 export type { Abort, ResponseIntent } from './abort.ts'
 export { runFold, runScope } from './run-fold.ts'
@@ -27,18 +25,3 @@ export { validateInput } from './validate.ts'
 export { unit } from './schema.ts'
 export type { InputOf, OutputOf, UnitSchema } from './schema.ts'
 export type { CarrierGuard, DepGuard } from './adapter-guard.ts'
-
-// The chain is not consumed here (a fragment is bound to no app); the parameter
-// keeps the call site self-documenting — `scopeFor(chain)` reads as "the shared
-// fragment surface for this app's world". `.input` locks the fragment's input
-// schema; `.guard`/`.handle` are usable directly for a param-less fragment.
-export function scopeFor(_chain?: unknown) {
-  const base = fragment()
-  return {
-    guard: base.guard,
-    handle: base.handle,
-    input: base.input,
-    body: base.body,
-    form: base.form,
-  }
-}

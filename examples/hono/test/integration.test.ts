@@ -4,7 +4,7 @@ import { app } from '../src/server.ts'
 // Integration test: the REAL example app (its wire chain, in-memory PGlite via
 // the default `memory://` DATABASE_URL) mounted on a REAL Hono app, driven
 // through `app.request`. Complements the app's UNIT tests (handlers.test.ts,
-// fragments with fake deps): here the fragments run against the actual built
+// scopes with fake deps): here the scopes run against the actual built
 // singletons, through the host's native routing and codec.
 describe('example-app on Hono — integration', () => {
   it('GET /feed → 200, anonymous by default (no session cookie)', async () => {

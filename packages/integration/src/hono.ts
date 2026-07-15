@@ -10,7 +10,7 @@ import type {
   Handler,
   InputOf,
   OutputOf,
-  RequestScope,
+  RequestCarrier,
 } from '@lntt/scope'
 import { runFold } from '@lntt/scope'
 import { serializeCookie } from './http-codec.ts'
@@ -55,7 +55,7 @@ export function hono<C extends Lunette<any, any, any>>(
 
   // THE terminal. GENERIC over the route Input `I` (the load-bearing point,
   // spike 1): Hono's `.get` overload solves `I` to the handler's OWN constraint
-  // — the fragment's schema — and records `ToSchema<M, P, I.in, R>`, so `hc`
+  // — the scope's schema — and records `ToSchema<M, P, I.in, R>`, so `hc`
   // reads request `{ param: InferInput<S> }` and response@200 = R. Reads the
   // built app from the mount'd context, runs OUR fold, returns via `c.json` so
   // R flows into the RPC output.
@@ -65,7 +65,7 @@ export function hono<C extends Lunette<any, any, any>>(
       c: Context<WireEnv<Pub>, string, I>,
     ) => {
       const params = c.req.valid('param') // OutputOf<S>, coerced by sValidator
-      const outcome = await runFold<RequestScope, R>(
+      const outcome = await runFold<RequestCarrier, R>(
         handler,
         c.get('__wireApp') as object,
         { request: c.req.raw },
@@ -93,10 +93,10 @@ export function hono<C extends Lunette<any, any, any>>(
   // is also the single place the deps brand fires (Need ⊆ Pub) — at the call
   // site, before the tuple is spread into the native chain.
   // Hono's carrier streams a readable request, so it PROVIDES the `body`
-  // capability — the `CarrierGuard<Cap, 'body'>` clause accepts body/form
-  // fragments. (tRPC's clause is `CarrierGuard<Cap, never>`, which rejects them.)
+  // capability — the `CarrierGuard<Cap, 'body' | 'cookies'>` clause accepts body/form
+  // scopes. (tRPC's clause is `CarrierGuard<Cap, never>`, which rejects them.)
   const handler = <S extends StandardSchemaV1, Need extends object, R, Cap extends Capability>(
-    handler: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body'>,
+    handler: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body' | 'cookies'>,
   ) => [sValidator('param', handler.schema), handlerFrom(handler)] as const
 
   return { mount, handler, dispose }

@@ -62,7 +62,7 @@ export const chain = lunette<{ env: Env }>()
   // pending cookies through the scope CookieSink (signing stays in the helper).
   .expose('sessionCookie', sessionCookie)
   .expose('pendingCookie', pendingCookie)
-  .use(renderModule) // private infrastructure fragment: its Pub is wiring only
+  .use(renderModule) // private infrastructure scope: its Pub is wiring only
   .expose(accessModule) // public feature module
   .expose(profileModule)
   .expose(threadsModule)

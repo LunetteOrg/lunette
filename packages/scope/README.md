@@ -12,7 +12,7 @@ adapters live in [`@lntt/integration`](../integration).
 
 ## The model
 
-A **fragment** is an abstract handler bound to no app. It declares:
+A **scope** is an abstract handler bound to no app. It declares:
 
 - its **input** — one Standard Schema (zod / Valibot / ArkType) via `.input`;
 - a stack of **guards** — cross-cutting steps (auth, ownership, prefetch) that
@@ -23,14 +23,31 @@ Both guard and leaf are `(deps, ctx)`:
 
 - `deps` — the handler's own dependencies, declared inline and structural
   (`{ sessionRepo: SessionRepo }`), reconciled against the app at the adapter;
-- `ctx` — the carrier (`request` + `cookies` over HTTP) plus the validated
-  `params` plus every prior guard's enrichment.
+- `ctx` — the validated `params` + every prior guard's enrichment + whatever the
+  injected extensions add (`request`, `cookies`, `body`/`form`).
+
+`scope()` is carrier-agnostic (`.input`/`.guard`/`.handle`, portable across any
+host). Carrier capabilities are injected as tree-shakable EXTENSIONS, each mapping
+to the hosts that support it — so a scope authored for a host never even sees the
+channels that host lacks:
+
+- **`@lntt/scope/request`** — `ctx.request` (read headers/session). Read-only, no
+  capability → mounts everywhere, tRPC included.
+- **`@lntt/scope/body`** — the `.body`/`.form` channels + the `body` capability →
+  rejected on tRPC (no readable body).
+- **`@lntt/scope/cookies`** — the `Set-Cookie` sink `ctx.cookies` + the `cookies`
+  capability → rejected on tRPC (drops `Set-Cookie`).
+
+A tRPC scope is `scope().extend(request)` — it cannot call `.body` (the method is
+not there), so the mistake is impossible by construction, not caught late at the
+mount. Reach for `request` when a guard reads the request:
 
 ```ts
-import { fragment, forbidden, notFound, unauthorized } from '@lntt/scope'
+import { scope, forbidden, notFound, unauthorized } from '@lntt/scope'
+import { request } from '@lntt/scope/request'
 import { z } from 'zod'
 
-export const courseHandler = fragment()
+export const courseHandler = scope().extend(request)
   .input(z.object({ courseId: z.string() }))
   .guard(({ sessionRepo }: { sessionRepo: SessionRepo }, ctx) => {
     const session = sessionRepo.get(ctx.request)
@@ -58,17 +75,17 @@ A **returned** value is a domain outcome (a result, or an `Abort` like
 **thrown** error is infrastructure (a 5xx / rollback / nack). A validation
 failure of the input is a returned `422` — never a throw.
 
-## Running a fragment
+## Running a scope
 
-Hosts run a fragment through the fold; you rarely call these directly, but they
+Hosts run a scope through the fold; you rarely call these directly, but they
 are the whole runtime:
 
 - `runFold(handler, app, carrier, params)` — thread `app` through the guards to
   the leaf, short-circuit on an `Abort`, return an `Outcome`.
 - `runScope(handler, app, carrier, rawInput)` — validate `rawInput` against the
-  fragment's schema first (→ a returned `422` on failure), then fold.
+  scope's schema first (→ a returned `422` on failure), then fold.
 
-Because a fragment is abstract, it is **testable in isolation** with plain fakes
+Because a scope is abstract, it is **testable in isolation** with plain fakes
 — no host, no chain:
 
 ```ts
@@ -79,9 +96,9 @@ const out = await runScope(courseHandler,
 
 ## The adapter contract
 
-A fragment binds to a concrete app only at the host adapter. A **missing
+A scope binds to a concrete app only at the host adapter. A **missing
 dependency** is a compile error at the adapter (`DepGuard` brand: the chain's
-public surface must satisfy the fragment's accumulated `Need`). See
+public surface must satisfy the scope's accumulated `Need`). See
 `@lntt/integration` for the per-host adapters (Hono, Express, React Router,
 tRPC), each preserving its host's native routing and typed client.
 

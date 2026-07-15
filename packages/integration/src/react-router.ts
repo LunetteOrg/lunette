@@ -1,7 +1,8 @@
 import { Lunette } from '@lntt/wire'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Capability, CarrierGuard, DepGuard, Handler, RequestScope } from '@lntt/scope'
-import { fragment, runScope } from '@lntt/scope'
+import type { Capability, CarrierGuard, DepGuard, Handler, RequestCarrier } from '@lntt/scope'
+import { scope, runScope } from '@lntt/scope'
+import { request } from '@lntt/scope/request'
 import { outcomeToResponse } from './http-codec.ts'
 
 // The chain's public surface and its Seed, extracted from the Lunette value.
@@ -28,7 +29,7 @@ export interface WireContext<Pub> {
 }
 
 // React Router 7 pack. Takes the CHAIN, owns build-once, and exposes the shared
-// fragment surface, the host `to*`, a `mount`, and `dispose`. The core never
+// scope surface, the host `to*`, a `mount`, and `dispose`. The core never
 // imports react-router beyond its calling convention.
 export function reactRouter<C extends Lunette<any, any, any>>(
   chain: C,
@@ -36,7 +37,7 @@ export function reactRouter<C extends Lunette<any, any, any>>(
 ) {
   type Pub = PubOf<C>
   const { ensure, dispose } = buildOnce(chain)
-  const base = fragment()
+  const base = scope().extend(request)
 
   // mount = the getLoadContext-shaped seeding step, registered ONCE in the
   // server entry. Reads the host env, seeds the memoized build, and returns the
@@ -48,21 +49,21 @@ export function reactRouter<C extends Lunette<any, any, any>>(
   // The deps check (DepGuard) fires when the frag meets `toLoader`. Params are
   // NOT reconciled against the schema here: RR7's own typegen types
   // `args.params` from the file route (`Record<string, string>`), independent
-  // of the fragment's schema. `runScope` validates+coerces them at runtime →
+  // of the scope's schema. `runScope` validates+coerces them at runtime →
   // a RETURNED 422 abort on a bad param, and the leaf reads the coerced
   // `OutputOf<S>`.
   // RR7 loaders/actions get the Fetch request with a readable body, so RR7
-  // PROVIDES the `body` capability (`CarrierGuard<Cap, 'body'>`).
+  // PROVIDES the `body` capability (`CarrierGuard<Cap, 'body' | 'cookies'>`).
   const toLoader =
     <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
-      handler: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body'>,
+      handler: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body' | 'cookies'>,
     ) =>
     (args: {
       request: Request
       params: Record<string, string>
       context: WireContext<Pub>
     }): Promise<Response> =>
-      runScope<RequestScope, S, R>(
+      runScope<RequestCarrier, S, R>(
         handler,
         args.context.__wireApp as object,
         { request: args.request },

@@ -16,7 +16,7 @@ import { abortFor } from './respond.ts'
 
 // PROTOTYPE — the feed handler as PURE, named functions, so each is unit-tested
 // in isolation (typed, no carrier, no fold, no fake session to satisfy a gate).
-// The fragment that wires them lives in ../handlers.ts.
+// The scope that wires them lives in ../handlers.ts.
 
 // The feed fetch — a guard: declares only the slice of the app it calls
 // (`threads.listFeed`), returns the enrichment `{ feed }`. It ignores the ctx.
@@ -54,7 +54,7 @@ export const postGuard = (
     .then((post) => (isError(post) ? notFound() : { post }))
 
 // The trivial shape leaf behind the post loader: no deps, reads only the post
-// the prefetch guard accumulated. Named so the fragment stays declarative.
+// the prefetch guard accumulated. Named so the scope stays declarative.
 export const postHandler = (
   _deps: Record<never, never>,
   ctx: { post: PostForReading },
@@ -64,7 +64,7 @@ export const postHandler = (
 // The leaf declares only `threads.publishPost` (a bound leaf on the app: deps
 // fixed, called with the input). publishPost is a 7-dep node — validate, upload
 // inline images (blobs), detect format, create the post, warm the render cache
-// — but the fragment sees ONE function. Body fields come off the request (the
+// — but the scope sees ONE function. Body fields come off the request (the
 // hosts stream it in); the author is the gated session, never the client.
 // The shared write step: the SAME domain call + error mapping, fed by whichever
 // input channel the host uses — `.body` on the HTTP hosts, the `.input` payload
