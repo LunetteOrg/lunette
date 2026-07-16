@@ -55,3 +55,52 @@ describe('the scope fold at runtime', () => {
     if (!anon.ok) expect(anon.abort.intent).toEqual({ kind: 'status', status: 401 })
   })
 })
+
+// The fold runs extension `prepare` steps FIRST, over the raw carrier, and owns
+// the cookie sink — tested here generically (a plain handler + a fake step),
+// independent of any one extension.
+describe('the fold — prepare steps and the cookie sink', () => {
+  it('runs prepare steps before the guards, merging their enrichment into ctx', async () => {
+    const handler = {
+      guards: [],
+      prepare: [async () => ({ tag: 'from-prepare' as const })],
+      leaf: (_app: object, ctx: { tag?: string }) => ({ seen: ctx.tag }),
+    }
+    const out = await runFold<object, { seen: string | undefined }>(handler, {}, {}, {})
+    expect(out).toEqual({ ok: true, value: { seen: 'from-prepare' }, cookies: [] })
+  })
+
+  it('a prepare step returning an abort short-circuits — no guards, no leaf', async () => {
+    let ran = false
+    const handler = {
+      guards: [() => ((ran = true), {})],
+      prepare: [async () => forbidden()],
+      leaf: () => ({}),
+    }
+    const out = await runFold<object, object>(handler, {}, {}, {})
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.abort.intent).toMatchObject({ status: 403 })
+    expect(ran).toBe(false)
+  })
+
+  it('creates the cookie sink; a leaf that sets one has it collected into the Outcome', async () => {
+    const handler = {
+      guards: [],
+      prepare: [],
+      leaf: (_app: object, ctx: object) => {
+        ;(ctx as { cookies: { set(n: string, v: string, o?: object): void } }).cookies.set(
+          'sid',
+          'abc',
+          { httpOnly: true },
+        )
+        return { ok: true }
+      },
+    }
+    const out = await runFold<object, { ok: boolean }>(handler, {}, {}, {})
+    expect(out).toEqual({
+      ok: true,
+      value: { ok: true },
+      cookies: [{ name: 'sid', value: 'abc', options: { httpOnly: true } }],
+    })
+  })
+})

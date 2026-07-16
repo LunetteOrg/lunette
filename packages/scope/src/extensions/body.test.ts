@@ -1,66 +1,58 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { scope } from '../scope.ts'
-import { runFold } from '../run-fold.ts'
-import type { RequestCarrier } from '../carrier.ts'
+import { isAbort } from '../abort.ts'
+import { unit } from '../schema.ts'
+import type { Prepare, ScopeExtensionValue } from '../scope.ts'
 import { body } from './body.ts'
 
-// The `body` extension pushes a `prepare` step that reads the RAW carrier request
-// and validates the channel into ctx — exercised here through `runFold`.
+// Unit test — the `body` extension in ISOLATION, no `scope()` / `runFold`. Drive
+// its runtime contract directly: `.body`/`.form` push a `prepare` step; capture
+// that step off a fake `rebuild` and run it against a bare carrier. This tests the
+// parse-and-validate the extension OWNS, not the fold that composes it.
+type Channels = {
+  body(schema: z.ZodTypeAny): unknown
+  form(schema: z.ZodTypeAny): unknown
+}
+const stepFor = (call: (m: Channels) => void): Prepare => {
+  let step!: Prepare
+  const methods = (body as unknown as ScopeExtensionValue).methods(
+    { schema: unit, guards: [], prepare: [] },
+    (s) => {
+      step = s.prepare[s.prepare.length - 1]!
+      return {}
+    },
+  ) as unknown as Channels
+  call(methods)
+  return step
+}
 
-describe('body — runtime parse + validate', () => {
-  const jsonReq = (b: unknown) =>
-    new Request('http://x/', {
-      method: 'POST',
-      body: JSON.stringify(b),
-      headers: { 'content-type': 'application/json' },
+const jsonReq = (b: unknown) =>
+  new Request('http://x/', {
+    method: 'POST',
+    body: JSON.stringify(b),
+    headers: { 'content-type': 'application/json' },
+  })
+
+describe('body — the prepare step (unit, off the fold)', () => {
+  const bodyStep = stepFor((m) => m.body(z.object({ title: z.string() })))
+  const formStep = stepFor((m) => m.form(z.object({ email: z.string() })))
+
+  it('.body parses + validates the JSON body into { body }', async () => {
+    expect(await bodyStep({ request: jsonReq({ title: 'Hello' }) })).toEqual({
+      body: { title: 'Hello' },
     })
-
-  it('.body parses + validates the JSON body into ctx.body', async () => {
-    const handler = scope()
-      .extend(body)
-      .body(z.object({ title: z.string() }))
-      .handle((_d: {}, ctx) => ({ echoed: ctx.body.title }))
-
-    const ok = await runFold<RequestCarrier, { echoed: string }>(
-      handler,
-      {},
-      { request: jsonReq({ title: 'Hello' }) },
-      {},
-    )
-    expect(ok).toEqual({ ok: true, value: { echoed: 'Hello' }, cookies: [] })
   })
 
-  it('a body missing the required field is a RETURNED 422 (the error convention)', async () => {
-    const handler = scope()
-      .extend(body)
-      .body(z.object({ title: z.string() }))
-      .handle((_d: {}, ctx) => ({ echoed: ctx.body.title }))
-
-    const bad = await runFold<RequestCarrier, { echoed: string }>(
-      handler,
-      {},
-      { request: jsonReq({ nope: 1 }) },
-      {},
-    )
-    expect(bad.ok).toBe(false)
-    if (!bad.ok) expect(bad.abort.intent).toMatchObject({ kind: 'status', status: 422 })
+  it('an invalid body is a RETURNED 422 abort, never a throw', async () => {
+    const out = await bodyStep({ request: jsonReq({ nope: 1 }) })
+    expect(isAbort(out)).toBe(true)
+    if (isAbort(out)) expect(out.intent).toMatchObject({ kind: 'status', status: 422 })
   })
 
-  it('.form parses + validates the form body into ctx.form', async () => {
-    const handler = scope()
-      .extend(body)
-      .form(z.object({ email: z.string() }))
-      .handle((_d: {}, ctx) => ({ to: ctx.form.email }))
-
+  it('.form parses + validates the form body into { form }', async () => {
     const fd = new FormData()
     fd.set('email', 'user@example.com')
-    const out = await runFold<RequestCarrier, { to: string }>(
-      handler,
-      {},
-      { request: new Request('http://x/', { method: 'POST', body: fd }) },
-      {},
-    )
-    expect(out).toEqual({ ok: true, value: { to: 'user@example.com' }, cookies: [] })
+    const out = await formStep({ request: new Request('http://x/', { method: 'POST', body: fd }) })
+    expect(out).toEqual({ form: { email: 'user@example.com' } })
   })
 })
