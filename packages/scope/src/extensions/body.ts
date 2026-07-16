@@ -1,8 +1,8 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Abort } from './abort.ts'
-import type { OutputOf } from './schema.ts'
-import type { Prepare, ScopeExtension, ScopeExtensionValue } from './scope.ts'
-import { validateInput } from './validate.ts'
+import type { Abort } from '../abort.ts'
+import type { OutputOf } from '../schema.ts'
+import type { Prepare, ScopeExtension, ScopeExtensionValue } from '../scope.ts'
+import { validateInput } from '../validate.ts'
 
 // The `body` extension — a tree-shakable subpath (`@lntt/scope/body`). Injecting
 // it (`scope().extend(body)`) adds the declared body channels `.body` / `.form`.

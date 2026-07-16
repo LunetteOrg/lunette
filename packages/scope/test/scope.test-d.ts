@@ -3,10 +3,8 @@ import { z } from 'zod'
 import type { Admin, Course, Repos, Session } from './domain.ts'
 import { forbidden, notFound, unauthorized } from '../src/abort.ts'
 import { scope, type Handler } from '../src/scope.ts'
-import { request } from '../src/request.ts'
-import { body } from '../src/body.ts'
-import { cookies } from '../src/cookies.ts'
-import type { CookieSink, RequestHead } from '../src/carrier.ts'
+import { request } from '../src/extensions/request.ts'
+import type { RequestHead } from '../src/carrier.ts'
 
 // One schema on the scope fixes `P = OutputOf<S>` for every guard and the
 // leaf — the params axis now flows from ONE `.input`, not a per-guard
@@ -86,30 +84,8 @@ describe('scope().extend(request) — the type contract', () => {
     >()
   })
 
-  it('.body / .form expose the validated body on ctx and flow the body capability into Cap', () => {
-    const bodySchema = z.object({ title: z.string() })
-    const handler = scope().extend(body)
-      .body(bodySchema)
-      .handle((_deps: {}, ctx) => {
-        expectTypeOf(ctx.body).toEqualTypeOf<{ title: string }>()
-        return { ok: true }
-      })
-    // the scope carries 'body' in its Cap marker — the adapter's CarrierGuard
-    // reads exactly this to gate a mount on a body-less host (tRPC).
-    expectTypeOf(handler.__cap).toEqualTypeOf<((c: 'body') => void) | undefined>()
-
-    const formSchema = z.object({ email: z.string() })
-    scope().extend(body)
-      .form(formSchema)
-      .handle((_deps: {}, ctx) => {
-        expectTypeOf(ctx.form).toEqualTypeOf<{ email: string }>()
-        return {}
-      })
-
-    // a param-only request scope requires NO capability (Cap = never)
-    const paramOnly = scope().extend(request).input(schema).handle((_deps: {}) => ({ ok: true }))
-    expectTypeOf(paramOnly.__cap).toEqualTypeOf<((c: never) => void) | undefined>()
-  })
+  // (the `.body`/`.form`/`cookies`/composition/collision contracts live co-located
+  // with the extensions in `src/extensions/extensions.test-d.ts`.)
 
   it('a param-less request scope (no .input) still gets the carrier and requires no app', () => {
     const handler = scope().extend(request).handle((_deps: {}, ctx) => {
@@ -140,34 +116,6 @@ describe('scope() — the carrier-agnostic base', () => {
         ctx.request
         return { ok: true }
       })
-  })
-
-  it('body/form and cookies are separate extensions — neither on the base NOR on request', () => {
-    // @ts-expect-error — `.body` exists only on scope().extend(body)
-    scope().body(z.object({ title: z.string() }))
-    // @ts-expect-error — `.form` exists only on scope().extend(body)
-    scope().form(z.object({ email: z.string() }))
-    // a request-only scope (tRPC-safe) has NO body channels — the mistake cannot be written
-    // @ts-expect-error — `.body` is the `body` extension's, absent on a request scope
-    scope().extend(request).body(z.object({ title: z.string() }))
-    // the cookie sink is the `cookies` extension's; request alone does not expose it
-    scope()
-      .extend(request)
-      .guard((_app: {}, ctx) => {
-        // @ts-expect-error — no `cookies` without `.extend(cookies)`
-        ctx.cookies
-        return {}
-      })
-  })
-
-  it('the cookies extension brings the sink and flows the `cookies` capability', () => {
-    const handler = scope()
-      .extend(cookies)
-      .handle((_deps: {}, ctx) => {
-        expectTypeOf(ctx.cookies).toEqualTypeOf<CookieSink>()
-        return { ok: true }
-      })
-    expectTypeOf(handler.__cap).toEqualTypeOf<((c: 'cookies') => void) | undefined>()
   })
 
   it('an agnostic scope produces a Handler with Cap = never', () => {

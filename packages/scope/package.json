@@ -6,9 +6,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./request": "./src/request.ts",
-    "./body": "./src/body.ts",
-    "./cookies": "./src/cookies.ts"
+    "./request": "./src/extensions/request.ts",
+    "./body": "./src/extensions/body.ts",
+    "./cookies": "./src/extensions/cookies.ts"
   },
   "scripts": {
     "test": "vitest run",

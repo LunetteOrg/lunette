@@ -1,5 +1,5 @@
-import type { CookieSink } from './carrier.ts'
-import type { ScopeExtension, ScopeExtensionValue } from './scope.ts'
+import type { CookieSink } from '../carrier.ts'
+import type { ScopeExtension, ScopeExtensionValue } from '../scope.ts'
 
 // The `cookies` extension — a tree-shakable subpath (`@lntt/scope/cookies`).
 // Injecting it (`scope().extend(cookies)`) adds the `Set-Cookie` output sink on

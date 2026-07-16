@@ -1,5 +1,5 @@
-import type { RequestHead } from './carrier.ts'
-import type { ScopeExtension, ScopeExtensionValue } from './scope.ts'
+import type { RequestHead } from '../carrier.ts'
+import type { ScopeExtension, ScopeExtensionValue } from '../scope.ts'
 
 // The `request` extension — a tree-shakable subpath (`@lntt/scope/request`).
 // It is READ-ONLY: injecting it (`scope().extend(request)`) adds `ctx.request`
