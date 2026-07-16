@@ -84,8 +84,7 @@ describe('scope().extend(request) — the type contract', () => {
     >()
   })
 
-  // (the `.body`/`.form`/`cookies`/composition/collision contracts live co-located
-  // with the extensions in `src/extensions/extensions.test-d.ts`.)
+  // (each extension's contract lives next to it: `src/extensions/*.test-d.ts`.)
 
   it('a param-less request scope (no .input) still gets the carrier and requires no app', () => {
     const handler = scope().extend(request).handle((_deps: {}, ctx) => {

@@ -3,8 +3,6 @@ import { z } from 'zod'
 import { forbidden, notFound, unauthorized } from './abort.ts'
 import { scope } from './scope.ts'
 import { request } from './extensions/request.ts'
-import { body } from './extensions/body.ts'
-import { cookies } from './extensions/cookies.ts'
 import { runFold } from './run-fold.ts'
 import type { RequestCarrier } from './carrier.ts'
 import { makeRepos, type Repos } from './domain.fixture.ts'
@@ -55,69 +53,5 @@ describe('the scope fold at runtime', () => {
     const anon = await run(new Request('http://x/'), { courseId: 'c1' })
     expect(anon.ok).toBe(false)
     if (!anon.ok) expect(anon.abort.intent).toEqual({ kind: 'status', status: 401 })
-  })
-
-  it('the cookie sink collects Set-Cookie without changing the leaf return', async () => {
-    // Sets a cookie → the `cookies` extension brings the sink.
-    const handler = scope().extend(cookies).handle((_deps: {}, ctx) => {
-      ctx.cookies.set('sid', 'abc', { httpOnly: true })
-      return { ok: true }
-    })
-    const out = await runFold<RequestCarrier, { ok: boolean }>(
-      handler,
-      {},
-      { request: new Request('http://x/') },
-      {},
-    )
-    expect(out.ok).toBe(true)
-    if (out.ok) expect(out.value).toEqual({ ok: true })
-    expect(out.cookies).toEqual([{ name: 'sid', value: 'abc', options: { httpOnly: true } }])
-  })
-
-  it('.body parses + validates the JSON body into ctx.body; a bad body → 422', async () => {
-    const bodySchema = z.object({ title: z.string() })
-    const handler = scope().extend(body)
-      .body(bodySchema)
-      .handle((_deps: {}, ctx) => ({ echoed: ctx.body.title }))
-    const jsonReq = (body: unknown) =>
-      new Request('http://x/', {
-        method: 'POST',
-        body: JSON.stringify(body),
-        headers: { 'content-type': 'application/json' },
-      })
-
-    const ok = await runFold<RequestCarrier, { echoed: string }>(
-      handler,
-      {},
-      { request: jsonReq({ title: 'Hello' }) },
-      {},
-    )
-    expect(ok).toEqual({ ok: true, value: { echoed: 'Hello' }, cookies: [] })
-
-    // a body missing the required field is a RETURNED 422 (the error convention)
-    const bad = await runFold<RequestCarrier, { echoed: string }>(
-      handler,
-      {},
-      { request: jsonReq({ nope: 1 }) },
-      {},
-    )
-    expect(bad.ok).toBe(false)
-    if (!bad.ok) expect(bad.abort.intent).toMatchObject({ kind: 'status', status: 422 })
-  })
-
-  it('.form parses + validates the form body into ctx.form', async () => {
-    const formSchema = z.object({ email: z.string() })
-    const handler = scope().extend(body)
-      .form(formSchema)
-      .handle((_deps: {}, ctx) => ({ to: ctx.form.email }))
-    const fd = new FormData()
-    fd.set('email', 'user@example.com')
-    const out = await runFold<RequestCarrier, { to: string }>(
-      handler,
-      {},
-      { request: new Request('http://x/', { method: 'POST', body: fd }) },
-      {},
-    )
-    expect(out).toEqual({ ok: true, value: { to: 'user@example.com' }, cookies: [] })
   })
 })
