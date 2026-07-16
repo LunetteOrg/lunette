@@ -1,9 +1,9 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
-import type { SessionRepo } from './domain.ts'
-import { forbidden } from '../src/abort.ts'
-import { scope, type Handler } from '../src/scope.ts'
-import type { InputOf, OutputOf } from '../src/schema.ts'
+import type { SessionRepo } from './domain.fixture.ts'
+import { forbidden } from './abort.ts'
+import { scope, type Handler } from './scope.ts'
+import type { InputOf, OutputOf } from './schema.ts'
 
 // One schema on the scope. `z.coerce.number()` gives an OUTPUT of `number`
 // (the coerced value) from a string-ish INPUT — the exact split the host needs:

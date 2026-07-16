@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { forbidden } from '../src/abort.ts'
-import { scope } from '../src/scope.ts'
-import { runScope } from '../src/run-fold.ts'
-import type { RequestCarrier } from '../src/carrier.ts'
+import { forbidden } from './abort.ts'
+import { scope } from './scope.ts'
+import { runScope } from './run-fold.ts'
+import type { RequestCarrier } from './carrier.ts'
 
 // The scope's schema drives runtime coercion + validation through `runScope`
 // — the convenience the non-native hosts (RR7, Express, bus) use: validate →

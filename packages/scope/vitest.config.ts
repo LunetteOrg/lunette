@@ -2,10 +2,11 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
+    // Tests are CO-LOCATED with the source in `src/` (next to what they cover).
+    include: ['src/**/*.test.ts'],
     typecheck: {
       enabled: true,
-      include: ['src/**/*.test-d.ts', 'test/**/*.test-d.ts'],
+      include: ['src/**/*.test-d.ts'],
       tsconfig: './tsconfig.json',
     },
   },

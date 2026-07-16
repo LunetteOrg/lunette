@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { forbidden, notFound, unauthorized } from '../src/abort.ts'
-import { scope } from '../src/scope.ts'
-import { request } from '../src/extensions/request.ts'
-import { body } from '../src/extensions/body.ts'
-import { cookies } from '../src/extensions/cookies.ts'
-import { runFold } from '../src/run-fold.ts'
-import type { RequestCarrier } from '../src/carrier.ts'
-import { makeRepos, type Repos } from './domain.ts'
+import { forbidden, notFound, unauthorized } from './abort.ts'
+import { scope } from './scope.ts'
+import { request } from './extensions/request.ts'
+import { body } from './extensions/body.ts'
+import { cookies } from './extensions/cookies.ts'
+import { runFold } from './run-fold.ts'
+import type { RequestCarrier } from './carrier.ts'
+import { makeRepos, type Repos } from './domain.fixture.ts'
 
 // The core fold, driven directly with a PLAIN app object — no host, no chain
 // (@lntt/scope is framework-free; a wire chain is only a convenience for

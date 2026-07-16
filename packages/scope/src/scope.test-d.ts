@@ -1,10 +1,10 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
-import type { Admin, Course, Repos, Session } from './domain.ts'
-import { forbidden, notFound, unauthorized } from '../src/abort.ts'
-import { scope, type Handler } from '../src/scope.ts'
-import { request } from '../src/extensions/request.ts'
-import type { RequestHead } from '../src/carrier.ts'
+import type { Admin, Course, Repos, Session } from './domain.fixture.ts'
+import { forbidden, notFound, unauthorized } from './abort.ts'
+import { scope, type Handler } from './scope.ts'
+import { request } from './extensions/request.ts'
+import type { RequestHead } from './carrier.ts'
 
 // One schema on the scope fixes `P = OutputOf<S>` for every guard and the
 // leaf — the params axis now flows from ONE `.input`, not a per-guard
