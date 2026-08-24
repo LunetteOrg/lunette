@@ -1,9 +1,13 @@
-import type { IncomingMessage } from 'node:http'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { Outcome } from '@lntt/scope'
+import { serializeCookie } from './http.ts'
 
-// The bridge from a Node request to the scope's carrier, shared by every
-// non-Fetch host on Node (Express here; a Fastify/Koa pack would reuse it
-// unchanged). The Fetch-based packs — Hono, React Router, tRPC — never need it:
-// they already receive a `Request` with a real origin.
+// The two Node-side halves of a pack, public so a host we ship no pack for
+// composes them instead of copying them: the request lift (below) and the
+// outcome render (`renderOutcome`, at the bottom). Express uses both; a
+// Fastify/Koa pack would reuse them unchanged. The Fetch-based packs — Hono,
+// React Router, tRPC — need neither: they receive a `Request` with a real origin
+// and hand back a `Response` (`outcomeToResponse` in `./http.ts`).
 //
 // `new Request(...)` demands an ABSOLUTE url while Node hands over a path, so
 // an origin has to come from somewhere. That somewhere is the request itself,
@@ -90,4 +94,43 @@ export function toWebRequest(req: IncomingMessage, options: NodeCarrierOptions =
   // in that order the lift serves both without depending on Express's types.
   const path = (req as IncomingMessage & { originalUrl?: string }).originalUrl ?? req.url ?? '/'
   return new Request(new URL(path, originOf(req, options)), init)
+}
+
+// The outcome render for a node `ServerResponse` — the counterpart of
+// `outcomeToResponse` (`./http.ts`) for hosts that write onto a response object
+// instead of returning one. Express's `Response` EXTENDS `ServerResponse`, as
+// does Fastify's `res.raw`, so one function serves every node host including
+// bare `node:http`.
+//
+// This is the whole host-facing contract of a scope: `ok: true` is the leaf's
+// value, a RETURNED abort carries its `ResponseIntent`, and the cookies the sink
+// collected ride BOTH branches (a redirect that drops a session still has to
+// emit its `Set-Cookie`). A THROW never reaches here — it stays infrastructure
+// and the host's own error path turns it into a 500.
+export function renderOutcome(res: ServerResponse, outcome: Outcome<unknown>): void {
+  const headers: Record<string, string | string[]> = {}
+  if (outcome.cookies.length > 0) headers['set-cookie'] = outcome.cookies.map(serializeCookie)
+
+  if (outcome.ok) {
+    headers['content-type'] = 'application/json'
+    res.writeHead(200, headers)
+    res.end(JSON.stringify(outcome.value))
+    return
+  }
+
+  const { intent } = outcome.abort
+  if (intent.kind === 'redirect') {
+    headers['location'] = intent.location
+    res.writeHead(intent.status, headers)
+    res.end()
+    return
+  }
+  if (intent.body === undefined) {
+    res.writeHead(intent.status, headers)
+    res.end()
+    return
+  }
+  headers['content-type'] = 'application/json'
+  res.writeHead(intent.status, headers)
+  res.end(JSON.stringify(intent.body))
 }

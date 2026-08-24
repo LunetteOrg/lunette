@@ -1,7 +1,9 @@
 import { Readable } from 'node:stream'
 import type { IncomingMessage } from 'node:http'
 import { describe, expect, it } from 'vitest'
-import { toWebRequest } from '../src/node.ts'
+import type { ServerResponse } from 'node:http'
+import { httpError, redirect, type Outcome } from '@lntt/scope'
+import { renderOutcome, toWebRequest } from '../src/node.ts'
 
 // A node request, faked at exactly the surface the lift reads. `body` becomes
 // the stream the Web Request drains, so the body assertions exercise the real
@@ -134,5 +136,80 @@ describe('toWebRequest — method, headers and body', () => {
   it('gives GET and HEAD no body', () => {
     expect(toWebRequest(nodeRequest({ method: 'GET' })).body).toBeNull()
     expect(toWebRequest(nodeRequest({ method: 'HEAD' })).body).toBeNull()
+  })
+})
+
+// A ServerResponse faked at the surface the render writes to. Express's
+// `Response` and Fastify's `res.raw` both ARE a ServerResponse, so what holds
+// here holds for every node host.
+const nodeResponse = () => {
+  const written: {
+    status?: number | undefined
+    headers?: Record<string, string | string[]> | undefined
+    body?: string | undefined
+  } = {}
+  const res = {
+    writeHead(status: number, headers?: Record<string, string | string[]>) {
+      written.status = status
+      written.headers = headers ?? {}
+      return res
+    },
+    end(body?: string) {
+      written.body = body
+      return res
+    },
+  }
+  return { res: res as unknown as ServerResponse, written }
+}
+
+const ok = <R,>(value: R, cookies: Outcome<R>['cookies'] = []): Outcome<R> => ({
+  ok: true,
+  value,
+  cookies,
+})
+
+describe('renderOutcome', () => {
+  it('writes a leaf value as 200 JSON', () => {
+    const { res, written } = nodeResponse()
+    renderOutcome(res, ok({ feed: [] }))
+    expect(written.status).toBe(200)
+    expect(written.headers?.['content-type']).toBe('application/json')
+    expect(written.body).toBe('{"feed":[]}')
+  })
+
+  it('turns a redirect intent into its status and Location, with no body', () => {
+    const { res, written } = nodeResponse()
+    renderOutcome(res, { ok: false, abort: redirect('/dashboard'), cookies: [] })
+    expect(written.status).toBe(302)
+    expect(written.headers?.['location']).toBe('/dashboard')
+    expect(written.body).toBeUndefined()
+  })
+
+  it('renders a status intent, with and without a body', () => {
+    const bare = nodeResponse()
+    renderOutcome(bare.res, { ok: false, abort: httpError(401), cookies: [] })
+    expect(bare.written.status).toBe(401)
+    expect(bare.written.body).toBeUndefined()
+    expect(bare.written.headers?.['content-type']).toBeUndefined()
+
+    const explained = nodeResponse()
+    renderOutcome(explained.res, { ok: false, abort: httpError(422, { field: 'email' }), cookies: [] })
+    expect(explained.written.status).toBe(422)
+    expect(explained.written.body).toBe('{"field":"email"}')
+  })
+
+  it('emits the cookie sink on the ok branch AND on an abort', () => {
+    const cookies = [{ name: 'session', value: 'abc', options: { path: '/', httpOnly: true } }]
+
+    const good = nodeResponse()
+    renderOutcome(good.res, ok({ done: true }, cookies))
+    expect(good.written.headers?.['set-cookie']).toEqual(['session=abc; Path=/; HttpOnly'])
+
+    // the case that makes the sink ride BOTH branches: logging out drops the
+    // cookie and redirects in one outcome.
+    const goodbye = nodeResponse()
+    renderOutcome(goodbye.res, { ok: false, abort: redirect('/'), cookies })
+    expect(goodbye.written.status).toBe(302)
+    expect(goodbye.written.headers?.['set-cookie']).toEqual(['session=abc; Path=/; HttpOnly'])
   })
 })

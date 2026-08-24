@@ -37,12 +37,11 @@ scope-runtime app.
 
 The packs above are a **convenience, not a requirement**. Next to the
 adapter-backed `express/src/server.ts` sits the same app mounted with **no
-adapter**: build the chain once, assemble the `RequestCarrier` from the native
-request, call `runScope`, render the returned `Outcome`. The line it holds is
-"nothing that mounts a scope is imported" — the fold call, the outcome render
-and the brands are all written out; only the request lift
-(`@lntt/integration/node`, plumbing that knows nothing about scopes) is reused,
-since rewriting it would just teach a weaker version of the origin handling. `test/manual.test.ts` drives **both** apps through the same requests
+pack** — the file IS the pack, written out: build the chain once, assemble the
+`RequestCarrier`, call `runScope`, brand the mount. What a pack *composes* is
+imported (`@lntt/integration/node` — the request lift and the outcome render,
+plumbing that knows nothing about scopes); what a pack *is* stays on the page.
+That is the answer to "what does porting to Fastify or Koa cost": this file. `test/manual.test.ts` drives **both** apps through the same requests
 and asserts identical responses, so the two files are readable side by side as
 "what the adapter does for you" vs "what it costs to do it yourself".
 

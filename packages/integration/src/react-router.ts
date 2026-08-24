@@ -3,7 +3,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { Capability, CarrierGuard, DepGuard, Handler, RequestCarrier } from '@lntt/scope'
 import { scope, runScope } from '@lntt/scope'
 import { request } from '@lntt/scope/request'
-import { outcomeToResponse } from './http-codec.ts'
+import { outcomeToResponse } from './http.ts'
 
 // The chain's public surface and its Seed, extracted from the Lunette value.
 type PubOf<C> = C extends { build: (...a: never[]) => Promise<{ app: infer A }> } ? A : never

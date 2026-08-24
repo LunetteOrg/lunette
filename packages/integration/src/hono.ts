@@ -13,7 +13,7 @@ import type {
   RequestCarrier,
 } from '@lntt/scope'
 import { runFold } from '@lntt/scope'
-import { serializeCookie } from './http-codec.ts'
+import { serializeCookie } from './http.ts'
 
 type PubOf<C> = C extends { build: (...a: never[]) => Promise<{ app: infer A }> } ? A : never
 type SeedOf<C> = C extends Lunette<any, any, infer S> ? S : never

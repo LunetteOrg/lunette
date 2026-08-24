@@ -1,9 +1,12 @@
 import type { Outcome, SetCookie } from '@lntt/scope'
 
-// The HTTP outcome codec, shared by the Fetch-based hosts (React Router,
-// Hono). A returned domain result → 200; a returned abort → its intent
-// (redirect / 4xx); a THROW never reaches here — it stays infrastructure and
-// the host maps it to 5xx.
+// The HTTP outcome codec — the host-agnostic half of every pack, public so a
+// host we ship no pack for composes the same pieces instead of copying them.
+// A returned domain result → 200; a returned abort → its intent (redirect /
+// 4xx); a THROW never reaches here — it stays infrastructure and the host maps
+// it to 5xx. `outcomeToResponse` serves the Fetch hosts (Hono, React Router);
+// hosts on a node `ServerResponse` use `renderOutcome` from `./node.ts`, which
+// speaks the same contract onto a different response object.
 export function serializeCookie({ name, value, options }: SetCookie): string {
   const parts = [`${name}=${value}`]
   if (options.path !== undefined) parts.push(`Path=${options.path}`)

@@ -5,11 +5,10 @@ import type {
   Response as ExRes,
 } from 'express'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Capability, CarrierGuard, DepGuard, Handler, Outcome, RequestCarrier } from '@lntt/scope'
+import type { Capability, CarrierGuard, DepGuard, Handler, RequestCarrier } from '@lntt/scope'
 import { scope, runScope } from '@lntt/scope'
 import { request } from '@lntt/scope/request'
-import { serializeCookie } from './http-codec.ts'
-import { toWebRequest, type NodeCarrierOptions } from './node.ts'
+import { renderOutcome, toWebRequest, type NodeCarrierOptions } from './node.ts'
 
 type PubOf<C> = C extends { build: (...a: never[]) => Promise<{ app: infer A }> } ? A : never
 type SeedOf<C> = C extends Lunette<any, any, infer S> ? S : never
@@ -25,24 +24,10 @@ function buildOnce<C extends Lunette<any, any, any>>(chain: C) {
   return { ensure, dispose }
 }
 
-// Express is NOT Fetch-based, so there is no Response to hand back — the request
-// is lifted into a Web `Request` by the shared node bridge (`./node.ts`, which a
-// Fastify/Koa pack would reuse) and the outcome is translated onto the node
-// `res` directly.
-const renderExpress = (res: ExRes, outcome: Outcome<unknown>): void => {
-  for (const cookie of outcome.cookies) res.append('Set-Cookie', serializeCookie(cookie))
-  if (outcome.ok) {
-    res.status(200).json(outcome.value)
-    return
-  }
-  const { intent } = outcome.abort
-  if (intent.kind === 'redirect') {
-    res.redirect(intent.status, intent.location)
-    return
-  }
-  if (intent.body !== undefined) res.status(intent.status).json(intent.body)
-  else res.status(intent.status).end()
-}
+// Express is NOT Fetch-based: there is no Response to hand back, so the pack is
+// the composition of the two node primitives (`./node.ts`) — lift the request
+// into a Web `Request` (the scope speaks Fetch), write the outcome onto `res`.
+// A Fastify or Koa pack is the same two calls.
 
 // The built app is attached to the express request by the mount middleware.
 type WireReq = ExReq & { __wireApp?: unknown }
@@ -78,12 +63,13 @@ export function express<C extends Lunette<any, any, any>>(
   // 422 abort, which `renderExpress` renders as 4xx).
   // Express streams the request body into the Web Request, so it PROVIDES the
   // `body` capability (`CarrierGuard<Cap, 'body' | 'cookies'>` accepts body/form scopes).
+  // `renderOutcome` takes the node `ServerResponse` Express's `res` extends.
   const handler =
     <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
       h: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body' | 'cookies'>,
     ): RequestHandler =>
     async (req: ExReq, res: ExRes): Promise<void> =>
-      renderExpress(
+      renderOutcome(
         res,
         await runScope<RequestCarrier, S, R>(
           h,

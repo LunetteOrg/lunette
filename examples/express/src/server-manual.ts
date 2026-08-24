@@ -1,18 +1,9 @@
-import expressApp, { type Express, type RequestHandler, type Response as ExRes } from 'express'
+import expressApp, { type Express, type RequestHandler } from 'express'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { runScope } from '@lntt/scope'
-// The ONE import from the integration package — see section 2 for why it does
-// not weaken the exercise.
-import { toWebRequest } from '@lntt/integration/node'
-import type {
-  Capability,
-  CarrierGuard,
-  DepGuard,
-  Handler,
-  Outcome,
-  RequestCarrier,
-  SetCookie,
-} from '@lntt/scope'
+// The two node-side primitives — see the header for where the line sits.
+import { renderOutcome, toWebRequest } from '@lntt/integration/node'
+import type { Capability, CarrierGuard, DepGuard, Handler, RequestCarrier } from '@lntt/scope'
 import {
   chain,
   commentScope,
@@ -29,18 +20,22 @@ import {
 } from '@lntt/example-app'
 import type { App, Env } from '@lntt/example-app'
 
-// The SAME app as `server.ts`, mounted with NO adapter. The host packs are a
-// convenience, not a requirement of the guest posture (decision 33): `.extend`
-// leaves a scope a pure host-agnostic `Handler` (schema + prepare steps + guards
-// + leaf), so a host owes it exactly four things — the four sections below. Read
-// this file next to `server.ts`: the route table at the bottom is IDENTICAL, and
+// The SAME app as `server.ts`, mounted with NO pack — this file IS the pack,
+// written out. The guest posture (decision 33) says a host contributes only the
+// terminal handler, and `.extend` leaves a scope a pure host-agnostic `Handler`
+// (schema + prepare steps + guards + leaf); what follows is everything it takes
+// to mount one, and it is two short sections.
+//
+// The line: what a pack COMPOSES is imported (`@lntt/integration/node` — the
+// request lift and the outcome render, plumbing that knows nothing about
+// scopes), what a pack IS stays written out here: build-once, the carrier, the
+// `runScope` call, and the two brands that make a bad mount a compile error.
+// That is the point — for a host we ship no pack for (Fastify, Koa, bare
+// `node:http`), this handful of lines IS the port.
+//
+// Read it next to `server.ts`: the route table at the bottom is IDENTICAL, and
 // `test/manual.test.ts` drives both apps through the same requests to prove the
 // responses are too.
-//
-// The one thing imported from @lntt/integration is the request lift (section 2),
-// which knows nothing about scopes; NOTHING that mounts a scope is imported —
-// the fold call, the outcome render and the two brands are all written out here.
-// A Fetch-based host skips section 2 entirely.
 
 // ── 1. build once ────────────────────────────────────────────────────────────
 // First-seed-wins promise memo: one app per process, built lazily on the first
@@ -64,55 +59,20 @@ const buildOnce = (seedFrom: () => { env: Env }) => {
   }
 }
 
-// ── 2. the carrier ───────────────────────────────────────────────────────────
-// The scope speaks Fetch, Express does not, so `RequestCarrier` needs the
-// request lifted into a Web `Request`. This ONE import is where the line of the
-// exercise sits: `toWebRequest` knows nothing about scopes — it is
-// `IncomingMessage` → `Request` plus origin recovery, plumbing any Express app
-// would need — while everything that MOUNTS a scope (the fold call, the outcome
-// render, the brands) is written out below. Rewriting it here would only teach a
-// weaker version of it: the shipped one handles TLS, `X-Forwarded-*` and the
-// `allowedHosts` check that keeps a spoofed `Host` out of `ctx.request.url`.
+// ── 2. the mount: carrier in, outcome out ────────────────────────────────────
+// The two imported primitives sit at either end of the per-request call.
+// `toWebRequest` lifts Express's request into the Web `Request` the carrier
+// holds — the scope sees it narrowed to `RequestHead` (no body accessors), so
+// the body is reachable ONLY through the declared `.body`/`.form` channels, the
+// runtime object being a full `Request` is what lets those channels read it
+// (decision 34). `renderOutcome` writes the other end: the leaf's value, or the
+// abort's `ResponseIntent`, plus the cookies the sink collected on BOTH
+// branches. A THROW reaches neither — it stays infrastructure and Express turns
+// it into a 500.
 //
-// The scope sees the result narrowed to `RequestHead` (no body accessors), so
-// the body is reachable ONLY through the declared `.body`/`.form` channels — the
-// runtime object staying a full `Request` is what lets those channels read it
-// (decision 34).
+// Both are plumbing: no scope enters them. What they bracket is the part worth
+// writing out, below.
 
-// ── 3. rendering the outcome ─────────────────────────────────────────────────
-// `Set-Cookie` serialization, rewritten locally on purpose: the shipped one
-// lives in @lntt/integration and importing it would defeat the exercise. It is
-// eight lines over the `SetCookie` shape the sink collects — a host needing more
-// attributes writes them here, next to its own response code.
-const serializeCookie = ({ name, value, options }: SetCookie): string => {
-  const parts = [`${name}=${value}`]
-  if (options.path !== undefined) parts.push(`Path=${options.path}`)
-  if (options.maxAge !== undefined) parts.push(`Max-Age=${options.maxAge}`)
-  if (options.httpOnly === true) parts.push('HttpOnly')
-  return parts.join('; ')
-}
-
-// The whole host-facing contract of a scope: `ok: true` is the leaf's value, a
-// RETURNED abort carries its `ResponseIntent`, and the cookies the sink
-// collected ride BOTH branches (a redirect that drops a session still has to
-// emit its `Set-Cookie`). A THROW never reaches here — it stays infrastructure
-// and Express's own error path turns it into a 500.
-const render = (res: ExRes, outcome: Outcome<unknown>): void => {
-  for (const cookie of outcome.cookies) res.append('Set-Cookie', serializeCookie(cookie))
-  if (outcome.ok) {
-    res.status(200).json(outcome.value)
-    return
-  }
-  const { intent } = outcome.abort
-  if (intent.kind === 'redirect') {
-    res.redirect(intent.status, intent.location)
-    return
-  }
-  if (intent.body !== undefined) res.status(intent.status).json(intent.body)
-  else res.status(intent.status).end()
-}
-
-// ── 4. the mount ─────────────────────────────────────────────────────────────
 // The capabilities THIS carrier provides: Express streams the request body, so
 // `body`; the response renders `Set-Cookie`, so `cookies`. A host that could not
 // do one of them narrows this set and every scope requiring it stops compiling
@@ -134,7 +94,7 @@ export const makeHandler = (env?: Env) => {
       h: Handler<Need, S, R, Cap> & DepGuard<App, Need> & CarrierGuard<Cap, HostCaps>,
     ): RequestHandler =>
     async (req, res): Promise<void> =>
-      render(
+      renderOutcome(
         res,
         await runScope<RequestCarrier, S, R>(
           h,

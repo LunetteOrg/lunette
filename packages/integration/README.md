@@ -51,18 +51,30 @@ app.get('/courses/:courseId', w.handler(courseHandler)) // params validated at r
 A third argument configures how the request's origin is recovered (see below):
 `express(chain, seed, { allowedHosts: ['app.example.com'], trustProxy: true })`.
 
-### Node — the shared request lift
+### The primitives — `/http` and `/node`
 
-`@lntt/integration/node` is the bridge every non-Fetch host on Node needs, not a
-pack of its own: `toWebRequest(req, options)` lifts an `IncomingMessage` into the
-Web `Request` a `RequestCarrier` carries. The Express pack uses it; a Fastify or
-Koa pack would reuse it unchanged; the Fetch hosts (Hono, React Router, tRPC)
-never need it, since they already receive a `Request` with a real origin.
+A pack is not magic: it is build-once plus two primitives, both public, so a host
+we ship no pack for composes the same pieces instead of copying them.
+
+`@lntt/integration/http` is host-agnostic — `serializeCookie`, and
+`outcomeToResponse(outcome)` for hosts that RETURN a `Response` (Hono, React
+Router). `@lntt/integration/node` is its counterpart for hosts that WRITE onto
+one: `toWebRequest(req, options)` lifts an `IncomingMessage` into the Web
+`Request` a `RequestCarrier` carries, and `renderOutcome(res, outcome)` writes
+the outcome onto a `ServerResponse`. Express's `Response` and Fastify's
+`res.raw` both ARE a `ServerResponse`, so those two serve every node host,
+bare `node:http` included — the Express pack is their composition and nothing
+more.
 
 ```ts
-import { toWebRequest } from '@lntt/integration/node'
-const request = toWebRequest(req, { allowedHosts: ['app.example.com'], trustProxy: true })
+import { renderOutcome, toWebRequest } from '@lntt/integration/node'
+
+const handler = (h) => async (req, res) =>
+  renderOutcome(res, await runScope(h, app, { request: toWebRequest(req) }, req.params))
 ```
+
+`examples/express/src/server-manual.ts` is a full working port on this shape,
+tested side by side with the pack it replaces.
 
 `new Request(...)` demands an absolute url while Node hands over a path, so an
 origin has to be recovered from the request — and `Host` is a **client header**.
