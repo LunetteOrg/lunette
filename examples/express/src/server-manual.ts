@@ -1,11 +1,9 @@
-import expressApp, {
-  type Express,
-  type Request as ExReq,
-  type RequestHandler,
-  type Response as ExRes,
-} from 'express'
+import expressApp, { type Express, type RequestHandler, type Response as ExRes } from 'express'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { runScope } from '@lntt/scope'
+// The ONE import from the integration package — see section 2 for why it does
+// not weaken the exercise.
+import { toWebRequest } from '@lntt/integration/node'
 import type {
   Capability,
   CarrierGuard,
@@ -31,16 +29,18 @@ import {
 } from '@lntt/example-app'
 import type { App, Env } from '@lntt/example-app'
 
-// The SAME app as `server.ts`, mounted with NO `@lntt/integration` import at
-// all. The host packs are a convenience, not a requirement of the guest posture
-// (decision 33): `.extend` leaves a scope a pure host-agnostic `Handler`
-// (schema + prepare steps + guards + leaf), so a host owes it exactly four
-// things — the four sections below. Read this file next to `server.ts`: the
-// route table at the bottom is IDENTICAL, and `test/manual.test.ts` drives both
-// apps through the same requests to prove the responses are too.
+// The SAME app as `server.ts`, mounted with NO adapter. The host packs are a
+// convenience, not a requirement of the guest posture (decision 33): `.extend`
+// leaves a scope a pure host-agnostic `Handler` (schema + prepare steps + guards
+// + leaf), so a host owes it exactly four things — the four sections below. Read
+// this file next to `server.ts`: the route table at the bottom is IDENTICAL, and
+// `test/manual.test.ts` drives both apps through the same requests to prove the
+// responses are too.
 //
-// Nothing here is Express-specific insight. A host that is not Fetch-based
-// lifts its request the same way; a Fetch-based one skips section 2 entirely.
+// The one thing imported from @lntt/integration is the request lift (section 2),
+// which knows nothing about scopes; NOTHING that mounts a scope is imported —
+// the fold call, the outcome render and the two brands are all written out here.
+// A Fetch-based host skips section 2 entirely.
 
 // ── 1. build once ────────────────────────────────────────────────────────────
 // First-seed-wins promise memo: one app per process, built lazily on the first
@@ -65,42 +65,19 @@ const buildOnce = (seedFrom: () => { env: Env }) => {
 }
 
 // ── 2. the carrier ───────────────────────────────────────────────────────────
-// The scope speaks Fetch, Express does not, so `RequestCarrier` is assembled by
-// hand. The scope sees the request narrowed to `RequestHead` (no body
-// accessors), so the body is reachable ONLY through the declared `.body`/`.form`
-// channels — the runtime object stays a full `Request`, which is what lets those
-// channels read it (decision 34).
-const toWebRequest = (req: ExReq): Request => {
-  const headers = new Headers()
-  for (const [key, value] of Object.entries(req.headers)) {
-    if (Array.isArray(value)) for (const v of value) headers.append(key, v)
-    else if (value !== undefined) headers.set(key, value)
-  }
-  const init: RequestInit & { duplex?: 'half' } = { method: req.method, headers }
-  // GET/HEAD carry no body. For the rest the node stream IS the Web Request
-  // body; a stream body requires `duplex: 'half'`.
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    ;(init as { body?: unknown }).body = req
-    init.duplex = 'half'
-  }
-  return new Request(new URL(req.originalUrl, originOf(req)), init)
-}
-
-// `new Request(...)` demands an absolute url while Express hands over a path, so
-// the origin has to be recovered — and `Host` is a client header, so taken as
-// sent it can be spoofed into whatever a scope builds from `ctx.request.url`. An
-// allowlist is the defence; empty here, which is the shipped pack's default (the
-// host as sent, like Express's own `req.hostname`). The pack's version also
-// covers TLS and `X-Forwarded-*` — see `NodeCarrierOptions`.
-const ALLOWED_HOSTS: readonly string[] = []
-const FALLBACK_ORIGIN = 'http://localhost'
-
-const originOf = (req: ExReq): string => {
-  const host = req.headers.host
-  if (host === undefined) return FALLBACK_ORIGIN
-  if (ALLOWED_HOSTS.length > 0 && !ALLOWED_HOSTS.includes(host)) return FALLBACK_ORIGIN
-  return `http://${host}`
-}
+// The scope speaks Fetch, Express does not, so `RequestCarrier` needs the
+// request lifted into a Web `Request`. This ONE import is where the line of the
+// exercise sits: `toWebRequest` knows nothing about scopes — it is
+// `IncomingMessage` → `Request` plus origin recovery, plumbing any Express app
+// would need — while everything that MOUNTS a scope (the fold call, the outcome
+// render, the brands) is written out below. Rewriting it here would only teach a
+// weaker version of it: the shipped one handles TLS, `X-Forwarded-*` and the
+// `allowedHosts` check that keeps a spoofed `Host` out of `ctx.request.url`.
+//
+// The scope sees the result narrowed to `RequestHead` (no body accessors), so
+// the body is reachable ONLY through the declared `.body`/`.form` channels — the
+// runtime object staying a full `Request` is what lets those channels read it
+// (decision 34).
 
 // ── 3. rendering the outcome ─────────────────────────────────────────────────
 // `Set-Cookie` serialization, rewritten locally on purpose: the shipped one

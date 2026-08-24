@@ -37,9 +37,12 @@ scope-runtime app.
 
 The packs above are a **convenience, not a requirement**. Next to the
 adapter-backed `express/src/server.ts` sits the same app mounted with **no
-`@lntt/integration` import at all**: build the chain once, assemble the
-`RequestCarrier` from the native request, call `runScope`, render the returned
-`Outcome`. `test/manual.test.ts` drives **both** apps through the same requests
+adapter**: build the chain once, assemble the `RequestCarrier` from the native
+request, call `runScope`, render the returned `Outcome`. The line it holds is
+"nothing that mounts a scope is imported" — the fold call, the outcome render
+and the brands are all written out; only the request lift
+(`@lntt/integration/node`, plumbing that knows nothing about scopes) is reused,
+since rewriting it would just teach a weaker version of the origin handling. `test/manual.test.ts` drives **both** apps through the same requests
 and asserts identical responses, so the two files are readable side by side as
 "what the adapter does for you" vs "what it costs to do it yourself".
 
