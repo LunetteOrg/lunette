@@ -25,7 +25,7 @@ against the real (in-memory PGlite) chain.
 | entry | host | how | what its test drives |
 |---|---|---|---|
 | [`hono/`](./hono) | Hono | `app.get(path, ...w.handler(h))` | `app.request` + a typed `hc<AppType>()` client (`.test-d`) |
-| [`express/`](./express) | Express | `app.get(path, w.handler(h))` | a real HTTP server + `fetch` |
+| [`express/`](./express) | Express | `app.get(path, w.handler(h))` | a real HTTP server + `fetch`, and parity against the hand-wired mount below |
 | [`rr7/`](./rr7) | React Router 7 | `w.toLoader(h)` / `w.toAction(h)` | loaders/actions invoked with a `Request` |
 | [`trpc/`](./trpc) | tRPC | `toProcedure(t.procedure, h)` | a typed server-side caller |
 
@@ -33,21 +33,25 @@ Unit tests (in `app/`) prove the scopes in isolation; integration tests (in
 each entry) prove them mounted on a real host — the two halves of testing a
 scope-runtime app.
 
-## [`node-http/`](./node-http) — the same app, wired by hand
+## Wiring a host by hand — [`express/src/server-manual.ts`](./express/src/server-manual.ts)
 
-The four packs above are a **convenience, not a requirement**. `node-http/`
-mounts the same scopes on bare `node:http` with **no `@lntt/integration` import
-at all**: build the chain once, assemble the `RequestCarrier` from the native
-request, call `runScope`, render the returned `Outcome`. Cookie serialization is
-rewritten locally rather than borrowed from the integration package, and the
-route table keeps `DepGuard`/`CarrierGuard` — both ship from `@lntt/scope`, so a
-hand-wired host keeps its compile-time gates (`src/server.test-d.ts` proves the
-negatives). It runs the same authenticated end-to-end round-trip as the others.
+The packs above are a **convenience, not a requirement**. Next to the
+adapter-backed `express/src/server.ts` sits the same app mounted with **no
+`@lntt/integration` import at all**: build the chain once, assemble the
+`RequestCarrier` from the native request, call `runScope`, render the returned
+`Outcome`. `test/manual.test.ts` drives **both** apps through the same requests
+and asserts identical responses, so the two files are readable side by side as
+"what the adapter does for you" vs "what it costs to do it yourself".
+
+The hand-written mount keeps its compile-time gates: `DepGuard` and
+`CarrierGuard` ship from `@lntt/scope`, not from the adapters, so naming them in
+one signature is all it takes — `src/server-manual.test-d.ts` carries the
+negatives, including a carrier that declares no `body` capability rejecting the
+body-reading writes.
 
 ## Run
 
 ```
 pnpm --filter @lntt/example-app test          # the app + unit tests
 pnpm --filter @lntt/example-hono test         # (or -express / -rr7 / -trpc)
-pnpm --filter @lntt/example-node-http test    # the adapter-free hand-wiring
 ```
