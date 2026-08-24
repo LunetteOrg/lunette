@@ -2,6 +2,8 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import express from 'express'
 import { describe, expect, it } from 'vitest'
+import { scope } from '@lntt/scope'
+import { request } from '@lntt/scope/request'
 import { chain, type Env } from './fixture/chain.ts'
 import { courseHandler, loginHandler } from './fixture/handlers.ts'
 import { express as expressPack } from '../src/express.ts'
@@ -47,5 +49,41 @@ describe('Express pack — mount middleware + real HTTP round-trip', () => {
 
     await close()
     await pack.dispose()
+  })
+})
+
+// The carrier options reach the lift, so `ctx.request.url` carries a REAL
+// origin instead of a placeholder — and a spoofed `Host` does not travel into
+// it once `allowedHosts` is set.
+describe('Express pack — the request origin', () => {
+  const urlScope = scope()
+    .extend(request)
+    .handle((_deps: {}, ctx) => ({ url: ctx.request.url }))
+
+  const serve = async (carrier?: Parameters<typeof expressPack>[2]) => {
+    const pack = expressPack(chain, () => ({ env: { label: 'express' } satisfies Env }), carrier)
+    const app = express()
+    app.use(pack.mount())
+    app.get('/where', pack.handler(urlScope))
+    return { ...(await startServer(app)), dispose: pack.dispose }
+  }
+
+  it('reflects the Host the client reached when nothing constrains it', async () => {
+    const { url, close, dispose } = await serve()
+    const res = await fetch(`${url}/where`)
+    expect(await res.json()).toEqual({ url: `${url}/where` })
+    await close()
+    await dispose()
+  })
+
+  it('discards a Host outside the allowlist', async () => {
+    const { url, close, dispose } = await serve({
+      allowedHosts: ['app.example.com'],
+      origin: 'https://app.example.com',
+    })
+    const res = await fetch(`${url}/where`, { headers: { host: 'evil.example' } })
+    expect(await res.json()).toEqual({ url: 'https://app.example.com/where' })
+    await close()
+    await dispose()
   })
 })

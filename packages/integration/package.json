@@ -7,6 +7,7 @@
   "exports": {
     "./hono": "./src/hono.ts",
     "./express": "./src/express.ts",
+    "./node": "./src/node.ts",
     "./react-router": "./src/react-router.ts",
     "./trpc": "./src/trpc.ts"
   },
@@ -27,11 +28,21 @@
     "react-router": ">=7"
   },
   "peerDependenciesMeta": {
-    "@hono/standard-validator": { "optional": true },
-    "@trpc/server": { "optional": true },
-    "express": { "optional": true },
-    "hono": { "optional": true },
-    "react-router": { "optional": true }
+    "@hono/standard-validator": {
+      "optional": true
+    },
+    "@trpc/server": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    },
+    "hono": {
+      "optional": true
+    },
+    "react-router": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@hono/standard-validator": "^0.2.3",

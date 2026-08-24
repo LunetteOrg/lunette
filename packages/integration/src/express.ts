@@ -9,6 +9,7 @@ import type { Capability, CarrierGuard, DepGuard, Handler, Outcome, RequestCarri
 import { scope, runScope } from '@lntt/scope'
 import { request } from '@lntt/scope/request'
 import { serializeCookie } from './http-codec.ts'
+import { toWebRequest, type NodeCarrierOptions } from './node.ts'
 
 type PubOf<C> = C extends { build: (...a: never[]) => Promise<{ app: infer A }> } ? A : never
 type SeedOf<C> = C extends Lunette<any, any, infer S> ? S : never
@@ -24,27 +25,10 @@ function buildOnce<C extends Lunette<any, any, any>>(chain: C) {
   return { ensure, dispose }
 }
 
-// Express is NOT Fetch-based, so there is no Response to hand back — we lift its
-// `req` into a Web `Request` (the scope speaks Fetch) and translate the outcome
-// onto the node `res` directly.
-const toWebRequest = (req: ExReq): Request => {
-  const headers = new Headers()
-  for (const [key, value] of Object.entries(req.headers)) {
-    if (Array.isArray(value)) for (const v of value) headers.append(key, v)
-    else if (value !== undefined) headers.set(key, value)
-  }
-  const method = req.method
-  const init: RequestInit & { duplex?: 'half' } = { method, headers }
-  // GET/HEAD carry no body. For the rest, stream the node request as the Web
-  // Request body so the leaf can read `formData()` / `json()` / `text()`. The
-  // `duplex: 'half'` option is required when a Request is built from a stream.
-  if (method !== 'GET' && method !== 'HEAD') {
-    ;(init as { body?: unknown }).body = req
-    init.duplex = 'half'
-  }
-  return new Request(`http://localhost${req.originalUrl}`, init)
-}
-
+// Express is NOT Fetch-based, so there is no Response to hand back — the request
+// is lifted into a Web `Request` by the shared node bridge (`./node.ts`, which a
+// Fastify/Koa pack would reuse) and the outcome is translated onto the node
+// `res` directly.
 const renderExpress = (res: ExRes, outcome: Outcome<unknown>): void => {
   for (const cookie of outcome.cookies) res.append('Set-Cookie', serializeCookie(cookie))
   if (outcome.ok) {
@@ -70,6 +54,10 @@ type WireReq = ExReq & { __wireApp?: unknown }
 export function express<C extends Lunette<any, any, any>>(
   chain: C,
   seedFrom: () => SeedOf<C>,
+  // How the request's origin is recovered — see `NodeCarrierOptions`. Worth
+  // setting `allowedHosts` for any app whose scopes read `ctx.request.url`
+  // beyond its path: `Host` is a client header, so unfiltered it can be spoofed.
+  carrier: NodeCarrierOptions = {},
 ) {
   type Pub = PubOf<C>
   const { ensure, dispose } = buildOnce(chain)
@@ -100,7 +88,7 @@ export function express<C extends Lunette<any, any, any>>(
         await runScope<RequestCarrier, S, R>(
           h,
           (req as WireReq).__wireApp as object,
-          { request: toWebRequest(req) },
+          { request: toWebRequest(req, carrier) },
           req.params,
         ),
       )

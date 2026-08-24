@@ -48,6 +48,31 @@ app.use(w.mount())
 app.get('/courses/:courseId', w.handler(courseHandler)) // params validated at runtime
 ```
 
+A third argument configures how the request's origin is recovered (see below):
+`express(chain, seed, { allowedHosts: ['app.example.com'], trustProxy: true })`.
+
+### Node — the shared request lift
+
+`@lntt/integration/node` is the bridge every non-Fetch host on Node needs, not a
+pack of its own: `toWebRequest(req, options)` lifts an `IncomingMessage` into the
+Web `Request` a `RequestCarrier` carries. The Express pack uses it; a Fastify or
+Koa pack would reuse it unchanged; the Fetch hosts (Hono, React Router, tRPC)
+never need it, since they already receive a `Request` with a real origin.
+
+```ts
+import { toWebRequest } from '@lntt/integration/node'
+const request = toWebRequest(req, { allowedHosts: ['app.example.com'], trustProxy: true })
+```
+
+`new Request(...)` demands an absolute url while Node hands over a path, so an
+origin has to be recovered from the request — and `Host` is a **client header**.
+Taken as sent it can be spoofed into anything a scope builds from
+`ctx.request.url` (a canonical link, an absolute redirect). The default matches
+Express, Fastify and Koa themselves — the host as sent — and `allowedHosts`
+narrows it to the hosts your app answers to, falling back to `origin`
+(`http://localhost` unless given). `X-Forwarded-Proto`/`X-Forwarded-Host` are
+ignored unless `trustProxy` says a proxy rewrites them.
+
 ### React Router 7 — the loader/action recipe
 
 ```ts

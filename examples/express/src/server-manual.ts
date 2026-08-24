@@ -83,7 +83,23 @@ const toWebRequest = (req: ExReq): Request => {
     ;(init as { body?: unknown }).body = req
     init.duplex = 'half'
   }
-  return new Request(`http://localhost${req.originalUrl}`, init)
+  return new Request(new URL(req.originalUrl, originOf(req)), init)
+}
+
+// `new Request(...)` demands an absolute url while Express hands over a path, so
+// the origin has to be recovered — and `Host` is a client header, so taken as
+// sent it can be spoofed into whatever a scope builds from `ctx.request.url`. An
+// allowlist is the defence; empty here, which is the shipped pack's default (the
+// host as sent, like Express's own `req.hostname`). The pack's version also
+// covers TLS and `X-Forwarded-*` — see `NodeCarrierOptions`.
+const ALLOWED_HOSTS: readonly string[] = []
+const FALLBACK_ORIGIN = 'http://localhost'
+
+const originOf = (req: ExReq): string => {
+  const host = req.headers.host
+  if (host === undefined) return FALLBACK_ORIGIN
+  if (ALLOWED_HOSTS.length > 0 && !ALLOWED_HOSTS.includes(host)) return FALLBACK_ORIGIN
+  return `http://${host}`
 }
 
 // ── 3. rendering the outcome ─────────────────────────────────────────────────

@@ -18,7 +18,9 @@ the `errore` library (errors as values) applied to DI.
                         the sink, cap 'cookies') — the core names none
   packages/integration  @lntt/integration  host adapters as tree-shakable
                         subpaths ("./hono", "./express", "./react-router",
-                        "./trpc") — wire as a guest, per-host native routing
+                        "./trpc") — wire as a guest, per-host native routing;
+                        "./node" is the shared IncomingMessage→Request lift the
+                        non-Fetch Node hosts share (origin recovery + allowlist)
   packages/{cli,listener,flow}       scaffolds only — no shipped design;
                         their stories live in the tracker
   examples/             example apps USING the shipped packages (IN review
