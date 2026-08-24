@@ -95,6 +95,31 @@ importers:
         specifier: ^3.2.0
         version: 3.2.6(@types/node@25.9.3)
 
+  examples/node-http:
+    dependencies:
+      '@lntt/example-app':
+        specifier: workspace:*
+        version: link:../app
+      '@lntt/scope':
+        specifier: workspace:*
+        version: link:../../packages/scope
+      '@lntt/wire':
+        specifier: workspace:*
+        version: link:../../packages/wire
+      '@standard-schema/spec':
+        specifier: ^1.0.0
+        version: 1.1.0
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.2
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.6(@types/node@24.13.2)
+
   examples/rr7:
     dependencies:
       '@lntt/example-app':

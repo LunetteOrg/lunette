@@ -24,7 +24,8 @@ the `errore` library (errors as values) applied to DI.
   examples/             example apps USING the shipped packages (IN review
                         scope): examples/app is the broad issue-1 app (its use
                         cases as @lntt/scope scopes); per-host entries mount
-                        it via @lntt/integration/*
+                        it via @lntt/integration/*, and examples/node-http
+                        mounts it with NO adapter at all (runScope by hand, §33)
   research/             live research prototypes (prior art, not products) —
                         PoC code proving out @lntt/wire's behaviour and DX,
                         OUT OF SCOPE for code review (correctness/security/
