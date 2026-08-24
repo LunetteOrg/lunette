@@ -11,7 +11,7 @@ import { makeHandler } from './server-manual.ts'
 // adapters': a host that writes its own `handler` keeps them by naming them in
 // ONE signature. These are the negatives that prove they still bite with
 // nothing from @lntt/integration in the picture.
-const handler = makeHandler()
+const { handler } = makeHandler()
 
 describe('the hand-wired mount', () => {
   it('takes a scope the chain satisfies, capabilities included', () => {

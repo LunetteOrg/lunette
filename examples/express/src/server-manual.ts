@@ -44,13 +44,24 @@ import type { App, Env } from '@lntt/example-app'
 
 // ── 1. build once ────────────────────────────────────────────────────────────
 // First-seed-wins promise memo: one app per process, built lazily on the first
-// request. Correct because the seed is process-static (env) — NOT a per-request
-// cache, and a per-request-varying seed would break the model.
+// request — `seedFrom` runs once, so a per-request-varying seed would be
+// silently ignored. Correct because the design's seed is process-static (env);
+// this is NOT a per-request cache.
 type Built = Awaited<ReturnType<typeof chain.build>>
 
 const buildOnce = (seedFrom: () => { env: Env }) => {
   let built: Promise<Built> | undefined
-  return (): Promise<Built> => (built ??= chain.build(seedFrom()))
+  return {
+    // The PROMISE is memoized, not the resolved app: two requests racing the
+    // very first call share the one build instead of each starting their own.
+    ensure: (): Promise<Built> => (built ??= chain.build(seedFrom())),
+    // The chain's teardown, reachable from the mount: build-once owns a
+    // lifecycle (the db pool), so whoever owns the process closes it. Never
+    // built, nothing to dispose.
+    dispose: async (): Promise<void> => {
+      if (built) await (await built).dispose()
+    },
+  }
 }
 
 // ── 2. the carrier ───────────────────────────────────────────────────────────
@@ -124,8 +135,9 @@ type HostCaps = 'body' | 'cookies'
 // negatives). Params are validated at RUNTIME by `runScope` (Express has no
 // native validator): a bad or missing param is a RETURNED 422.
 export const makeHandler = (env?: Env) => {
-  const ensure = buildOnce(() => ({ env: env ?? parseEnv({}) }))
-  return <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
+  const { ensure, dispose } = buildOnce(() => ({ env: env ?? parseEnv({}) }))
+  const handler =
+    <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
       h: Handler<Need, S, R, Cap> & DepGuard<App, Need> & CarrierGuard<Cap, HostCaps>,
     ): RequestHandler =>
     async (req, res): Promise<void> =>
@@ -138,10 +150,13 @@ export const makeHandler = (env?: Env) => {
           req.params,
         ),
       )
+  return { handler, dispose }
 }
 
 export function makeApp(env?: Env): Express {
-  const handler = makeHandler(env)
+  // `dispose` is the shipped pack's shape too: the mount hands it back and the
+  // process owner decides when to call it.
+  const { handler } = makeHandler(env)
 
   // From here down this is `server.ts` verbatim — the wiring is the same work
   // whether an adapter supplies `handler` or this file does.
