@@ -1,0 +1,26 @@
+{
+  "name": "@lntt/example-workers-hono",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example: a standalone chain mounted on Hono and served from a Cloudflare Worker, with the tests running inside workerd.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "typecheck": "wrangler types && tsc --noEmit"
+  },
+  "dependencies": {
+    "@lntt/integration": "workspace:*",
+    "@lntt/scope": "workspace:*",
+    "@lntt/wire": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.1.0",
+    "hono": "^4.12.25",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.126.0",
+    "zod": "^3.25.76"
+  }
+}

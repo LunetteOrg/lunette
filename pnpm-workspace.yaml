@@ -2,3 +2,4 @@ packages:
   - packages/*
   - research/*
   - examples/*
+  - examples/cloudflare-workers/*
