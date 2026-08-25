@@ -9,10 +9,12 @@ import { hostEnv } from '../config/env.ts'
 // chain, the pack, or the env.
 //
 // The build itself stays LAZY (first request that reaches a loader). On Node an
-// eager `await chain.build(...)` here would work just as well; on Cloudflare it
-// would only work as long as no layer performs I/O while constructing, since
-// Workers forbid I/O outside a request. Lazy is the shape that is correct in
-// both, which is why the pack owns it.
+// eager `await chain.build(...)` here would work just as well; on Cloudflare a
+// layer that touches a binding while constructing stops the worker from
+// STARTING, since no asynchronous I/O is allowed outside a request. Lazy is the
+// shape that is correct in both, which is why the pack owns it — and
+// `examples/cloudflare-workers/*` runs the negative case rather than asserting
+// it here (§36).
 const pack = reactRouter(chain, () => ({ env: hostEnv() }))
 
 export const { toLoader, toAction, dispose } = pack

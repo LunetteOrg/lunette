@@ -1260,6 +1260,34 @@ Cloudflare Workers the bindings exist only inside the fetch handler, so there is
 no startup moment at which the seed is available. Every other framework surveyed
 assumes configuration is ready before the first request.
 
+**Amendment — the constraint, as measured.** `examples/cloudflare-workers/*` now
+runs this rather than describing it, and two details came back sharper than they
+were stated.
+
+The ban is on asynchronous **I/O**, not on async work. A layer awaiting
+`crypto.subtle.digest` at module scope is allowed; a layer reading KV is not.
+The line is TOUCHING A BINDING, which is also why an in-memory example proves
+nothing about it and those entries read KV. When it does bite, the worker does
+not fail a request — it fails to START: "Disallowed operation called within
+global scope. Asynchronous I/O (ex: fetch() or connect()), setting a timeout,
+and generating random values are not allowed within global scope."
+
+Binding a port is not I/O. On the Express entry `app.listen()` runs at module
+scope (with `httpServerHandler` from `cloudflare:node`, `nodejs_compat`, and a
+compatibility date after 2025-08-15) and the worker starts: nothing is opened, a
+port is registered with an emulated server. That was an open question and is now
+a passing test.
+
+Where the rule can be OBSERVED is not where one would expect.
+`@cloudflare/vitest-plugin` (the renamed `vitest-pool-workers`) runs test bodies
+inside workerd, which makes it right for behaviour — but it loads modules
+through Vitest's own module runner, from within a request, so under it module
+scope is always an I/O context and a module-scope `fetch()` succeeds. Only
+`createTestHarness` (wrangler), which starts a worker the way a deployment does,
+sees the ban. Each Workers entry therefore carries two vitest projects, and the
+negative case is a fixture worker refused at startup — not an assertion about
+one.
+
 **Known caveat, not solved here.** On Workers the memo's lifetime is the
 isolate's, which we do not control. Cloudflare documents that a value captured
 in global scope "might not be updated when `env` changes", and that a deploy

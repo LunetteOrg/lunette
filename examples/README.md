@@ -68,6 +68,29 @@ exists on its own:
 | the adapter + a real host | the chain (a fixture) | [`packages/integration/test`](../packages/integration/test) |
 | the adapter + host + chain | nothing | `<entry>/test/surface.test.ts`, `e2e.test.ts` |
 
+## [`cloudflare-workers/`](./cloudflare-workers) — the same shape, on a runtime that enforces it
+
+Two standalone entries (own chain, KV-backed, no `@lntt/example-app` — PGlite
+cannot run there) that make executable what the Node entries could only write in
+a comment.
+
+| entry | what only IT can show |
+|---|---|
+| [`cloudflare-workers/hono/`](./cloudflare-workers/hono) | `config/env.ts` swaps `process.env` for `import { env } from 'cloudflare:workers'` and nothing downstream changes; a module-scope build is REFUSED by the runtime; #39's mechanism reproduced (a KV write after the first request is not picked up) |
+| [`cloudflare-workers/express/`](./cloudflare-workers/express) | the Node Express pack running UNCHANGED on `node:http` emulated by Workers (`httpServerHandler`), where `seedFrom` has no `c.env` to receive — so the config module is the only way bindings can arrive |
+
+Two findings from building them, both correcting an assumption:
+
+- **`@cloudflare/vitest-plugin` does not enforce the no-I/O-at-module-scope
+  rule.** It loads modules through Vitest's module runner from within a request,
+  so a module-scope `fetch()` goes straight through. `createTestHarness`
+  (wrangler) starts a worker the way a deployment does and there the ban is
+  real — hence two vitest projects per entry, `workerd` for behaviour and `node`
+  for the rule.
+- **The ban covers asynchronous I/O, not async work.** `crypto.subtle.digest` at
+  module scope is fine; touching a BINDING is not. An in-memory chain proves
+  nothing here, which is why these read KV.
+
 ## Wiring a host by hand — [`express/src/server-manual.ts`](./express/src/server-manual.ts)
 
 The packs above are a **convenience, not a requirement**. Next to the
