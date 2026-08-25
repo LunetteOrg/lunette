@@ -1,64 +1,49 @@
 import { Hono } from 'hono'
 import { scope } from '@lntt/scope'
 import {
-  chain,
   commentScope,
   commentsScope,
   identityScope,
   feedGuard,
   loginScope,
   logoutScope,
-  parseEnv,
   postScope,
   publishPostScope,
   setPreferenceScope,
   feedHandler,
   verifyScope,
 } from '@lntt/example-app'
-import type { Env } from '@lntt/example-app'
-import { hono } from '@lntt/integration/hono'
+import { handler } from './bootstrap/index.ts'
 
-// Mount @lntt/example-app on Hono. The pack takes the CHAIN and owns build-once;
-// `seedFrom` maps the host env (Cloudflare `c.env`, or here the process env /
-// defaults) to the chain's Seed `{ env }`. The SAME scopes the app defines —
-// and unit-tests in isolation — are wired here with Hono's NATIVE routing, so
-// `hc<typeof app>()` stays fully typed.
+// The MOUNT, and nothing else: the route table, in Hono's own native routing.
+// Everything above it — the chain, the pack, the env — lives in `bootstrap/`,
+// so what is left on this page is exactly what is about Hono. Read it next to
+// `examples/express/src/server.ts`: the two files differ only where the hosts do.
 //
-// `makeApp` is the FACTORY: a fresh pack + routed app, optionally seeded with a
-// caller-supplied `env` (else parsed from the host env). A build-once pack is a
-// module singleton, so a test that needs a different env (e.g. DEV_MAIL_OUTBOX
-// for an end-to-end sign-in) builds its OWN instance here rather than mutating
-// the shared one.
-export const makeApp = (env?: Env) => {
-  const w = hono(chain, (hostEnv) =>
-    env ? { env } : { env: parseEnv((hostEnv ?? {}) as Record<string, string | undefined>) },
-  )
-  // No `w.mount()`: handlers reach the app through the pack itself, so the app
-  // needs no `WireEnv` annotation either. Register it only to read the app
-  // outside a scope — see @lntt/integration's README.
-  return new Hono()
-    // reads
-    // The feed is composed INLINE here to show the single-host idiom — a real
-    // app has one host and composes at the wiring, so no shared-scope module
-    // is needed. The shared `*Scope` imports below are the multi-host
-    // portability device; `feedScope` still ships as their documented form.
-    .get('/feed', ...w.handler(scope().guard(feedGuard).handle(feedHandler)))
-    .get('/posts/:postId', ...w.handler(postScope))
-    .get('/posts/:postId/comments', ...w.handler(commentsScope))
-    .get('/me', ...w.handler(identityScope))
-    // auth
-    .post('/login', ...w.handler(loginScope))
-    .post('/verify', ...w.handler(verifyScope))
-    .post('/logout', ...w.handler(logoutScope))
-    // writes (gated)
-    .post('/posts', ...w.handler(publishPostScope))
-    .post('/posts/:postId/comments', ...w.handler(commentScope))
-    .post('/me/preference', ...w.handler(setPreferenceScope))
-}
-
-// The default instance (host env / defaults) — what the server entry and the
-// typed client consume.
-export const app = makeApp()
+// The SAME scopes the app defines — and unit-tests in isolation — are wired here
+// through native chaining and the native validator, so `hc<AppType>()` stays
+// fully typed (input and output).
+//
+// No `mount()`: handlers reach the app through the pack itself (§33). Register
+// it only to read the app OUTSIDE a scope — see @lntt/integration's README.
+export const app = new Hono()
+  // reads
+  // The feed is composed INLINE here to show the single-host idiom — a real app
+  // has one host and composes at the wiring, so no shared-scope module is
+  // needed. The shared `*Scope` imports above are the multi-host portability
+  // device; `feedScope` still ships as their documented form.
+  .get('/feed', ...handler(scope().guard(feedGuard).handle(feedHandler)))
+  .get('/posts/:postId', ...handler(postScope))
+  .get('/posts/:postId/comments', ...handler(commentsScope))
+  .get('/me', ...handler(identityScope))
+  // auth
+  .post('/login', ...handler(loginScope))
+  .post('/verify', ...handler(verifyScope))
+  .post('/logout', ...handler(logoutScope))
+  // writes (gated)
+  .post('/posts', ...handler(publishPostScope))
+  .post('/posts/:postId/comments', ...handler(commentScope))
+  .post('/me/preference', ...handler(setPreferenceScope))
 
 // The type a Hono RPC client (`hc<AppType>()`) consumes — routes, params, and
 // the JSON each returns, all inferred from the scopes.

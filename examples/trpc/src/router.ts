@@ -1,7 +1,6 @@
 import { initTRPC } from '@trpc/server'
 import { scope } from '@lntt/scope'
 import {
-  chain,
   commentProcedure,
   commentsScope,
   identityScope,
@@ -11,15 +10,13 @@ import {
   setPreferenceProcedure,
   feedHandler,
 } from '@lntt/example-app'
-import type { App } from '@lntt/example-app'
 import { toMutation, toProcedure } from '@lntt/integration/trpc'
+import type { Ctx } from './bootstrap/index.ts'
 
-export { chain }
-
-// The tRPC context: the built app singletons plus the carrier the scopes
-// read (a `request` — natural for tRPC-over-HTTP). A RequestCarrier scope
-// consumed by tRPC needs its carrier fields present on the context.
-export type Ctx = App & { request: Request }
+// The ROUTER, and nothing else: the procedure table. The chain, the build-once
+// handle and the context shape live in `bootstrap/`, so what is left on this
+// page is exactly what is about tRPC.
+export type { Ctx }
 
 const t = initTRPC.context<Ctx>().create()
 

@@ -1,12 +1,21 @@
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { describe, expect, it } from 'vitest'
-import { outbox, parseEnv } from '@lntt/example-app'
-import { makeApp } from '../src/server.ts'
+import { outbox } from '@lntt/example-app'
+import { app } from '../src/server.ts'
+
+// The env this suite needs. ESM hoists the imports above this line, so the
+// composition root has already been evaluated by the time it runs — and that is
+// fine BECAUSE the build is lazy: the seed is a thunk `ensure` evaluates on the
+// build that actually happens (§36), which is the first request below. Setting
+// the env is therefore all it takes to run the app differently, and an eager
+// build would fail this test. Vitest isolates modules per file, so the
+// neighbouring suites get their own app from their own env.
+process.env['DEV_MAIL_OUTBOX'] = '1'
 
 // A FULL authenticated round-trip over a REAL HTTP socket: sign in (real OTP via
 // the dev outbox) → the signed session cookie rides Set-Cookie → authenticated
-// write → read back. The app is built with DEV_MAIL_OUTBOX so the code is
+// write → read back. The app runs with DEV_MAIL_OUTBOX so the code is
 // readable; `redirect: 'manual'` keeps the verify 302 so its cookie is visible.
 
 const codeFrom = (body: string): string => /code is (\d+)/.exec(body)?.[1] ?? ''
@@ -16,7 +25,7 @@ const cookie = (res: Response, name: string): string => {
 }
 
 const start = async () => {
-  const server = createServer(makeApp(parseEnv({ DEV_MAIL_OUTBOX: '1' })))
+  const server = createServer(app)
   await new Promise<void>((resolve) => server.listen(0, resolve))
   const { port } = server.address() as AddressInfo
   return {

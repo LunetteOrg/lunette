@@ -1,13 +1,13 @@
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { describe, expect, it } from 'vitest'
-import { makeApp } from '../src/server.ts'
+import { app } from '../src/server.ts'
 
 // Integration test: the real example app mounted on a real Express server,
 // driven over an actual HTTP socket with `fetch`. Complements the app's unit
 // tests (scopes with fake deps).
 const start = async () => {
-  const server = createServer(makeApp())
+  const server = createServer(app)
   await new Promise<void>((resolve) => server.listen(0, resolve))
   const { port } = server.address() as AddressInfo
   return {

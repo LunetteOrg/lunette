@@ -13,13 +13,13 @@ import {
   identityScope,
   loginScope,
   logoutScope,
-  parseEnv,
   postScope,
   publishPostScope,
   setPreferenceScope,
   verifyScope,
 } from '@lntt/example-app'
-import type { App, Env } from '@lntt/example-app'
+import type { App } from '@lntt/example-app'
+import { hostEnv } from './config/env.ts'
 
 // The SAME app as `server.ts`, mounted with NO pack — this file IS the pack,
 // written out. The guest posture (decision 33) says a host contributes only the
@@ -41,11 +41,12 @@ import type { App, Env } from '@lntt/example-app'
 // ── 1. build once ────────────────────────────────────────────────────────────
 // `@lntt/wire`'s own primitive: one app, built lazily on first use and
 // memoized — the lifecycle of a chain belongs to the chain's package, not to a
-// host. The handle lives INSIDE the factory, one per mount: that is how a second
-// app is obtained (a test with a different env), since the memo is per handle
-// and the seed, being process-static (§36), is read only once. The seed
-// is a thunk, so the ones that would be discarded are never even computed — the
-// per-call axis is the window, never a second app.
+// host. The handle lives INSIDE the factory, one per mount: the memo is per
+// handle, so a second mount is a second app — which is why `server.ts` next
+// door and this file each serve from their own chain. The seed is a THUNK,
+// evaluated only on the build that happens (§36): being process-static it is
+// read once, on the first request, and the per-call axis is the window, never a
+// second app.
 
 // ── 2. the mount: carrier in, outcome out ────────────────────────────────────
 // The two imported primitives sit at either end of the per-request call.
@@ -75,7 +76,7 @@ type HostCaps = 'body' | 'cookies'
 // why a hand-wired host keeps them (`server-manual.test-d.ts` proves the
 // negatives). Params are validated at RUNTIME by `runScope` (Express has no
 // native validator): a bad or missing param is a RETURNED 422.
-export const makeHandler = (env?: Env) => {
+export const makeHandler = () => {
   const { ensure, dispose } = buildOnce(chain)
   const handler =
     <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
@@ -86,7 +87,7 @@ export const makeHandler = (env?: Env) => {
         res,
         await runScope<RequestCarrier, S, R>(
           h,
-          (await ensure(() => ({ env: env ?? parseEnv({}) }))).app,
+          (await ensure(() => ({ env: hostEnv() }))).app,
           { request: toWebRequest(req) },
           req.params,
         ),
@@ -94,27 +95,28 @@ export const makeHandler = (env?: Env) => {
   return { handler, dispose }
 }
 
-export function makeApp(env?: Env): Express {
-  // `dispose` is the shipped pack's shape too: the mount hands it back and the
-  // process owner decides when to call it.
-  const { handler } = makeHandler(env)
+// `dispose` is the shipped pack's shape too: the mount hands it back and the
+// process owner decides when to call it.
+const { handler } = makeHandler()
 
-  // From here down this is `server.ts` verbatim — the wiring is the same work
-  // whether an adapter supplies `handler` or this file does.
-  const app = expressApp()
-  // reads
-  app.get('/feed', handler(feedScope))
-  app.get('/posts/:postId', handler(postScope))
-  app.get('/posts/:postId/comments', handler(commentsScope))
-  app.get('/me', handler(identityScope))
-  // auth — the raw request body streams into the Web Request, so the leaves
-  // read it through `.form`/`.body` (no express.json(), which would drain it).
-  app.post('/login', handler(loginScope))
-  app.post('/verify', handler(verifyScope))
-  app.post('/logout', handler(logoutScope))
-  // writes (gated)
-  app.post('/posts', handler(publishPostScope))
-  app.post('/posts/:postId/comments', handler(commentScope))
-  app.post('/me/preference', handler(setPreferenceScope))
-  return app
-}
+// From here down this is `server.ts` verbatim — the wiring is the same work
+// whether an adapter supplies `handler` or this file does. This module is the
+// composition root and the mount at once, which is the one place it departs
+// from the shape next door: what `bootstrap/index.ts` holds for the adapter-
+// backed server is written out above.
+export const app: Express = expressApp()
+
+// reads
+app.get('/feed', handler(feedScope))
+app.get('/posts/:postId', handler(postScope))
+app.get('/posts/:postId/comments', handler(commentsScope))
+app.get('/me', handler(identityScope))
+// auth — the raw request body streams into the Web Request, so the leaves
+// read it through `.form`/`.body` (no express.json(), which would drain it).
+app.post('/login', handler(loginScope))
+app.post('/verify', handler(verifyScope))
+app.post('/logout', handler(logoutScope))
+// writes (gated)
+app.post('/posts', handler(publishPostScope))
+app.post('/posts/:postId/comments', handler(commentScope))
+app.post('/me/preference', handler(setPreferenceScope))

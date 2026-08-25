@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { outbox, parseEnv } from '@lntt/example-app'
-import { chain, createCaller } from '../src/router.ts'
+import { chain, outbox, parseEnv } from '@lntt/example-app'
+import { createCaller } from '../src/router.ts'
 
 // A FULL authenticated round-trip through the tRPC caller. tRPC has NO login/
 // verify procedures (those are cookie/redirect flows — HTTP-only), so the sign-in
@@ -16,6 +16,11 @@ import { chain, createCaller } from '../src/router.ts'
 // is follow-up #37. What this proves is that the SHARED cookie session works
 // uniformly across every host, tRPC included — not that the bearer path works.
 
+// This suite builds its OWN chain rather than going through the composition
+// root, and on tRPC that costs nothing: the app travels in the CONTEXT, so a
+// caller takes whatever app it is handed. The HTTP entries have no such door —
+// their routes are registered on a pack — which is why those suites set the
+// environment instead. The difference is the host's, not a convention's.
 const codeFrom = (body: string): string => /code is (\d+)/.exec(body)?.[1] ?? ''
 
 describe('example-app on tRPC — authenticated end-to-end', () => {

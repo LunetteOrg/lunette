@@ -2,8 +2,8 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { Express } from 'express'
 import { describe, expect, it } from 'vitest'
-import { makeApp as adapterApp } from '../src/server.ts'
-import { makeApp as manualApp } from '../src/server-manual.ts'
+import { app as adapterApp } from '../src/server.ts'
+import { app as manualApp } from '../src/server-manual.ts'
 
 // The adapter-backed app and the hand-wired one, driven through the SAME
 // requests, asserted to answer identically. This is what the guest posture
@@ -39,8 +39,8 @@ const snapshot = async (res: Response): Promise<Snapshot> => ({
   body: await res.text(),
 })
 
-const drive = async (make: (env?: undefined) => Express): Promise<Snapshot[]> => {
-  const { url, close } = await start(make())
+const drive = async (app: Express): Promise<Snapshot[]> => {
+  const { url, close } = await start(app)
   const invalid = new FormData()
   invalid.set('email', 'not-an-email')
   const valid = new FormData()

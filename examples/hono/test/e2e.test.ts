@@ -1,12 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { outbox, parseEnv } from '@lntt/example-app'
-import { makeApp } from '../src/server.ts'
+import { outbox } from '@lntt/example-app'
+import { app } from '../src/server.ts'
+
+// The env this suite needs. ESM hoists the imports above this line, so the
+// composition root has already been evaluated by the time it runs — and that is
+// fine BECAUSE the build is lazy: the seed is a thunk `ensure` evaluates on the
+// build that actually happens (§36), which is the first request below. Setting
+// the env is therefore all it takes to run the app differently, and an eager
+// build would fail this test. Vitest isolates modules per file, so the
+// neighbouring suites get their own app from their own env.
+process.env['DEV_MAIL_OUTBOX'] = '1'
 
 // A FULL authenticated round-trip THROUGH Hono's HTTP layer: sign in (a real OTP,
 // recovered from the in-memory dev outbox) → the signed session cookie rides
 // Set-Cookie → an authenticated write → read it back. This proves the cookie
 // sign/read round-trip AND gated write routing end to end — not just at the unit
-// or codec level. The app is built with DEV_MAIL_OUTBOX so the code is readable.
+// or codec level. The app runs with DEV_MAIL_OUTBOX so the code is readable.
 
 const codeFrom = (body: string): string => /code is (\d+)/.exec(body)?.[1] ?? ''
 
@@ -17,8 +26,6 @@ const cookie = (res: Response, name: string): string => {
 
 describe('example-app on Hono — authenticated end-to-end', () => {
   it('sign in → publish → read back, through the real HTTP cookie flow', async () => {
-    const app = makeApp(parseEnv({ DEV_MAIL_OUTBOX: '1' }))
-
     // 1. login: email → 200 + a signed pending cookie
     const form = new FormData()
     form.set('email', 'e2e@example.com')

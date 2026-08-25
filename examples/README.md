@@ -22,6 +22,23 @@ Each is a thin package: it imports `app`'s scopes and mounts them via
 `@lntt/integration/<host>`, and its **integration test** drives the mounted host
 against the real (in-memory PGlite) chain.
 
+All four share **one layout** (§37), so that what differs between two of them is
+only what is genuinely about the host:
+
+```
+config/env.ts        where the environment comes from — the ONE host-specific file
+bootstrap/index.ts   the composition root: the pack, built once, re-exporting
+                     what the mount uses
+<the mount>          the route table — server.ts, router.ts, or routes/* on RR7
+```
+
+The mount never sees the chain, the pack or the env. `bootstrap/index.ts` is a
+module singleton with no `makeApp(env?)` factory: a suite that needs a different
+environment sets it before the first request, which works because the build is
+lazy (§36) — the composition root reads the environment on the first request,
+not at import. Between `hono/` and `express/` the two files above differ by one
+import, one call and a comment.
+
 | entry | host | how | what its test drives |
 |---|---|---|---|
 | [`hono/`](./hono) | Hono | `app.get(path, ...w.handler(h))` | `app.request` + a typed `hc<AppType>()` client (`.test-d`) |
