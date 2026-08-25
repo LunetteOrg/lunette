@@ -11,6 +11,12 @@
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": []
+    // Node/undici supplies the Fetch globals this toolchain compiles against
+    // (`Request`, `Headers`, `FormData`) — see `RequestHead` in @lntt/scope's
+    // carrier.ts. Named EXPLICITLY: they used to arrive only because some
+    // dependency happened to pull @types/node into the program, which is not a
+    // dependency anything declared. A package targeting another runtime
+    // overrides `types` in its own tsconfig.
+    "types": ["node"]
   }
 }

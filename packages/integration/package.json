@@ -49,11 +49,12 @@
     "@hono/standard-validator": "^0.2.3",
     "@trpc/server": "^11.18.0",
     "@types/express": "^5.0.6",
+    "@types/node": "^24.13.2",
     "express": "^5.2.1",
     "hono": "^4.12.25",
     "react-router": "^7.18.1",
     "typescript": "^5.9.2",
-    "vitest": "^3.2.0",
+    "vitest": "^4.1.0",
     "zod": "^3.25.76"
   }
 }
