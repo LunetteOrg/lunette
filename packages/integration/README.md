@@ -15,11 +15,17 @@ Tree-shakable per-host subpaths; import only what you use. Each framework is an
 ## The shape
 
 Wire is a guest: it never wraps the router. Each pack takes the **chain** (not a
-built app), owns build-once (`mount`, memoized per isolate, seeded from the host
+built app), owns build-once (memoized per process/isolate, seeded from the host
 context — `process.env` on Node, `c.env` on a Worker), and gives you ONE function
-that consumes a scope, used with the host's **native** routing. Different
-chains can serve routes in the same app (each `mount` stashes its app under its
-own key).
+that consumes a scope, used with the host's **native** routing.
+
+Handlers are **self-sufficient**: each reads the app from its own pack, so
+different chains really can serve routes in the same app. `mount` is therefore
+**optional** on Hono and Express — register it only to reach the app OUTSIDE a
+scope (your own middleware, a hand-written route, a healthcheck), where it
+stashes the app under `contextKey` (default `'__wireApp'`; give two packs in one
+app different keys). On React Router it is NOT optional: there `mount` IS
+`getLoadContext`, the only channel RR7 has for handing the host env to a loader.
 
 ### Hono — native routing, typed `hc` client preserved
 
@@ -30,7 +36,6 @@ import { hc } from 'hono/client'
 
 const w = hono(chain, (env) => ({ env }))
 const app = new Hono()
-  .use(w.mount())
   .get('/courses/:courseId', ...w.handler(courseHandler))
 
 // the RPC client stays fully typed (input + output):
@@ -44,12 +49,12 @@ const res = await client.courses[':courseId'].$get({ param: { courseId: 'c1' } }
 import { express } from '@lntt/integration/express'
 const w = express(chain, () => ({ env: process.env }))
 const app = expressApp()
-app.use(w.mount())
 app.get('/courses/:courseId', w.handler(courseHandler)) // params validated at runtime
 ```
 
-A third argument configures how the request's origin is recovered (see below):
-`express(chain, seed, { allowedHosts: ['app.example.com'], trustProxy: true })`.
+A third argument carries the options: `carrier` for how the request's origin is
+recovered (see below) and `contextKey` for `mount`'s slot —
+`express(chain, seed, { carrier: { allowedHosts: ['app.example.com'] } })`.
 
 ### The primitives — `/http` and `/node`
 

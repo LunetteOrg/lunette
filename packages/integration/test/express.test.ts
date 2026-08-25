@@ -60,8 +60,8 @@ describe('Express pack — the request origin', () => {
     .extend(request)
     .handle((_deps: {}, ctx) => ({ url: ctx.request.url }))
 
-  const serve = async (carrier?: Parameters<typeof expressPack>[2]) => {
-    const pack = expressPack(chain, () => ({ env: { label: 'express' } satisfies Env }), carrier)
+  const serve = async (options?: Parameters<typeof expressPack>[2]) => {
+    const pack = expressPack(chain, () => ({ env: { label: 'express' } satisfies Env }), options)
     const app = express()
     app.use(pack.mount())
     app.get('/where', pack.handler(urlScope))
@@ -78,8 +78,7 @@ describe('Express pack — the request origin', () => {
 
   it('discards a Host outside the allowlist', async () => {
     const { url, close, dispose } = await serve({
-      allowedHosts: ['app.example.com'],
-      origin: 'https://app.example.com',
+      carrier: { allowedHosts: ['app.example.com'], origin: 'https://app.example.com' },
     })
     const res = await fetch(`${url}/where`, { headers: { host: 'evil.example' } })
     expect(await res.json()).toEqual({ url: 'https://app.example.com/where' })

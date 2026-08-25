@@ -16,8 +16,16 @@ import type {
 import { runFold } from '@lntt/scope'
 import { serializeCookie } from './http.ts'
 
-// The Hono env the mount and terminal share: the built app rides in Variables.
-export type WireEnv<Pub> = { Variables: { __wireApp: Pub } }
+// The Hono env `mount` writes into: the built app rides in Variables, under the
+// pack's `contextKey`. Handlers do NOT read it — annotate your app with this
+// only when you reach the app outside a scope (`c.get('__wireApp')`).
+export type WireEnv<Pub, K extends string = '__wireApp'> = { Variables: Record<K, Pub> }
+
+export interface HonoOptions {
+  // Where `mount` stashes the app on the context. Default `'__wireApp'`; give
+  // two packs in one app different keys.
+  readonly contextKey?: string
+}
 
 // Hono pack. Takes the CHAIN, owns build-once, and — crucially — DOES NOT wrap
 // the router. It contributes a `mount` middleware, a generic terminal handler
@@ -25,18 +33,25 @@ export type WireEnv<Pub> = { Variables: { __wireApp: Pub } }
 // chaining (`.get(path, ...handler(handler))`), which is what lets `typeof app`
 // accumulate the route schema so `hc<typeof app>()` stays fully typed — path,
 // method, INPUT (the validated param), and OUTPUT (the leaf's R via `c.json`).
+// `mount` is OPTIONAL: handlers are self-sufficient, it exists to expose the
+// app on the context for code outside a scope.
 export function hono<C extends Lunette<any, any, any>>(
   chain: C,
   seedFrom: (hostEnv: unknown) => SeedOf<C>,
+  options: HonoOptions = {},
 ) {
   type Pub = PubOf<C>
   const { ensure, dispose } = buildOnce(chain)
+  const key = options.contextKey ?? '__wireApp'
 
-  // mount = the middleware registered ONCE. Reads c.env (Cloudflare) as the
-  // seed source, seeds the per-isolate build, stashes the app on the context.
-  // It contributes NOTHING to the route schema, so RPC typing is untouched.
+  // OPTIONAL. Handlers do not need it — each seeds from its own `c.env` and
+  // reads the app from THIS pack's `ensure`. Register it only to reach the app
+  // OUTSIDE a scope: your own middleware, a hand-written route, a healthcheck.
+  // Two packs in one app must then take different `contextKey`s, since the
+  // context slot is shared by whoever writes it (§33). It contributes NOTHING
+  // to the route schema, so RPC typing is untouched.
   const mount = (): MiddlewareHandler<WireEnv<Pub>> => async (c, next) => {
-    c.set('__wireApp', (await ensure(() => seedFrom(c.env))).app as Pub)
+    c.set(key as '__wireApp', (await ensure(() => seedFrom(c.env))).app as Pub)
     await next()
   }
 
@@ -52,9 +67,13 @@ export function hono<C extends Lunette<any, any, any>>(
       c: Context<WireEnv<Pub>, string, I>,
     ) => {
       const params = c.req.valid('param') // OutputOf<S>, coerced by sValidator
+      // The seed comes from THIS request's `c.env` (Cloudflare hands bindings
+      // to the handler, never at startup) and is read only on the build that
+      // happens; the app comes from this pack's own memo, never from a context
+      // slot another pack could overwrite (§33).
       const outcome = await runFold<RequestCarrier, R>(
         handler,
-        c.get('__wireApp') as object,
+        (await ensure(() => seedFrom(c.env))).app as object,
         { request: c.req.raw },
         params as object,
       )

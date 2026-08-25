@@ -33,8 +33,10 @@ export const makeApp = (env?: Env) => {
   const w = hono(chain, (hostEnv) =>
     env ? { env } : { env: parseEnv((hostEnv ?? {}) as Record<string, string | undefined>) },
   )
+  // No `w.mount()`: handlers reach the app through the pack itself, so the app
+  // needs no `WireEnv` annotation either. Register it only to read the app
+  // outside a scope — see @lntt/integration's README.
   return new Hono()
-    .use(w.mount())
     // reads
     // The feed is composed INLINE here to show the single-host idiom — a real
     // app has one host and composes at the wiring, so no shared-scope module

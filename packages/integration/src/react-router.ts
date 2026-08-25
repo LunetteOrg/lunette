@@ -10,9 +10,16 @@ import { outcomeToResponse } from './http.ts'
 // Build-once per isolate: first-seed-wins promise-memo. Correct because the
 // design's seed is isolate-static (env) — one app per isolate. This is NOT a
 // per-request cache; a per-request-varying seed would break the model.
-// The load context the mount produces and the loaders read back.
-export interface WireContext<Pub> {
-  readonly __wireApp: Pub
+// The load context `mount` produces and the loaders read back. Unlike the other
+// packs, React Router's `mount` is NOT optional: it IS `getLoadContext`, the
+// only channel through which RR7 hands the host env to a loader — so the app
+// necessarily travels through the context here (§33). Two packs in one app must
+// therefore take different `contextKey`s.
+export type WireContext<Pub, K extends string = '__wireApp'> = Record<K, Pub>
+
+export interface ReactRouterOptions {
+  // The context key `mount` writes and the loaders read. Default `'__wireApp'`.
+  readonly contextKey?: string
 }
 
 // React Router 7 pack. Takes the CHAIN, owns build-once, and exposes the shared
@@ -21,17 +28,18 @@ export interface WireContext<Pub> {
 export function reactRouter<C extends Lunette<any, any, any>>(
   chain: C,
   seedFrom: (hostEnv: unknown) => SeedOf<C>,
+  options: ReactRouterOptions = {},
 ) {
   type Pub = PubOf<C>
   const { ensure, dispose } = buildOnce(chain)
+  const key = options.contextKey ?? '__wireApp'
   const base = scope().extend(request)
 
   // mount = the getLoadContext-shaped seeding step, registered ONCE in the
   // server entry. Reads the host env, seeds the memoized build, and returns the
   // load context carrying the built app; loaders read it back via args.context.
-  const mount = async (hostEnv: unknown): Promise<WireContext<Pub>> => ({
-    __wireApp: (await ensure(() => seedFrom(hostEnv))).app as Pub,
-  })
+  const mount = async (hostEnv: unknown): Promise<WireContext<Pub>> =>
+    ({ [key]: (await ensure(() => seedFrom(hostEnv))).app as Pub }) as WireContext<Pub>
 
   // The deps check (DepGuard) fires when the frag meets `toLoader`. Params are
   // NOT reconciled against the schema here: RR7's own typegen types
@@ -52,7 +60,7 @@ export function reactRouter<C extends Lunette<any, any, any>>(
     }): Promise<Response> =>
       runScope<RequestCarrier, S, R>(
         handler,
-        args.context.__wireApp as object,
+        (args.context as Record<string, unknown>)[key] as object,
         { request: args.request },
         args.params,
       ).then(outcomeToResponse)

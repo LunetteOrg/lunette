@@ -29,7 +29,9 @@ import { express } from '@lntt/integration/express'
 export function makeApp(env?: Env): Express {
   const w = express(chain, () => ({ env: env ?? parseEnv({}) }))
   const app = expressApp()
-  app.use(w.mount())
+  // No `w.mount()`: handlers reach the app through the pack itself. Register it
+  // only to read the app outside a scope (your own middleware, a hand-written
+  // route) — see @lntt/integration's README.
   // reads
   // The feed is composed INLINE here to show the single-host idiom — a real app
   // has one host and composes at the wiring, so no shared-scope module is

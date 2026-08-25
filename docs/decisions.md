@@ -985,6 +985,24 @@ explicit named window a guard OPENS and later guards receive as an
 enrichment, never an ambient join — left until a real case demands it
 (principle 5).
 
+**Amendment: how the app reaches the handler.** The build-once memo is
+per PACK; what used to be shared was the TRANSPORT to the handler — `mount`
+stashed the app on the host context under a fixed `'__wireApp'` key and the
+handler read it back. With two packs in one app the last `mount` registered won,
+so a route answered from the WRONG chain, silently: `DepGuard` is satisfied by
+any chain whose public surface fits. Verified with a failing test before the fix
+(`test/two-chains.test.ts`), on Express and on Hono.
+
+Handlers are now self-sufficient: each reads the app from its own pack's
+`ensure`, so the claim "different chains can serve routes in the same app" holds
+by construction. `mount` survives as an OPTIONAL accessory on Hono and Express —
+it exists to reach the app outside a scope (a user middleware, a hand-written
+route, a healthcheck), which is the idiomatic Hono `Variables` channel and worth
+keeping — with `contextKey` making the slot per-pack. On React Router `mount`
+stays mandatory: there it IS `getLoadContext`, the only channel through which
+RR7 hands the host env to a loader, so the app necessarily travels through the
+context and only the key is made configurable.
+
 ### 34. Carrier capabilities gate host portability; the body is a declared channel
 
 **Decision.** A scope's input splits by SOURCE, and each host maps `.input`
