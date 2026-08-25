@@ -51,9 +51,45 @@ one signature is all it takes — `src/server-manual.test-d.ts` carries the
 negatives, including a carrier that declares no `body` capability rejecting the
 body-reading writes.
 
+## [`bare-express/`](./bare-express) — adopting one layer at a time
+
+The answer to "what if lunette ships no adapter for my host", and to the smaller
+question underneath it: how much of lunette do I have to take?
+
+- **Level one** (`src/level-1-chain-only.ts`) — `@lntt/wire` and nothing else.
+  The chain is built once at module scope in `bootstrap.ts` (an ES module IS the
+  singleton, so no memo is needed — that shape works on Node, not on Workers,
+  where I/O at module scope is forbidden and `buildOnce` exists instead, §36).
+  The handlers are ordinary Express handlers. If you only want the DI, you stop
+  here.
+- **Level two** (`src/level-2-scopes.ts`) — scopes on top, run by hand. Around
+  forty lines do everything an adapter would: lift the request into the carrier,
+  call `runScope`, render the `Outcome`, and brand the mount with `DepGuard` /
+  `CarrierGuard` (both ship from `@lntt/scope`, so they survive). The diff
+  against level one IS what scopes buy you: a declared input schema, a domain
+  error as a RETURNED value, and the cookie sink rendered once instead of per
+  route.
+
+`@lntt/integration` is **not a dependency of this package**, and a test asserts
+it — against the manifest and the imports, so the claim cannot rot.
+
+## [`two-chains/`](./two-chains) — two products in one process
+
+The smallest example, and the only one that does not import `app/`: two
+INDEPENDENT chains — a public catalogue and an admin area, each with its own
+seed, services and disposable resource — mounted on the same Express server.
+
+It answers "can several chains coexist in one host": each route is served by the
+pack whose chain satisfies it, the two lifecycles are built lazily and disposed
+separately (the admin chain is never built if nobody calls it), and mounting a
+scope on the wrong pack is a **compile error** — `test/isolation.test-d.ts`
+carries both directions as load-bearing negatives.
+
 ## Run
 
 ```
 pnpm --filter @lntt/example-app test          # the app + unit tests
 pnpm --filter @lntt/example-hono test         # (or -express / -rr7 / -trpc)
+pnpm --filter @lntt/example-two-chains test   # two chains, one server
+pnpm --filter @lntt/example-bare-express test # wire alone, then scopes by hand
 ```

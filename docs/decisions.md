@@ -985,6 +985,41 @@ explicit named window a guard OPENS and later guards receive as an
 enrichment, never an ambient join — left until a real case demands it
 (principle 5).
 
+**Amendment: the `headers` capability.** A third extension joins `body` and
+`cookies`: `@lntt/scope/headers` puts a response-header sink on `ctx.headers` and
+flows a `headers` capability, so a scope that decorates its response is rejected
+on a host with no response to decorate (tRPC). It is a SEPARATE subpath rather
+than a merge with `cookies` (a `response` extension covering both was weighed):
+a cookie has typed options and its own serialization, a header is a raw pair, and
+keeping them apart keeps each opt-in and leaves the existing `cookies` untouched.
+`Set-Cookie` stays the cookie sink's alone — writing it through the header sink
+would bypass the `cookies` gate. The declarative `.headers({...})` is the form to
+reach for (the policy sits at the wiring, next to the route, and the leaf stays a
+domain function); the sink is for guards, where cross-cutting concerns belong. A
+leaf that writes headers has stopped being a use case.
+
+The step behind `.headers({...})` is ALSO exported as `setHeaders`, so the same
+policy can be composed as an ordinary guard (`.guard(setHeaders({...}))`). Two
+forms of one thing is a considered exception to principle 5: the fluent method is
+discoverable straight off `.extend(headers)`, the function is what a policy
+shared between scopes wants, and it makes the position in the guard chain
+visible. Neither has precedence over the other — the step runs where it is
+called, exactly like any guard, which is the whole reason `.headers` is not a
+"before everything" hook.
+
+**Amendment: a leaf may speak the host's own language.** On React Router a leaf
+can return `data(value, { status })`, return a `Response` it built, or throw
+`redirect(...)`. This is SUPPORTED, not accidental: the pack does not re-wrap
+what the leaf already built, it merges the sinks' effects into it. Wrapping it —
+the naive path, and what the code did before this was found — silently dropped
+the status the leaf chose and serialized React Router's internal carrier as the
+body; the failure was invisible until a sink happened to be non-empty, since
+without effects there was nothing to wrap with. Two things are given up
+knowingly: the scope imports the framework, so it no longer runs on the other
+hosts (which is why no scope in the shared example app does it), and a
+`Set-Cookie` written INSIDE a leaf-built response is invisible to the `cookies`
+capability — taking over the response means taking over its contract (§34).
+
 **Amendment: how the app reaches the handler.** The build-once memo is
 per PACK; what used to be shared was the TRANSPORT to the handler — `mount`
 stashed the app on the host context under a fixed `'__wireApp'` key and the

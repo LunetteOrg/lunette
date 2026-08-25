@@ -15,7 +15,8 @@ the `errore` library (errors as values) applied to DI.
                         capabilities ship as tree-shakable subpaths, each mapping
                         to the hosts that support it ("./request" ctx.request, no
                         cap → tRPC too; "./body" .body/.form, cap 'body'; "./cookies"
-                        the sink, cap 'cookies') — the core names none
+                        the Set-Cookie sink, cap 'cookies'; "./headers" the response
+                        headers, cap 'headers') — the core names none
   packages/integration  @lntt/integration  host adapters as tree-shakable
                         subpaths ("./hono", "./express", "./react-router",
                         "./trpc") — wire as a guest, per-host native routing;
@@ -27,7 +28,9 @@ the `errore` library (errors as values) applied to DI.
                         scope): examples/app is the broad issue-1 app (its use
                         cases as @lntt/scope scopes); per-host entries mount
                         it via @lntt/integration/*, one of them ALSO wired by
-                        hand with no adapter (runScope directly, §33)
+                        hand with no adapter (runScope directly, §33);
+                        examples/two-chains is standalone — two independent
+                        chains on one Express app
   research/             live research prototypes (prior art, not products) —
                         PoC code proving out @lntt/wire's behaviour and DX,
                         OUT OF SCOPE for code review (correctness/security/
@@ -87,9 +90,10 @@ the tracker when relevant — never from here.
   · opener (window arg 1) · bridge (window arg 2) · bag · guard · seed ·
   scope (`scope()` agnostic, `.extend(ext)` injects carriers) · carrier
   (`RequestCarrier`/`JobCarrier`) · scope extension (a composable unit in a
-  tree-shakable subpath — `request` read-only, `body`, `cookies` — each declaring
-  ctx/methods/deps/capability; the core names none; `.extend` gates collisions,
-  §4) · capability (`'body'`/`'cookies'`, gated at mount per host, §34) · dialect.
+  tree-shakable subpath — `request` read-only, `body`, `cookies`, `headers` — each
+  declaring ctx/methods/deps/capability; the core names none; `.extend` gates
+  collisions, §4) · capability (`'body'`/`'cookies'`/`'headers'`, gated at mount
+  per host, §34) · dialect.
 - **Tests**: vitest with typecheck (`*.test-d.ts` included via the
   `typecheck` block in each `vitest.config.ts`; `pnpm typecheck` runs
   `tsc --noEmit` and is the separate gate). Always verify by running:

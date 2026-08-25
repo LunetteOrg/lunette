@@ -92,14 +92,30 @@ ignored unless `trustProxy` says a proxy rewrites them.
 
 ### React Router 7 — the loader/action recipe
 
+A module-level singleton in a `.server` module, re-exported by the route
+modules. No load context anywhere: loaders reach the app through the pack.
+
 ```ts
-// app/scope.ts
-export const web = reactRouter(chain, (env) => ({ env }))
-// app/entry.server.ts
-export const getLoadContext = (env) => web.mount(env)
+// app/wire.server.ts
+export const web = reactRouter(chain, () => ({ env: process.env }))
+export const courseLoader = web.toLoader(courseHandler)
+
 // app/routes/courses.$courseId.tsx
-export const loader = web.toLoader(courseHandler)
+export { courseLoader as loader } from '~/wire.server'
 ```
+
+This is the only shape that works on every deployment. `getLoadContext` is a
+parameter of the server ADAPTERS (`@react-router/express`,
+`@react-router/node`), so it exists only once you have written a custom server:
+under `react-router-serve` or `react-router dev` there is nowhere to register it,
+and the default template ships no server file. On Workers, import `env` from
+`cloudflare:workers` in that same module rather than threading bindings through
+the request — which is what the framework's own Cloudflare template now does.
+
+`web.mount(hostEnv)` remains for custom-server apps that want to seed at boot or
+expose the app on the load context; it is not needed to serve a scope, and its
+`WireContext` record is valid only WITHOUT the `v8_middleware` future flag (with
+it, RR7's context is a `RouterContextProvider` read via `createContext`).
 
 ### tRPC — one call, typed `AppRouter` preserved
 
