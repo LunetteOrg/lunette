@@ -59,12 +59,16 @@
 
 export { Lunette, lunette, layer } from './chain.ts'
 export type { Provided, Next, Layer, NextValue, ValueLayer, Expand } from './chain.ts'
+export type { BuiltOf, PubOf, SeedOf } from './chain.ts'
 
 export { lazy, lazyAsync, circular } from './lazy.ts'
 export type { Lazy } from './lazy.ts'
 
 export { window } from './window.ts'
 export type { With } from './window.ts'
+
+export { buildOnce } from './build-once.ts'
+export type { BuildOnce } from './build-once.ts'
 
 export { bind } from './bind.ts'
 export type { Binder } from './bind.ts'

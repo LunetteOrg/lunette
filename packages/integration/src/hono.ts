@@ -1,4 +1,5 @@
-import { Lunette } from '@lntt/wire'
+import { buildOnce, Lunette } from '@lntt/wire'
+import type { PubOf, SeedOf } from '@lntt/wire'
 import { sValidator } from '@hono/standard-validator'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { Context, MiddlewareHandler } from 'hono'
@@ -14,20 +15,6 @@ import type {
 } from '@lntt/scope'
 import { runFold } from '@lntt/scope'
 import { serializeCookie } from './http.ts'
-
-type PubOf<C> = C extends { build: (...a: never[]) => Promise<{ app: infer A }> } ? A : never
-type SeedOf<C> = C extends Lunette<any, any, infer S> ? S : never
-
-function buildOnce<C extends Lunette<any, any, any>>(chain: C) {
-  type Built = Awaited<ReturnType<C['build']>>
-  let built: Promise<Built> | undefined
-  const build = chain.build.bind(chain) as unknown as (seed: SeedOf<C>) => Promise<Built>
-  const ensure = (seed: SeedOf<C>): Promise<Built> => (built ??= build(seed))
-  const dispose = async (): Promise<void> => {
-    if (built) await (await built).dispose()
-  }
-  return { ensure, dispose }
-}
 
 // The Hono env the mount and terminal share: the built app rides in Variables.
 export type WireEnv<Pub> = { Variables: { __wireApp: Pub } }
@@ -49,7 +36,7 @@ export function hono<C extends Lunette<any, any, any>>(
   // seed source, seeds the per-isolate build, stashes the app on the context.
   // It contributes NOTHING to the route schema, so RPC typing is untouched.
   const mount = (): MiddlewareHandler<WireEnv<Pub>> => async (c, next) => {
-    c.set('__wireApp', (await ensure(seedFrom(c.env))).app as Pub)
+    c.set('__wireApp', (await ensure(() => seedFrom(c.env))).app as Pub)
     await next()
   }
 

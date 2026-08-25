@@ -1,5 +1,6 @@
 import expressApp, { type Express, type RequestHandler } from 'express'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
+import { buildOnce } from '@lntt/wire'
 import { runScope } from '@lntt/scope'
 // The two node-side primitives — see the header for where the line sits.
 import { renderOutcome, toWebRequest } from '@lntt/integration/node'
@@ -38,26 +39,13 @@ import type { App, Env } from '@lntt/example-app'
 // responses are too.
 
 // ── 1. build once ────────────────────────────────────────────────────────────
-// First-seed-wins promise memo: one app per process, built lazily on the first
-// request — `seedFrom` runs once, so a per-request-varying seed would be
-// silently ignored. Correct because the design's seed is process-static (env);
-// this is NOT a per-request cache.
-type Built = Awaited<ReturnType<typeof chain.build>>
-
-const buildOnce = (seedFrom: () => { env: Env }) => {
-  let built: Promise<Built> | undefined
-  return {
-    // The PROMISE is memoized, not the resolved app: two requests racing the
-    // very first call share the one build instead of each starting their own.
-    ensure: (): Promise<Built> => (built ??= chain.build(seedFrom())),
-    // The chain's teardown, reachable from the mount: build-once owns a
-    // lifecycle (the db pool), so whoever owns the process closes it. Never
-    // built, nothing to dispose.
-    dispose: async (): Promise<void> => {
-      if (built) await (await built).dispose()
-    },
-  }
-}
+// `@lntt/wire`'s own primitive: one app, built lazily on first use and
+// memoized — the lifecycle of a chain belongs to the chain's package, not to a
+// host. The handle lives INSIDE the factory, one per mount: that is how a second
+// app is obtained (a test with a different env), since the memo is per handle
+// and the seed, being process-static (§36), is read only once. The seed
+// is a thunk, so the ones that would be discarded are never even computed — the
+// per-call axis is the window, never a second app.
 
 // ── 2. the mount: carrier in, outcome out ────────────────────────────────────
 // The two imported primitives sit at either end of the per-request call.
@@ -88,7 +76,7 @@ type HostCaps = 'body' | 'cookies'
 // negatives). Params are validated at RUNTIME by `runScope` (Express has no
 // native validator): a bad or missing param is a RETURNED 422.
 export const makeHandler = (env?: Env) => {
-  const { ensure, dispose } = buildOnce(() => ({ env: env ?? parseEnv({}) }))
+  const { ensure, dispose } = buildOnce(chain)
   const handler =
     <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
       h: Handler<Need, S, R, Cap> & DepGuard<App, Need> & CarrierGuard<Cap, HostCaps>,
@@ -98,7 +86,7 @@ export const makeHandler = (env?: Env) => {
         res,
         await runScope<RequestCarrier, S, R>(
           h,
-          (await ensure()).app,
+          (await ensure(() => ({ env: env ?? parseEnv({}) }))).app,
           { request: toWebRequest(req) },
           req.params,
         ),

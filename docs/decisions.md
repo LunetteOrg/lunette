@@ -1157,3 +1157,65 @@ capability, so a bus adapter cannot gate it by capability alone — decide there
 whether the bus mount simply refuses request-carrier handlers, or whether
 reading `request` needs its own capability. Left until the real case (principle
 5).
+
+### 36. Build-once is a free function the host holds; the seed is process-static
+
+**Decision.** An app is built ONCE per process (per isolate on Workers) and
+memoized, LAZILY on first use. That memo is `buildOnce(chain)` — a free function
+in `@lntt/wire` returning `{ ensure, dispose }`, NOT a method on `Lunette` and
+NOT a copy inside each host pack. Its purpose is IDENTITY, not speed: the
+chain's singletons (a db pool, a client) must exist once, and a second build
+would open a second pool and orphan the first. `ensure` takes the seed as a
+THUNK, evaluated only on the build that actually happens; the seed is read once
+and never again. A seed that varies per call is therefore not "ignored" — it is
+never computed. Multiplicity per tenant is expressed with a WINDOW (per call,
+principle 4), never with a second app; a genuinely different env means a
+different handle (which is how tests get a second app).
+
+**Alternatives.** (a) Memoize inside the chain — `chain.once()` or a memoizing
+`build`. Rejected: `build` is deliberately REPEATABLE, and that repeatability IS
+the mocking device (the seed, principle 5) and what lets tests build with a
+different env; memoizing in the shared chain value hides state in an object that
+is otherwise pure. (b) Keep the ten lines copied in each pack (they were, three
+times byte-identical). Rejected on "one way to do each thing" — and the copies
+had already drifted into the examples. (c) Key the memo by seed, so a changed
+env yields a new app. Rejected: it needs a key function for an arbitrary seed
+object, and it multiplies lifecycles (N pools, and a `dispose` that must close
+them all) to serve a case the window already covers. (d) Fail fast when a
+different seed arrives after the build. Rejected for now: comparing seeds needs
+either referential identity or a caller-supplied key, and with the thunk the
+later seeds are not even computed, so there is nothing to compare.
+
+**Why.** The prior art splits cleanly. Sharing INSTANCES is always the
+container's job (Symfony `shared: true`, Spring's singleton registry, .NET's
+singleton lifetime, Effect's layer memoization by reference equality) — that is
+the chain, and it already holds. Building the container ONCE is almost always
+the caller's, and containers defend themselves by FAILING rather than
+memoizing: .NET's "Build can only be called once.", Spring's "does not support
+multiple refresh attempts"; Guice and Dagger simply hand you a second graph.
+The one container that memoizes its own boot is Symfony (`if ($this->booted)
+return;` plus the dumped container), which answers a problem we do not have — a
+process that dies each request; tellingly, moving to worker mode (FrankenPHP,
+Swoole) made Symfony add a RESET, not more memoization. Where the memo must
+outlive a request, the industry puts it in the integration (NestJS's cached
+server on Lambda) or in a caller-held handle (Effect's `ManagedRuntime.make`,
+a free function beside the core, lazily built and explicitly disposed) — which
+is exactly the shape adopted here.
+
+The build is LAZY because of a constraint no classic container faces: on
+Cloudflare Workers the bindings exist only inside the fetch handler, so there is
+no startup moment at which the seed is available. Every other framework surveyed
+assumes configuration is ready before the first request.
+
+**Known caveat, not solved here.** On Workers the memo's lifetime is the
+isolate's, which we do not control. Cloudflare documents that a value captured
+in global scope "might not be updated when `env` changes", and that a deploy
+touching ONLY bindings may reuse running isolates — so a memoized app can serve
+stale configuration. There is no reliable detection on our side: `c.env` carries
+opaque bindings (KV namespaces, DO stubs) that cannot be compared structurally.
+The operational mitigation is to make binding-only changes ride a deploy that
+also touches code, which costs no API. A `reset()` on the handle (dispose +
+clear) is the obvious escape hatch and was deliberately NOT added: the
+three-line version is unsafe with requests in flight (it closes a pool others
+are using) and the safe version needs refcounting — a real feature, deferred
+until someone has the case in hand (principle 5). Tracked as #39.

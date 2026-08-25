@@ -1,4 +1,5 @@
-import { Lunette } from '@lntt/wire'
+import { buildOnce, Lunette } from '@lntt/wire'
+import type { PubOf, SeedOf } from '@lntt/wire'
 import type {
   Request as ExReq,
   RequestHandler,
@@ -9,20 +10,6 @@ import type { Capability, CarrierGuard, DepGuard, Handler, RequestCarrier } from
 import { scope, runScope } from '@lntt/scope'
 import { request } from '@lntt/scope/request'
 import { renderOutcome, toWebRequest, type NodeCarrierOptions } from './node.ts'
-
-type PubOf<C> = C extends { build: (...a: never[]) => Promise<{ app: infer A }> } ? A : never
-type SeedOf<C> = C extends Lunette<any, any, infer S> ? S : never
-
-function buildOnce<C extends Lunette<any, any, any>>(chain: C) {
-  type Built = Awaited<ReturnType<C['build']>>
-  let built: Promise<Built> | undefined
-  const build = chain.build.bind(chain) as unknown as (seed: SeedOf<C>) => Promise<Built>
-  const ensure = (seed: SeedOf<C>): Promise<Built> => (built ??= build(seed))
-  const dispose = async (): Promise<void> => {
-    if (built) await (await built).dispose()
-  }
-  return { ensure, dispose }
-}
 
 // Express is NOT Fetch-based: there is no Response to hand back, so the pack is
 // the composition of the two node primitives (`./node.ts`) — lift the request
@@ -51,7 +38,7 @@ export function express<C extends Lunette<any, any, any>>(
   // mount = the middleware registered ONCE. Ensures the build and attaches the
   // app to the request; the seed is static.
   const mount = (): RequestHandler => async (req, _res, next) => {
-    ;(req as WireReq).__wireApp = (await ensure(seedFrom())).app
+    ;(req as WireReq).__wireApp = (await ensure(() => seedFrom())).app
     next()
   }
 
