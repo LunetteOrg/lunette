@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lntt-example-workers-express",
+  "main": "src/server.ts",
+  // Two requirements, and they are the example's minimum runtime version:
+  // `nodejs_compat` for node:http, and a compatibility date after 2025-08-15,
+  // when Workers gained `cloudflare:node`'s `httpServerHandler`.
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "kv_namespaces": [{ "binding": "LINKS", "id": "links-namespace" }],
+  "vars": {
+    "LABEL": "express on workers",
+    "SIGNING_SECRET": "dev-secret-not-for-deployment"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // The counterpart of `wrangler.jsonc`, identical but for `main`: it points at
+  // a worker that builds the chain at MODULE SCOPE, which the runtime refuses.
+  "name": "lntt-example-workers-express-eager",
+  "main": "test/fixture/eager-worker.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "kv_namespaces": [{ "binding": "LINKS", "id": "links-namespace" }],
+  "vars": {
+    "LABEL": "express on workers",
+    "SIGNING_SECRET": "dev-secret-not-for-deployment"
+  }
+}
