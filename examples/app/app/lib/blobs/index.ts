@@ -31,7 +31,12 @@ const realBlobs = (cfg: { endpoint: string; bucket: string }): BlobStore => ({
       const res = await fetch(`${cfg.endpoint}/${cfg.bucket}/${key}`, {
         method: 'PUT',
         headers: { 'content-type': contentType },
-        body: bytes,
+        // A copy, handed over as a plain `ArrayBuffer`: a `Uint8Array` is a
+        // valid body for undici but the DOM lib types it over `ArrayBuffer`
+        // rather than `ArrayBufferLike`, and this module is also compiled by
+        // hosts that pull DOM in (a React Router app). An ArrayBuffer is a
+        // `BodyInit` under both.
+        body: bytes.slice().buffer as ArrayBuffer,
       })
       if (!res.ok) throw new Error(`blob store returned ${res.status}`)
     } catch (cause) {

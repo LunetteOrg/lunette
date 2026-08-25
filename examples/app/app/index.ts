@@ -21,11 +21,13 @@ export {
   logoutScope,
   postScope,
   publishPostScope,
+  publishPostFormScope,
   publishPostProcedure,
   setPreferenceScope,
   setPreferenceProcedure,
   feedHandler,
   verifyScope,
+  verifyFormScope,
 } from './handlers.ts'
 // `feedGuard` + `feedHandler` (exported above) are the feed's pure pieces, so a
 // single host can compose the feed route INLINE (the single-host idiom) instead

@@ -2,10 +2,12 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
+    include: ['test/**/*.test.ts'],
+    globalSetup: ['./test/global-setup.ts'],
+    testTimeout: 30_000,
     typecheck: {
       enabled: true,
-      include: ['src/**/*.test-d.ts', 'test/**/*.test-d.ts'],
+      include: ['test/**/*.test-d.ts'],
       tsconfig: './tsconfig.json',
     },
   },

@@ -30,7 +30,14 @@ import {
   identityHandler,
   preferenceHandler,
 } from './handlers/profile.ts'
-import { loginForm, loginGuard, logoutHandler, verifyBody, verifyHandler } from './handlers/auth.ts'
+import {
+  loginForm,
+  loginGuard,
+  logoutHandler,
+  verifyBody,
+  verifyForm,
+  verifyHandler,
+} from './handlers/auth.ts'
 
 // The pure feed pieces stay reachable through this surface: a single host can
 // compose the feed route INLINE (the single-host idiom, `feedGuard` + a
@@ -74,6 +81,15 @@ export const publishPostScope = gated()
   .extend(body)
   .body(publishBody)
   .handle((deps: PublishDeps, ctx) => publishHandler(deps, ctx.session.userId, ctx.body))
+
+// The BROWSER-shaped write: the same use case again, reading the form an HTML
+// `<Form method="post">` submits instead of a JSON body. The input CHANNEL
+// follows the CLIENT, not the host — a React Router page posts a form, an API
+// client posts JSON, and both reach `publishHandler` unchanged.
+export const publishPostFormScope = gated()
+  .extend(body)
+  .form(publishBody)
+  .handle((deps: PublishDeps, ctx) => publishHandler(deps, ctx.session.userId, ctx.form))
 
 // The tRPC-shaped write: the SAME use case as publishPostScope, authored for
 // RPC. Its whole input is the payload (`.input`, not `.body`), so it carries NO
@@ -155,6 +171,24 @@ export const verifyScope = scope()
   .body(verifyBody)
   .guard(pendingGuard)
   .handle(verifyHandler)
+
+// The browser-shaped verify: same guard, same handler, reading the form an HTML
+// `<Form>` posts. `termsAccepted` arrives as the string a checkbox sends, so the
+// schema coerces it — the shape difference between a form and a JSON body lives
+// in the SCHEMA, not in the use case.
+export const verifyFormScope = scope()
+  .extend(request)
+  .extend(body)
+  .extend(cookies)
+  .form(verifyForm)
+  .guard(pendingGuard)
+  // `.body` and `.form` are DIFFERENT ctx channels (`ctx.body` / `ctx.form`), so
+  // the shared handler — written against the JSON one — is fed explicitly. The
+  // adaptation is one line and visible, rather than the two channels quietly
+  // collapsing into one.
+  .handle((deps: Parameters<typeof verifyHandler>[0], ctx) =>
+    verifyHandler(deps, { pending: ctx.pending, body: ctx.form, cookies: ctx.cookies }),
+  )
 
 // ── auth: POST /logout ───────────────────────────────────────────────────────
 export const logoutScope = scope().extend(cookies).handle(logoutHandler)
