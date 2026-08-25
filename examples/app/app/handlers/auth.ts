@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { type Abort, type CookieSink, httpError, redirect } from '@lntt/scope'
+import { type Abort, httpError, redirect } from '@lntt/scope'
+import type { CookieSink } from '@lntt/scope/cookies'
 import type { UserRegistration } from '../domain/access.ts'
 import type { PendingAuth, PendingCookie, SessionCookie } from '../lib/cookies.ts'
 import { isError, type TaggedError } from '../lib/errors.ts'
@@ -99,6 +100,19 @@ export const verifyBody = z.object({
   code: z.string().optional(),
   displayName: z.string().optional(),
   termsAccepted: z.boolean().optional(),
+})
+
+// The same fields as they arrive from an HTML form, where every value is a
+// string: a checkbox sends `'on'` (or nothing), never a boolean. The difference
+// between a browser form and a JSON body belongs HERE, in the schema, so the
+// guard and the handler behind it stay identical.
+export const verifyForm = z.object({
+  code: z.string().optional(),
+  displayName: z.string().optional(),
+  termsAccepted: z
+    .union([z.literal('on'), z.literal('true')])
+    .optional()
+    .transform((v) => v !== undefined),
 })
 
 // ── auth: POST /logout ──────────────────────────────────────────────────────

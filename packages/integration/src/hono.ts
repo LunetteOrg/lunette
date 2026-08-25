@@ -14,6 +14,8 @@ import type {
   RequestCarrier,
 } from '@lntt/scope'
 import { runFold } from '@lntt/scope'
+import { readCookies } from '@lntt/scope/cookies'
+import { readHeaders } from '@lntt/scope/headers'
 import { serializeCookie } from './http.ts'
 
 // The Hono env `mount` writes into: the built app rides in Variables, under the
@@ -77,7 +79,8 @@ export function hono<C extends Lunette<any, any, any>>(
         { request: c.req.raw },
         params as object,
       )
-      for (const ck of outcome.cookies) {
+      for (const [name, value] of readHeaders(outcome)) c.header(name, value)
+      for (const ck of readCookies(outcome)) {
         c.header('set-cookie', serializeCookie(ck), { append: true })
       }
       if (outcome.ok) return c.json(outcome.value, 200) // R → RPC output@200
@@ -99,10 +102,10 @@ export function hono<C extends Lunette<any, any, any>>(
   // is also the single place the deps brand fires (Need ⊆ Pub) — at the call
   // site, before the tuple is spread into the native chain.
   // Hono's carrier streams a readable request, so it PROVIDES the `body`
-  // capability — the `CarrierGuard<Cap, 'body' | 'cookies'>` clause accepts body/form
+  // capability — the `CarrierGuard<Cap, 'body' | 'cookies' | 'headers'>` clause accepts body/form
   // scopes. (tRPC's clause is `CarrierGuard<Cap, never>`, which rejects them.)
   const handler = <S extends StandardSchemaV1, Need extends object, R, Cap extends Capability>(
-    handler: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body' | 'cookies'>,
+    handler: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body' | 'cookies' | 'headers'>,
   ) => [sValidator('param', handler.schema), handlerFrom(handler)] as const
 
   return { mount, handler, dispose }

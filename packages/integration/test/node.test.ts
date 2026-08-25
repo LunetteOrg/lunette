@@ -2,7 +2,8 @@ import { Readable } from 'node:stream'
 import type { IncomingMessage } from 'node:http'
 import { describe, expect, it } from 'vitest'
 import type { ServerResponse } from 'node:http'
-import { httpError, redirect, type Outcome } from '@lntt/scope'
+import { httpError, redirect, type Abort, type Outcome } from '@lntt/scope'
+import type { CookieEffect, SetCookie } from '@lntt/scope/cookies'
 import { renderOutcome, toWebRequest } from '../src/node.ts'
 
 // A node request, faked at exactly the surface the lift reads. `body` becomes
@@ -162,11 +163,26 @@ const nodeResponse = () => {
   return { res: res as unknown as ServerResponse, written }
 }
 
-const ok = <R,>(value: R, cookies: Outcome<R>['cookies'] = []): Outcome<R> => ({
+// The outcome as the extensions leave it: effects keyed by extension, which is
+// what a host reads through their readers.
+type Effects = CookieEffect & { readonly headers: Headers }
+
+const effectsOf = (cookies: readonly SetCookie[] = [], headers = new Headers()): Effects => ({
+  cookies,
+  headers,
+})
+
+const ok = <R,>(value: R, cookies: readonly SetCookie[] = [], headers = new Headers()): Outcome<R, Effects> => ({
   ok: true,
   value,
-  cookies,
+  effects: effectsOf(cookies, headers),
 })
+
+const aborted = (
+  abort: Abort,
+  cookies: readonly SetCookie[] = [],
+  headers = new Headers(),
+): Outcome<never, Effects> => ({ ok: false, abort, effects: effectsOf(cookies, headers) })
 
 describe('renderOutcome', () => {
   it('writes a leaf value as 200 JSON', () => {
@@ -179,7 +195,7 @@ describe('renderOutcome', () => {
 
   it('turns a redirect intent into its status and Location, with no body', () => {
     const { res, written } = nodeResponse()
-    renderOutcome(res, { ok: false, abort: redirect('/dashboard'), cookies: [] })
+    renderOutcome(res, aborted(redirect('/dashboard')))
     expect(written.status).toBe(302)
     expect(written.headers?.['location']).toBe('/dashboard')
     expect(written.body).toBeUndefined()
@@ -187,13 +203,13 @@ describe('renderOutcome', () => {
 
   it('renders a status intent, with and without a body', () => {
     const bare = nodeResponse()
-    renderOutcome(bare.res, { ok: false, abort: httpError(401), cookies: [] })
+    renderOutcome(bare.res, aborted(httpError(401)))
     expect(bare.written.status).toBe(401)
     expect(bare.written.body).toBeUndefined()
     expect(bare.written.headers?.['content-type']).toBeUndefined()
 
     const explained = nodeResponse()
-    renderOutcome(explained.res, { ok: false, abort: httpError(422, { field: 'email' }), cookies: [] })
+    renderOutcome(explained.res, aborted(httpError(422, { field: 'email' })))
     expect(explained.written.status).toBe(422)
     expect(explained.written.body).toBe('{"field":"email"}')
   })
@@ -208,7 +224,7 @@ describe('renderOutcome', () => {
     // the case that makes the sink ride BOTH branches: logging out drops the
     // cookie and redirects in one outcome.
     const goodbye = nodeResponse()
-    renderOutcome(goodbye.res, { ok: false, abort: redirect('/'), cookies })
+    renderOutcome(goodbye.res, aborted(redirect('/'), cookies))
     expect(goodbye.written.status).toBe(302)
     expect(goodbye.written.headers?.['set-cookie']).toEqual(['session=abc; Path=/; HttpOnly'])
   })

@@ -2,7 +2,7 @@ import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
 import { scope } from '../scope.ts'
 import type { ScopeExtension } from '../scope.ts'
-import type { CookieSink } from '../carrier.ts'
+import type { CookieSink } from './cookies.ts'
 import { body } from './body.ts'
 import { cookies } from './cookies.ts'
 

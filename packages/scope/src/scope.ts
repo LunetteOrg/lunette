@@ -10,6 +10,25 @@ import { unit, type OutputOf } from './schema.ts'
 // knowing what they do.
 export type Prepare = (carrier: object) => Promise<object | Abort> | object | Abort
 
+// A SINK, the other half of the extension SPI and the mirror of `Prepare`: where
+// a prepare step reads the carrier INTO the ctx, a sink is something the scope
+// WRITES during the fold whose result leaves with the `Outcome`. Created fresh
+// per invocation: `ctx` is what a guard/leaf sees under `key`, `collect` is what
+// lands in `outcome.effects[key]`.
+//
+// This is what keeps response concerns OUT of the core. `Set-Cookie` and the
+// response headers are not fold concepts — they are what the `cookies` and
+// `headers` extensions happen to collect, and the fold never learns their names
+// (§34). A host pack reads the effects it understands, through the reader the
+// extension exports next to its sink.
+export interface Sink {
+  readonly key: string
+  readonly ctx: unknown
+  collect(): unknown
+}
+
+export type SinkFactory = () => Sink
+
 // The abstract scope: an input schema + a guard/leaf stack captured as data,
 // bound to NO app. `Handler` carries the REAL input `schema` (the object a
 // host hands to its native validator) alongside phantom markers. `__need` and
@@ -22,6 +41,7 @@ export interface Handler<
   S extends StandardSchemaV1,
   R,
   Cap extends Capability = never,
+  Eff extends object = {},
 > {
   readonly schema: S
   // Extension-contributed PREPARE steps: they read the raw carrier (before the
@@ -33,6 +53,10 @@ export interface Handler<
   // Erased fold ingredients — the scope defers execution until an app is mounted
   // at the adapter; `runFold`/`runScope` run these.
   readonly guards: ReadonlyArray<(deps: object, ctx: object) => unknown>
+  // Extension-contributed SINKS: the fold instantiates each per invocation and
+  // hands what they collected to the `Outcome`. Empty for a scope that declares
+  // no extension with an output channel.
+  readonly sinks?: ReadonlyArray<SinkFactory>
   readonly leaf: (deps: object, ctx: object) => unknown
   readonly __need?: (n: Need) => void
   readonly __result?: R
@@ -40,6 +64,10 @@ export interface Handler<
   // requires. The adapter's `CarrierGuard` reads it to reject a mount on a host
   // that cannot supply them (e.g. `body` on tRPC).
   readonly __cap?: (c: Cap) => void
+  // Phantom, load-bearing: the shape of `outcome.effects` for THIS scope, so a
+  // host reads `effects.cookies` typed, and a scope that never injected the
+  // extension has no such key to read.
+  readonly __eff?: Eff
 }
 
 // ── The extension SPI ────────────────────────────────────────────────────────
@@ -70,6 +98,9 @@ type SchemaOf<T> = T extends { readonly __schema?: infer S }
   : UnitSchema
 type ParamsOf<T> = OutputOf<SchemaOf<T>>
 type CapsOf<T> = T extends { readonly __caps?: infer M } ? (keyof M extends Capability ? keyof M : never) : never
+// The effect map: every injected extension's `__effects` intersected, so
+// `outcome.effects` carries exactly the keys THIS scope can produce.
+type EffOf<T> = T extends { readonly __effects?: infer E } ? (E extends object ? E : {}) : {}
 type MethodsOf<T> = T extends { readonly __methods?: infer M } ? keyof M : never
 
 // The unit schema type: a scope that never calls `.input` runs with `P = {}`.
@@ -90,6 +121,8 @@ export interface ScopeExtension {
   readonly __need?: object
   readonly __caps?: object
   readonly __methods?: object
+  // What this extension deposits in `outcome.effects`, keyed by its own name.
+  readonly __effects?: object
 }
 type Redefines<Self, F> = Extract<MethodsOf<F>, MethodsOf<Self>>
 
@@ -104,6 +137,7 @@ export interface Scope {
   readonly __need?: object
   readonly __caps?: object
   readonly __methods?: object
+  readonly __effects?: object
 
   // `.input` fixes the params schema (first call wins; a second intersects and
   // is a user error). Its OUTPUT is `ctx.params` for every guard and the leaf.
@@ -123,7 +157,7 @@ export interface Scope {
   handle<Need2 extends object, R, Self = this>(
     this: Self,
     leaf: (deps: Need2, ctx: Ctx<Self>) => R | Abort | Promise<R | Abort>,
-  ): Handler<NeedOf<Self> & Need2, SchemaOf<Self>, R, CapsOf<Self>>
+  ): Handler<NeedOf<Self> & Need2, SchemaOf<Self>, R, CapsOf<Self>, EffOf<Self>>
 
   // Inject an extension. Composes its methods + ctx/need/caps onto the builder.
   // Rejected at THIS call site if it redefines a method already present (§4).
@@ -144,12 +178,16 @@ interface BuildState {
   readonly schema: StandardSchemaV1
   readonly guards: ReadonlyArray<AnyGuard>
   readonly prepare: ReadonlyArray<Prepare>
+  readonly sinks: ReadonlyArray<SinkFactory>
 }
 
 // The runtime face of an extension: contributes methods over the shared state +
 // a `rebuild` that reconstructs the composed builder (so `.body`/`.form` chain).
 export interface ScopeExtensionValue {
   methods(state: BuildState, rebuild: (state: BuildState) => Surface): Surface
+  // The output channel this extension opens, if any. Injected by `.extend`, so
+  // a scope that never extended it has neither the ctx entry nor the effect.
+  readonly sink?: SinkFactory
 }
 
 function buildHandler(state: BuildState, leaf: AnyGuard): Handler<object, StandardSchemaV1, never> {
@@ -159,6 +197,7 @@ function buildHandler(state: BuildState, leaf: AnyGuard): Handler<object, Standa
     leaf,
     // spread (not `key: undefined`) to respect exactOptionalPropertyTypes
     ...(state.prepare.length > 0 && { prepare: state.prepare }),
+    ...(state.sinks.length > 0 && { sinks: state.sinks }),
   }
 }
 
@@ -176,7 +215,8 @@ function make(state: BuildState, exts: readonly ScopeExtensionValue[]): Surface 
       return buildHandler(state, leaf)
     },
     extend(ext: ScopeExtensionValue) {
-      return make(state, [...exts, ext])
+      const next = ext.sink ? { ...state, sinks: [...state.sinks, ext.sink] } : state
+      return make(next, [...exts, ext])
     },
   }
   return Object.assign(base, ...exts.map((e) => e.methods(state, rebuild)))
@@ -187,5 +227,5 @@ function make(state: BuildState, exts: readonly ScopeExtensionValue[]): Surface 
 // `cookies`, … each its own tree-shakable subpath). Extensions compose and
 // self-describe; the core names none.
 export function scope(): Scope {
-  return make({ schema: unit, guards: [], prepare: [] }, []) as unknown as Scope
+  return make({ schema: unit, guards: [], prepare: [], sinks: [] }, []) as unknown as Scope
 }

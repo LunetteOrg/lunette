@@ -60,7 +60,7 @@ describe('scope .input(schema) — runtime coercion + abort', () => {
       { request: req },
       { courseId: '7' },
     )
-    expect(ok).toEqual({ ok: true, value: { courseId: 7, positive: true }, cookies: [] })
+    expect(ok).toEqual({ ok: true, value: { courseId: 7, positive: true }, effects: {} })
     expect(seen).toEqual([7]) // guard saw the coerced number, not "7"
 
     const denied = await runScope<RequestCarrier, typeof params, { courseId: number; positive: true }>(

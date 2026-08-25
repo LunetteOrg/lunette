@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { scope } from '../scope.ts'
-import type { CookieSink } from '../carrier.ts'
+import type { CookieSink } from './cookies.ts'
 import { cookies } from './cookies.ts'
 
 describe('cookies — the Set-Cookie sink + capability `cookies`', () => {

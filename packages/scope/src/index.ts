@@ -6,17 +6,22 @@
 // projections, and the adapter brand.
 
 export { scope } from './scope.ts'
-export type { Scope, ScopeExtension, ScopeExtensionValue, Prepare, Handler } from './scope.ts'
+export type {
+  Scope,
+  ScopeExtension,
+  ScopeExtensionValue,
+  Prepare,
+  Sink,
+  SinkFactory,
+  Handler,
+} from './scope.ts'
 export type {
   Capability,
-  CookieOptions,
-  CookieSink,
   JobCarrier,
   Message,
   Outcome,
   RequestHead,
   RequestCarrier,
-  SetCookie,
 } from './carrier.ts'
 export { forbidden, httpError, isAbort, notFound, redirect, unauthorized } from './abort.ts'
 export type { Abort, ResponseIntent } from './abort.ts'

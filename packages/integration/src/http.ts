@@ -1,4 +1,6 @@
-import type { Outcome, SetCookie } from '@lntt/scope'
+import type { Outcome } from '@lntt/scope'
+import { readCookies, type SetCookie } from '@lntt/scope/cookies'
+import { readHeaders } from '@lntt/scope/headers'
 
 // The HTTP outcome codec — the host-agnostic half of every pack, public so a
 // host we ship no pack for composes the same pieces instead of copying them.
@@ -15,9 +17,12 @@ export function serializeCookie({ name, value, options }: SetCookie): string {
   return parts.join('; ')
 }
 
-export function outcomeToResponse(outcome: Outcome<unknown>): Response {
-  const headers = new Headers()
-  for (const cookie of outcome.cookies) headers.append('set-cookie', serializeCookie(cookie))
+export function outcomeToResponse(outcome: Outcome<unknown, object>): Response {
+  // Each effect is read through the reader its own extension exports, so this
+  // codec never touches `outcome.effects` directly. A scope that injected
+  // neither extension reads back empty, and the branches below are unchanged.
+  const headers = new Headers(readHeaders(outcome))
+  for (const cookie of readCookies(outcome)) headers.append('set-cookie', serializeCookie(cookie))
 
   if (outcome.ok) {
     headers.set('content-type', 'application/json')

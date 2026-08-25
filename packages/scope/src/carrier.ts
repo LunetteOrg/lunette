@@ -4,22 +4,6 @@
 // the agnostic `scope()` reads only `params` + guard enrichments. `RequestCarrier`
 // / `JobCarrier` name the RUNTIME object a host hands to `runFold`.
 
-export interface CookieOptions {
-  readonly path?: string
-  readonly httpOnly?: boolean
-  readonly maxAge?: number
-}
-
-export interface SetCookie {
-  readonly name: string
-  readonly value: string
-  readonly options: CookieOptions
-}
-
-export interface CookieSink {
-  set(name: string, value: string, options?: CookieOptions): void
-}
-
 // The capabilities a host carrier can offer, and a scope can REQUIRE — each
 // maps a carrier extension to the hosts that support it. `body` — consuming the
 // request body stream (`@lntt/scope/body`'s `.body`/`.form`); a host with no
@@ -27,7 +11,7 @@ export interface CookieSink {
 // (`@lntt/scope/cookies`); a host that cannot render it (tRPC drops it) declares
 // it absent. The adapter's `CarrierGuard` turns a mismatch into a compile error
 // at the wiring call site. Extensible: 'multipart', 'stream', …
-export type Capability = 'body' | 'cookies'
+export type Capability = 'body' | 'cookies' | 'headers'
 
 // The body-consuming members of a Fetch `Request` — the standard `Body` mixin,
 // enumerated explicitly because this toolchain's `Request` comes from
@@ -76,8 +60,11 @@ export interface JobCarrier {
 }
 
 // The host-agnostic result of running a scope: the leaf's value or the abort,
-// plus the cookies the sink collected. A THROW is not represented here — it
-// propagates past the handler as infrastructure.
-export type Outcome<R> =
-  | { readonly ok: true; readonly value: R; readonly cookies: readonly SetCookie[] }
-  | { readonly ok: false; readonly abort: import('./abort.ts').Abort; readonly cookies: readonly SetCookie[] }
+// plus whatever the extensions' SINKS collected, keyed by extension. The core
+// does not know what is in there — `cookies` and `headers` are the `cookies` and
+// `headers` extensions' business, and each exports a typed reader for the hosts
+// that care. A THROW is not represented here: it propagates past the handler as
+// infrastructure.
+export type Outcome<R, Eff extends object = {}> =
+  | { readonly ok: true; readonly value: R; readonly effects: Eff }
+  | { readonly ok: false; readonly abort: import('./abort.ts').Abort; readonly effects: Eff }

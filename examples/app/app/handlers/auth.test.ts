@@ -1,5 +1,6 @@
 import { isAbort, runScope } from '@lntt/scope'
-import type { CookieSink, RequestCarrier, SetCookie } from '@lntt/scope'
+import type { RequestCarrier } from '@lntt/scope'
+import { readCookies, type CookieSink, type SetCookie } from '@lntt/scope/cookies'
 import { describe, expect, it } from 'vitest'
 import type { PendingAuth } from '../lib/cookies.ts'
 import { OtpInvalid } from '../lib/errors.ts'
@@ -176,7 +177,7 @@ describe('verifyScope: no pending → 401, wrong code → 401, ok → redirect +
     expect(out.ok).toBe(false)
     if (!out.ok)
       expect(out.abort.intent).toMatchObject({ kind: 'status', status: 401, body: { error: 'OtpInvalid' } })
-    expect(out.cookies).toEqual([])
+    expect(readCookies(out)).toEqual([])
   })
 
   it('ok → session cookie set, pending dropped, redirect to returnTo', async () => {
@@ -206,7 +207,7 @@ describe('verifyScope: no pending → 401, wrong code → 401, ok → redirect +
     )
     expect(out.ok).toBe(false)
     if (!out.ok) expect(out.abort.intent).toMatchObject({ kind: 'redirect', location: '/home' })
-    expect(out.cookies).toEqual([
+    expect(readCookies(out)).toEqual([
       { name: 'session', value: 'signed:s1', options: { path: '/', httpOnly: true, maxAge: 60 } },
       { name: 'pending-auth', value: '', options: { path: '/', maxAge: 0 } },
     ])

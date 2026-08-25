@@ -12,7 +12,8 @@ import { type Abort, forbidden, notFound, redirect, unauthorized } from '@lntt/s
 import { scope } from '@lntt/scope'
 import { request } from '@lntt/scope/request'
 import { cookies } from '@lntt/scope/cookies'
-import type { CookieSink, RequestHead } from '@lntt/scope'
+import type { RequestHead } from '@lntt/scope'
+import type { CookieSink } from '@lntt/scope/cookies'
 
 // One guard/leaf model, reused by every host adapter (React Router, Hono,
 // Express) AND the bus. The point of the prototype: the same handlers cross

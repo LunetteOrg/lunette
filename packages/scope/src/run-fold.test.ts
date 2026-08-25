@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { forbidden, notFound, unauthorized } from './abort.ts'
+import { forbidden, httpError, notFound, unauthorized } from './abort.ts'
 import { scope } from './scope.ts'
 import { request } from './extensions/request.ts'
 import { runFold } from './run-fold.ts'
@@ -40,7 +40,7 @@ describe('the scope fold at runtime', () => {
 
   it('accumulates enrichments then runs the leaf; short-circuits on abort', async () => {
     const ok = await run(bearer('u-admin'), { courseId: 'c1' })
-    expect(ok).toEqual({ ok: true, value: { id: 'c1', title: 'Owned by admin' }, cookies: [] })
+    expect(ok).toEqual({ ok: true, value: { id: 'c1', title: 'Owned by admin' }, effects: {} })
 
     const forb = await run(bearer('u-admin'), { courseId: 'c2' })
     expect(forb.ok).toBe(false)
@@ -57,9 +57,9 @@ describe('the scope fold at runtime', () => {
 })
 
 // The fold runs extension `prepare` steps FIRST, over the raw carrier, and owns
-// the cookie sink — tested here generically (a plain handler + a fake step),
+// the extension sinks — tested here generically (a plain handler + a fake step),
 // independent of any one extension.
-describe('the fold — prepare steps and the cookie sink', () => {
+describe('the fold — prepare steps and extension sinks', () => {
   it('runs prepare steps before the guards, merging their enrichment into ctx', async () => {
     const handler = {
       guards: [],
@@ -67,7 +67,7 @@ describe('the fold — prepare steps and the cookie sink', () => {
       leaf: (_app: object, ctx: { tag?: string }) => ({ seen: ctx.tag }),
     }
     const out = await runFold<object, { seen: string | undefined }>(handler, {}, {}, {})
-    expect(out).toEqual({ ok: true, value: { seen: 'from-prepare' }, cookies: [] })
+    expect(out).toEqual({ ok: true, value: { seen: 'from-prepare' }, effects: {} })
   })
 
   it('a prepare step returning an abort short-circuits — no guards, no leaf', async () => {
@@ -83,24 +83,72 @@ describe('the fold — prepare steps and the cookie sink', () => {
     expect(ran).toBe(false)
   })
 
-  it('creates the cookie sink; a leaf that sets one has it collected into the Outcome', async () => {
+  it('instantiates extension SINKS per invocation and collects them by key', async () => {
+    // The fold knows only the shape (`key`, `ctx`, `collect`) — never what a
+    // sink means. A cookie jar and a header bag are indistinguishable from here,
+    // which is what keeps response concerns out of the core.
+    const notes: string[] = []
     const handler = {
       guards: [],
       prepare: [],
+      sinks: [
+        () => {
+          const written: string[] = []
+          notes.push('created')
+          return {
+            key: 'audit',
+            ctx: { note: (what: string) => written.push(what) },
+            collect: () => written,
+          }
+        },
+      ],
       leaf: (_app: object, ctx: object) => {
-        ;(ctx as { cookies: { set(n: string, v: string, o?: object): void } }).cookies.set(
-          'sid',
-          'abc',
-          { httpOnly: true },
-        )
+        ;(ctx as { audit: { note(w: string): void } }).audit.note('leaf ran')
         return { ok: true }
       },
     }
-    const out = await runFold<object, { ok: boolean }>(handler, {}, {}, {})
-    expect(out).toEqual({
-      ok: true,
-      value: { ok: true },
-      cookies: [{ name: 'sid', value: 'abc', options: { httpOnly: true } }],
-    })
+
+    const out = await runFold<object, { ok: boolean }, { audit: string[] }>(handler, {}, {}, {})
+    expect(out.effects).toEqual({ audit: ['leaf ran'] })
+
+    // per INVOCATION: a second run starts from an empty sink
+    const again = await runFold<object, { ok: boolean }, { audit: string[] }>(handler, {}, {}, {})
+    expect(again.effects).toEqual({ audit: ['leaf ran'] })
+    expect(notes).toEqual(['created', 'created'])
+  })
+
+  it('collects what the sinks hold even when a guard aborts', async () => {
+    // A 4xx still carries its effects: a rate-limit guard that records something
+    // and then aborts must have both travel out.
+    const handler = {
+      guards: [
+        (_app: object, ctx: object) => {
+          ;(ctx as { audit: { note(w: string): void } }).audit.note('rejected')
+          return httpError(429)
+        },
+      ],
+      prepare: [],
+      sinks: [
+        () => {
+          const written: string[] = []
+          return { key: 'audit', ctx: { note: (w: string) => written.push(w) }, collect: () => written }
+        },
+      ],
+      leaf: () => ({ never: true }),
+    }
+
+    const out = await runFold<object, { never: boolean }, { audit: string[] }>(handler, {}, {}, {})
+    expect(out.ok).toBe(false)
+    expect(out.effects).toEqual({ audit: ['rejected'] })
+  })
+
+  it('leaves effects empty for a scope that injected no sink at all', async () => {
+    const out = await runFold<object, { ok: boolean }>(
+      { guards: [], prepare: [], leaf: () => ({ ok: true }) },
+      {},
+      {},
+      {},
+    )
+    expect(out.effects).toEqual({})
   })
 })

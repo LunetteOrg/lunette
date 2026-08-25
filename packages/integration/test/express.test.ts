@@ -3,7 +3,9 @@ import type { AddressInfo } from 'node:net'
 import express from 'express'
 import { describe, expect, it } from 'vitest'
 import { scope } from '@lntt/scope'
+import { headers } from '@lntt/scope/headers'
 import { request } from '@lntt/scope/request'
+import { httpError } from '@lntt/scope'
 import { chain, type Env } from './fixture/chain.ts'
 import { courseHandler, loginHandler } from './fixture/handlers.ts'
 import { express as expressPack } from '../src/express.ts'
@@ -84,5 +86,51 @@ describe('Express pack — the request origin', () => {
     expect(await res.json()).toEqual({ url: 'https://app.example.com/where' })
     await close()
     await dispose()
+  })
+})
+
+// The header sink, end to end over a real socket: what a scope declares at the
+// wiring has to arrive on the wire, on the success branch AND on an abort.
+describe('Express pack — response headers', () => {
+  const cached = scope()
+    .extend(headers)
+    .headers({ 'cache-control': 'public, max-age=60' })
+    .handle(() => ({ ok: true }))
+
+  const rateLimited = scope()
+    .extend(headers)
+    .guard((_deps: {}, ctx) => {
+      ctx.headers.set('retry-after', '30')
+      return httpError(429, { error: 'slow down' })
+    })
+    .handle(() => ({ never: true }))
+
+  it('renders declared headers alongside the value', async () => {
+    const pack = expressPack(chain, () => ({ env: { label: 'express' } satisfies Env }))
+    const app = express()
+    app.get('/cached', pack.handler(cached))
+    const { url, close } = await startServer(app)
+
+    const res = await fetch(`${url}/cached`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('cache-control')).toBe('public, max-age=60')
+
+    await close()
+    await pack.dispose()
+  })
+
+  it('keeps the headers a guard wrote before it aborted', async () => {
+    const pack = expressPack(chain, () => ({ env: { label: 'express' } satisfies Env }))
+    const app = express()
+    app.get('/limited', pack.handler(rateLimited))
+    const { url, close } = await startServer(app)
+
+    const res = await fetch(`${url}/limited`)
+    expect(res.status).toBe(429)
+    expect(res.headers.get('retry-after')).toBe('30')
+    expect(await res.json()).toEqual({ error: 'slow down' })
+
+    await close()
+    await pack.dispose()
   })
 })

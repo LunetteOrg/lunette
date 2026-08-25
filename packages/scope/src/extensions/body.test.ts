@@ -16,7 +16,7 @@ type Channels = {
 const stepFor = (call: (m: Channels) => void): Prepare => {
   let step!: Prepare
   const methods = (body as unknown as ScopeExtensionValue).methods(
-    { schema: unit, guards: [], prepare: [] },
+    { schema: unit, guards: [], prepare: [], sinks: [] },
     (s) => {
       step = s.prepare[s.prepare.length - 1]!
       return {}

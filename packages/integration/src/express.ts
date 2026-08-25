@@ -64,11 +64,11 @@ export function express<C extends Lunette<any, any, any>>(
   // are validated at RUNTIME by `runScope` (a bad/missing param → a RETURNED
   // 422 abort, which `renderExpress` renders as 4xx).
   // Express streams the request body into the Web Request, so it PROVIDES the
-  // `body` capability (`CarrierGuard<Cap, 'body' | 'cookies'>` accepts body/form scopes).
+  // `body` capability (`CarrierGuard<Cap, 'body' | 'cookies' | 'headers'>` accepts body/form scopes).
   // `renderOutcome` takes the node `ServerResponse` Express's `res` extends.
   const handler =
     <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
-      h: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body' | 'cookies'>,
+      h: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body' | 'cookies' | 'headers'>,
     ): RequestHandler =>
     async (req: ExReq, res: ExRes): Promise<void> =>
       renderOutcome(

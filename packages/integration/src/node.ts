@@ -1,5 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Outcome } from '@lntt/scope'
+import { readCookies } from '@lntt/scope/cookies'
+import { readHeaders } from '@lntt/scope/headers'
 import { serializeCookie } from './http.ts'
 
 // The two Node-side halves of a pack, public so a host we ship no pack for
@@ -107,9 +109,12 @@ export function toWebRequest(req: IncomingMessage, options: NodeCarrierOptions =
 // collected ride BOTH branches (a redirect that drops a session still has to
 // emit its `Set-Cookie`). A THROW never reaches here — it stays infrastructure
 // and the host's own error path turns it into a 500.
-export function renderOutcome(res: ServerResponse, outcome: Outcome<unknown>): void {
+export function renderOutcome(res: ServerResponse, outcome: Outcome<unknown, object>): void {
   const headers: Record<string, string | string[]> = {}
-  if (outcome.cookies.length > 0) headers['set-cookie'] = outcome.cookies.map(serializeCookie)
+  // Each effect through its extension's reader; neither injected reads empty.
+  for (const [name, value] of readHeaders(outcome)) headers[name] = value
+  const cookies = readCookies(outcome)
+  if (cookies.length > 0) headers['set-cookie'] = cookies.map(serializeCookie)
 
   if (outcome.ok) {
     headers['content-type'] = 'application/json'

@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import type { CookieSink, RequestHead } from '@lntt/scope'
+import type { RequestHead } from '@lntt/scope'
+import type { CookieSink } from '@lntt/scope/cookies'
 import type { Env } from '../config/env.ts'
 
 // Signed client-side state: a base64url payload plus an HMAC signature. The
