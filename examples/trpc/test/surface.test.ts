@@ -2,13 +2,23 @@ import { describe, expect, it } from 'vitest'
 import { createCaller } from '../src/router.ts'
 import { createContext, dispose } from '../src/bootstrap/index.ts'
 
-// Integration test: the real example app mounted as a tRPC router, driven
-// through a typed server-side caller. The built app singletons + a request are
-// the tRPC context; the fold runs inside each procedure's resolver.
+// The mounted SURFACE, one call at a time: every procedure answers with the
+// shape its scope promises, driven through a typed server-side caller. The
+// built app singletons + a request are the tRPC context; the fold runs inside
+// each procedure's resolver. What it proves is the MOUNT, so the stack under it
+// is the real one, and the context comes from the composition root on the
+// default environment — the same path a served router would take.
 //
-// The context comes from the composition root, on the default environment — the
-// same path a served router would take.
-describe('example-app on tRPC — integration', () => {
+// Not an integration test in the isolate-one-component sense: the thing under
+// test here only exists between a host and a chain, so both have to be real.
+// Those tests live where a component CAN be isolated — the adapter against a
+// fixture chain in `packages/integration/test`, PGlite on its own in
+// `examples/app/app/db`, the chain with only its transport faked in
+// `examples/app/app/bootstrap/chain.test.ts`.
+//
+// Its sibling `e2e.test.ts` differs in what it asks: a JOURNEY (sign-in out of
+// band, then an authenticated mutation) rather than each call judged on its own.
+describe('example-app on tRPC — the mounted surface', () => {
   it('drives feed / post through a typed caller against the real chain', async () => {
     const caller = createCaller(await createContext(new Request('http://x/')))
 

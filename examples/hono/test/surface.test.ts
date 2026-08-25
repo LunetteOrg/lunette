@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { app } from '../src/server.ts'
 
-// Integration test: the REAL example app (its wire chain, in-memory PGlite via
-// the default `memory://` DATABASE_URL) mounted on a REAL Hono app, driven
-// through `app.request`. Complements the app's UNIT tests (handlers.test.ts,
-// scopes with fake deps): here the scopes run against the actual built
-// singletons, through the host's native routing and codec.
-describe('example-app on Hono — integration', () => {
+// The mounted SURFACE, one request at a time: every route answers with the
+// shape its scope promises, through Hono's native routing and codec, driven by
+// `app.request`. What it proves is the MOUNT, so the stack under it is the real
+// one (the wire chain, in-memory PGlite via the default `memory://`).
+//
+// Not an integration test in the isolate-one-component sense: the thing under
+// test here only exists between a host and a chain, so both have to be real.
+// Those tests live where a component CAN be isolated — the adapter against a
+// fixture chain in `packages/integration/test`, PGlite on its own in
+// `examples/app/app/db`, the chain with only its transport faked in
+// `examples/app/app/bootstrap/chain.test.ts`.
+//
+// Its sibling `e2e.test.ts` shares this setup and differs in what it asks: a
+// JOURNEY across requests (a session cookie surviving from one to the next)
+// rather than each request judged on its own.
+describe('example-app on Hono — the mounted surface', () => {
   it('GET /feed → 200, anonymous by default (no session cookie)', async () => {
     const res = await app.request('/feed')
     expect(res.status).toBe(200)

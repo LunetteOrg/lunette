@@ -19,7 +19,7 @@ its own. The per-host wiring lives in the entry packages below, which import
 ## Per-host entries — mount the same app on each host
 
 Each is a thin package: it imports `app`'s scopes and mounts them via
-`@lntt/integration/<host>`, and its **integration test** drives the mounted host
+`@lntt/integration/<host>`, and its **`surface.test.ts`** drives the mounted host
 against the real (in-memory PGlite) chain.
 
 All four share **one layout** (§37), so that what differs between two of them is
@@ -46,9 +46,27 @@ import, one call and a comment.
 | [`rr7/`](./rr7) | React Router 7 | `w.toLoader(h)` / `w.toAction(h)` | loaders/actions invoked with a `Request` |
 | [`trpc/`](./trpc) | tRPC | `toProcedure(t.procedure, h)` | a typed server-side caller |
 
-Unit tests (in `app/`) prove the scopes in isolation; integration tests (in
-each entry) prove them mounted on a real host — the two halves of testing a
-scope-runtime app.
+### What each layer of test actually proves
+
+The two files in each entry — `surface.test.ts` and `e2e.test.ts` — share a
+setup: the real chain, the real host, a real round-trip. They differ in what
+they ask. `surface` judges each request on its own (does every route answer with
+the shape its scope promises); `e2e` asks for a JOURNEY (a session cookie minted
+by one request and honoured by the next). Neither is an *integration* test in
+the isolate-one-component sense, and deliberately so: what they exercise is the
+MOUNT, which exists only between a host and a chain, so both have to be real.
+
+The tests that DO isolate one real component live where such a component
+exists on its own:
+
+| what is real | what is faked | where |
+|---|---|---|
+| nothing — pure functions | every dep | [`app/app/handlers/*.test.ts`](./app/app/handlers) |
+| PGlite + Drizzle | no host, no chain | [`app/app/db/foundation.test.ts`](./app/app/db/foundation.test.ts), [`parity.test.ts`](./app/app/db/parity.test.ts) |
+| the service selectors | the env they read | [`app/app/lib/services.test.ts`](./app/app/lib/services.test.ts) |
+| the whole chain | only the mail transport | [`app/app/bootstrap/chain.test.ts`](./app/app/bootstrap/chain.test.ts) |
+| the adapter + a real host | the chain (a fixture) | [`packages/integration/test`](../packages/integration/test) |
+| the adapter + host + chain | nothing | `<entry>/test/surface.test.ts`, `e2e.test.ts` |
 
 ## Wiring a host by hand — [`express/src/server-manual.ts`](./express/src/server-manual.ts)
 

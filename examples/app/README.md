@@ -70,9 +70,9 @@ post (`sessionGuard` for a nullable session, then `postGuard`).
   `handlers/*.test.ts` call each guard/leaf directly with a typed `(deps, ctx)`:
   no carrier, no fold, no fake session to satisfy a gate. Every fetch, mapping
   and abort branch is proven here.
-- **Thin composition, proven per host** — the per-host `integration.test.ts`
-  (real chain, one round-trip) and `e2e.test.ts` (sign in → publish → read
-  back) exercise the wiring. There is deliberately NO per-scope `runScope`
+- **Thin composition, proven per host** — the per-host `surface.test.ts`
+  (real chain, each request judged on its own) and `e2e.test.ts` (sign in →
+  publish → read back, one journey) exercise the wiring. There is deliberately NO per-scope `runScope`
   layer, since the fold itself is proven once in `@lntt/scope` — the one
   exception is `verify`, whose fold interaction (a real transaction window) is
   scope-specific and kept in `auth.test.ts`.
