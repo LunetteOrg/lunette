@@ -1088,6 +1088,38 @@ rests on an asymmetry:
 - **SUPPLY (the mount) is CLOSED** — a written-out set in the adapter, or in the
   hand-written mount for a host we ship nothing for.
 
+**The gate had to be made invariant, and the reason is not the one it looks
+like.** Declared `(c: Cap) => void`, the capability phantom is contravariant, so
+`Handler<…, 'body'>` is assignable to `Handler<…, never>`: a caller NAMING the
+type arguments at a mount (`w.handler<…, never>(scope)`) satisfied the guard
+while the scope still required a capability the carrier lacked, with no cast
+anywhere. Inferred mounts — which is how every mount is actually written — were
+never affected.
+
+`DepGuard` was never exposed this way, and NOT because `Need` is somehow more
+real: `__need` has the identical shape, a contravariant phantom. What differs is
+the DIRECTION of each predicate against the bottom type. `DepGuard` asks
+`Pub extends Need`, and `never` makes that FALSE — nothing extends `never` — so
+the brand fires; naming a smaller object instead is refused earlier, by
+contravariance, since the handler's own `Need` no longer fits the named one.
+`CarrierGuard` asks whether `Exclude<Cap, HostCaps>` is `never`, which `never`
+satisfies VACUOUSLY — and contravariance waves the value through, since `never`
+is assignable to everything. One axis is protected on both moves, the other on
+neither.
+
+`__cap` is now `(c: Cap) => Cap`, present in both positions and therefore
+invariant, which refuses the assignment. What that also forbids is naming a
+capability WIDER than the scope requires — harmless in itself, and checked
+against the one pattern where it could have mattered: a table of routes iterated
+over. With real scopes that does not compile either way, since scopes differ on
+every axis (deps, schema, result, effects) and no union reconciles them. So the
+hole and the collateral are the same door — writing type arguments by hand and
+saying something other than the truth — and neither is reachable by accident.
+
+Measured before taking it: 7 extra instantiations across @lntt/integration,
+0.003%, no change in type count or check time. The negative lives in
+`capability-alphabet.test-d.ts`.
+
 Every mistake therefore falls the safe way, and the rule that follows is worth
 stating on its own: **narrowing a host's set is always legitimate — it only
 rejects more. WIDENING is a claim about MACHINERY, so it belongs to whoever

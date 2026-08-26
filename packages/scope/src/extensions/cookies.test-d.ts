@@ -11,6 +11,6 @@ describe('cookies — the Set-Cookie sink + capability `cookies`', () => {
         expectTypeOf(ctx.cookies).toEqualTypeOf<CookieSink>()
         return {}
       })
-    expectTypeOf(h.__cap).toEqualTypeOf<((c: 'cookies') => void) | undefined>()
+    expectTypeOf(h.__cap).toEqualTypeOf<((c: 'cookies') => 'cookies') | undefined>()
   })
 })

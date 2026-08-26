@@ -38,6 +38,17 @@ declare const bodylessMount: <Need extends object, S extends StandardSchemaV1, R
   h: Handler<Need, S, R, Cap> & CarrierGuard<Cap, 'cookies'>,
 ) => void
 
+// The same shape as `bodylessMount`, kept separate so the named-type-argument
+// cases below read against a carrier that plainly lacks `body`.
+declare const httpMountCookiesOnly: <
+  Need extends object,
+  S extends StandardSchemaV1,
+  R,
+  Cap extends Capability,
+>(
+  h: Handler<Need, S, R, Cap> & CarrierGuard<Cap, 'cookies'>,
+) => void
+
 // Reads the capability parameter back off a built handler, which is the axis
 // under test — `never` here is the failure, not a detail.
 type CapOf<H> = H extends Handler<any, any, any, infer C, any> ? C : never
@@ -78,5 +89,22 @@ describe('the shipped capabilities keep behaving', () => {
   it('is rejected where it does not', () => {
     // @ts-expect-error CarrierGuard: this carrier provides no `body` capability
     bodylessMount(bodyScope)
+  })
+})
+
+// The gate holds for mounts whose type arguments are INFERRED — which is every
+// mount anyone writes — and it has to hold when they are NAMED too. `Cap` lives
+// only in a phantom (`__cap`), so unlike `Need`, which is a real field and
+// contradicts a lie structurally, nothing else in `Handler` objects if a caller
+// declares a capability the scope does not have. `__cap` puts `Cap` in both
+// positions to make it invariant, which is what refuses the assignment (§34).
+describe('a mount that names its type arguments', () => {
+  it('cannot declare away a capability the scope requires', () => {
+    // @ts-expect-error CarrierGuard: naming `never` does not shed the `body` requirement
+    httpMountCookiesOnly<object, StandardSchemaV1, unknown, never>(bodyScope)
+  })
+
+  it('still takes a scope whose capability the carrier does provide', () => {
+    httpMount<object, StandardSchemaV1, unknown, 'body'>(bodyScope)
   })
 })

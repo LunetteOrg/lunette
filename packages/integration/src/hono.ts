@@ -63,8 +63,14 @@ export function hono<C extends Lunette<any, any, any>>(
   // reads request `{ param: InferInput<S> }` and response@200 = R. Reads the
   // built app from the mount'd context, runs OUR fold, returns via `c.json` so
   // R flows into the RPC output.
+  // Generic over `Cap` because it does not gate: the capability check already
+  // happened on the public `handler` signature below. `Cap` is invariant (§34),
+  // so an internal step that accepts any scope has to say so rather than lean on
+  // a default of `never`.
   const handlerFrom =
-    <S extends StandardSchemaV1, Need extends object, R>(handler: Handler<Need, S, R>) =>
+    <S extends StandardSchemaV1, Need extends object, R, Cap extends Capability>(
+      handler: Handler<Need, S, R, Cap>,
+    ) =>
     async <I extends { in: { param: InputOf<S> }; out: { param: OutputOf<S> } }>(
       c: Context<WireEnv<Pub>, string, I>,
     ) => {

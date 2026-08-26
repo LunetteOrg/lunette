@@ -121,7 +121,7 @@ describe('scope() — the carrier-agnostic base', () => {
     const handler = scope()
       .input(schema)
       .handle((_deps: {}, ctx) => ({ id: ctx.params.courseId }))
-    expectTypeOf(handler.__cap).toEqualTypeOf<((c: never) => void) | undefined>()
+    expectTypeOf(handler.__cap).toEqualTypeOf<((c: never) => never) | undefined>()
     expectTypeOf(handler).toMatchTypeOf<Handler<Record<never, never>, S, { id: string }>>()
   })
 })

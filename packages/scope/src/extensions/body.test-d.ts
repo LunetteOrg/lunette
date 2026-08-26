@@ -16,6 +16,6 @@ describe('body — the `.body`/`.form` channels + capability `body`', () => {
       })
     // the adapter's CarrierGuard reads exactly this to gate a mount on a
     // body-less host (tRPC).
-    expectTypeOf(h.__cap).toEqualTypeOf<((c: 'body') => void) | undefined>()
+    expectTypeOf(h.__cap).toEqualTypeOf<((c: 'body') => 'body') | undefined>()
   })
 })

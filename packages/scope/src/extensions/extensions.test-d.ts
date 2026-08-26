@@ -20,7 +20,7 @@ describe('composition — several extensions on one scope', () => {
         expectTypeOf(ctx.cookies).toEqualTypeOf<CookieSink>()
         return {}
       })
-    expectTypeOf(h.__cap).toEqualTypeOf<((c: 'body' | 'cookies') => void) | undefined>()
+    expectTypeOf(h.__cap).toEqualTypeOf<((c: 'body' | 'cookies') => 'body' | 'cookies') | undefined>()
   })
 })
 

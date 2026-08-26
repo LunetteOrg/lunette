@@ -25,6 +25,6 @@ describe('request — read-only, no capability', () => {
 
   it('carries NO capability (Cap = never → mounts on tRPC)', () => {
     const h = scope().extend(request).handle((_d: {}) => ({ ok: true }))
-    expectTypeOf(h.__cap).toEqualTypeOf<((c: never) => void) | undefined>()
+    expectTypeOf(h.__cap).toEqualTypeOf<((c: never) => never) | undefined>()
   })
 })

@@ -63,7 +63,23 @@ export interface Handler<
   // Phantom, load-bearing: `Cap` is the set of carrier capabilities the scope
   // requires. The adapter's `CarrierGuard` reads it to reject a mount on a host
   // that cannot supply them (e.g. `body` on tRPC).
-  readonly __cap?: (c: Cap) => void
+  //
+  // `Cap` appears in BOTH positions on purpose, which makes it INVARIANT. With
+  // only the parameter it is contravariant, and `Handler<…, 'body'>` is then
+  // assignable to `Handler<…, never>` — so naming the type arguments at a mount
+  // (`w.handler<…, never>(scope)`) satisfied the guard while the scope still
+  // required a capability the carrier lacked.
+  //
+  // `Need` is not exposed the same way, and the reason is the DIRECTION of each
+  // guard's predicate against the bottom type, not the phantom (`__need` has the
+  // identical shape). `DepGuard` asks `Pub extends Need`, which `never` makes
+  // FALSE — so the brand fires; naming a smaller object instead is refused by
+  // contravariance, since the handler's own `Need` no longer fits. `CarrierGuard`
+  // asks whether `Exclude<Cap, HostCaps>` is `never`, which `never` satisfies
+  // VACUOUSLY — and contravariance waves it through, since `never` is assignable
+  // to everything. Protected on both moves versus neither (§34). Measured: 7
+  // extra instantiations across @lntt/integration, 0.003%.
+  readonly __cap?: (c: Cap) => Cap
   // Phantom, load-bearing: the shape of `outcome.effects` for THIS scope, so a
   // host reads `effects.cookies` typed, and a scope that never injected the
   // extension has no such key to read.
