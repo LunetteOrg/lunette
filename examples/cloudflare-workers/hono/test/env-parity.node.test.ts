@@ -7,14 +7,20 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 //   src/config/env.ts           `import { env } from 'cloudflare:workers'`, at module scope
 //   src/config/env-from-host.ts Hono's per-request `c.env`, through `seedFrom(hostEnv)`
 //
-// The second is the ONLY use of `seedFrom`'s parameter anywhere in the repo. The
-// signature exists for `c.env` and nothing exercised it, which left open whether
-// it still earns its place — this file is that question under load.
-//
 // Two real workers, each with its own KV namespace so neither can borrow the
-// other's state, driven through the same sequence. Same responses = the parameter
-// buys nothing the config module does not already give, on the host it was added
-// for.
+// other's state, driven through the same sequence.
+//
+// WHAT THIS CANNOT PROVE, stated because the reading is tempting: not that the
+// second worker uses `seedFrom`'s parameter. Within one worker, `c.env` and
+// `import { env } from 'cloudflare:workers'` are the SAME bindings object, and
+// both wrangler configs carry the same vars — so no response distinguishes the
+// two paths, and this file stays green even if the second bootstrap silently
+// ignores its parameter. What the parameter receives is asserted where it CAN be
+// observed, against the pack: `packages/integration/test/hono.test.ts`.
+//
+// What it does prove: both wirings produce a working app, behaving alike down to
+// the status of every step — so on this runtime an app does not need the
+// parameter to reach its bindings, the config module being enough.
 const server = createTestHarness({
   workers: [
     { configPath: './wrangler.jsonc' },

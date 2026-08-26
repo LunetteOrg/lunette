@@ -56,16 +56,25 @@ This entry carries the same app twice, differing in one line:
 | `src/server.ts` | `src/bootstrap/index.ts` | `import { env } from 'cloudflare:workers'`, at module scope |
 | `src/server-from-host-env.ts` | `src/bootstrap/from-host-env.ts` | Hono's per-request `c.env`, via `seedFrom(hostEnv)` |
 
-The second is the **only** use of `seedFrom`'s parameter in the repo. The Hono
-pack carries that signature for `c.env` and nothing exercised it, which left open
-whether it still earns its place now that `cloudflare:workers` exists.
+The second is the only place an **app** in this repo reads `seedFrom`'s
+parameter. (The signature is not unique to Hono: the React Router pack carries it
+too, for `args.context` — RR7's load context.)
+
 `test/env-parity.node.test.ts` drives both workers — each with its own KV
 namespace, so neither borrows the other's state — through the same sequence of
 reads, writes, a duplicate-slug 409 and a schema 422, and asserts identical
-responses.
+responses. They are identical.
 
-They are identical. On the host the parameter was added for, it buys nothing the
-config module does not already give.
+Read that for exactly what it is. From outside a worker, `c.env` and
+`import { env } from 'cloudflare:workers'` are the SAME bindings object, so no
+response can reveal which one a seed read: this file proves the two wirings
+behave alike, NOT that the parameter is redundant. What the parameter actually
+receives is asserted where it can be observed —
+`packages/integration/test/hono.test.ts`, against the pack.
+
+What the pair does show is narrower and still worth having: on this runtime the
+config module is sufficient, so an app does not need the parameter to reach its
+bindings.
 
 One consequence is visible rather than argued: the seed is a THUNK evaluated only
 on the build that happens (§36), so the `c.env` variant reads the FIRST request's

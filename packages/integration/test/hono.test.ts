@@ -40,3 +40,41 @@ describe('Hono pack — mount middleware + native chain + terminal handler', () 
     await w.dispose()
   })
 })
+
+// What `seedFrom`'s PARAMETER actually receives. The signature is
+// `(hostEnv: unknown) => Seed` and exists for one reason — on Workers, Hono
+// hands the bindings over per request as `c.env` — but until now nothing in the
+// repo asserted that a value reaches it. Both the React Router pack's tests and
+// the Workers example exercise the SHAPE while supplying the env from elsewhere,
+// so the delivery itself was only ever verified by reading the pack.
+//
+// This is the whole claim, and it is one line of the pack: `hono.ts` calls
+// `seedFrom(c.env)`. Asserted here rather than in an example, because from
+// outside a worker `c.env` and `import { env } from 'cloudflare:workers'` are the
+// SAME object — no response can tell you which one a seed read.
+describe('the host env reaches seedFrom', () => {
+  it('receives the Hono context env, and only on the build that happens', async () => {
+    const received: unknown[] = []
+    const w = hono(chain, (hostEnv) => {
+      received.push(hostEnv)
+      return { env: { label: 'from-host' } satisfies Env }
+    })
+    const app = new Hono().get('/courses/:courseId', ...w.handler(courseHandler))
+
+    // Hono's `Bindings` are what `c.env` carries; `app.request`'s third argument
+    // is how they are supplied outside a Worker.
+    const bindings = { LABEL: 'delivered', TOKEN: 's3cret' }
+    const res = await app.request('/courses/c1', { headers: { authorization: 'Bearer u-admin' } }, bindings)
+    expect(res.status).toBe(200)
+
+    expect(received).toEqual([bindings])
+
+    // The seed is a thunk `ensure` evaluates once (§36), so a second request with
+    // DIFFERENT bindings does not reach `seedFrom` at all. That is the property
+    // the signature's name obscures: it is not a per-request seed.
+    await app.request('/courses/c1', { headers: { authorization: 'Bearer u-admin' } }, { LABEL: 'ignored' })
+    expect(received).toEqual([bindings])
+
+    await w.dispose()
+  })
+})
