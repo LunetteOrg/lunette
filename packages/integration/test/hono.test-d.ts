@@ -4,6 +4,7 @@
 // the response OUTPUT@200 (the leaf's R via `c.json`), both exact, not
 // `unknown`. If this file stops compiling, the pack has lost RPC.
 
+import type { PubOf } from '@lntt/wire'
 import { Hono } from 'hono'
 import { hc } from 'hono/client'
 import type { InferRequestType, InferResponseType } from 'hono/client'
@@ -12,7 +13,7 @@ import { chain, type Env } from './fixture/chain.ts'
 import { courseHandler } from './fixture/handlers.ts'
 import { hono, type WireEnv } from '../src/hono.ts'
 
-type Pub = Awaited<ReturnType<typeof chain.build>>['app']
+type Pub = PubOf<typeof chain>
 
 const w = hono(chain, () => ({ env: {} as Env }))
 

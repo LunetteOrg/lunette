@@ -1,3 +1,4 @@
+import type { PubOf } from '@lntt/wire'
 import { Hono } from 'hono'
 import { describe, expect, it } from 'vitest'
 import { chain, type Env } from './fixture/chain.ts'
@@ -6,7 +7,7 @@ import { hono, type WireEnv } from '../src/hono.ts'
 
 describe('Hono pack — mount middleware + native chain + terminal handler', () => {
   it('runs the same handlers through a real Hono onion (native chaining)', async () => {
-    type Pub = Awaited<ReturnType<typeof chain.build>>['app']
+    type Pub = PubOf<typeof chain>
     const w = hono(chain, () => ({ env: { label: 'hono' } satisfies Env }))
 
     // NATIVE chaining: `.use(mount)` seeds the build; `.get/.post(path,

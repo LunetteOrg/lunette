@@ -1,3 +1,4 @@
+import type { PubOf } from '@lntt/wire'
 import { Hono } from 'hono'
 import expressApp, { type Express } from 'express'
 import { describe, it } from 'vitest'
@@ -8,7 +9,7 @@ import { express as expressPack } from '../src/express.ts'
 import { hono, type WireEnv } from '../src/hono.ts'
 import { reactRouter } from '../src/react-router.ts'
 
-type Pub = Awaited<ReturnType<typeof chain.build>>['app']
+type Pub = PubOf<typeof chain>
 
 const rr = reactRouter(chain, (env) => ({ env: env as Env }))
 const ho = hono(chain, () => ({ env: {} as Env }))

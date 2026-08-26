@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { bind, lunette } from '@lntt/wire'
+import { bind, lunette, type PubOf } from '@lntt/wire'
 import type { Env } from '../config/env.ts'
 import { withDb } from '../db/layer.ts'
 import { commentRepo } from '../db/repos/comment.repo.ts'
@@ -69,4 +69,8 @@ export const chain = lunette<{ env: Env }>()
   .expose('getSession', (ctx) => sessionReader(ctx.sessionCookie, ctx.sessionRepo))
   .expose('validateEmail', () => validateEmail)
 
-export type App = Awaited<ReturnType<typeof chain.build>>['app']
+// The chain's PUBLIC surface — what `build` delivers and what a scope's `deps`
+// are checked against. `PubOf` ships from @lntt/wire for this: reaching for
+// `Awaited<ReturnType<typeof chain.build>>['app']` spells out the same inference
+// by hand, and a reader copying this file would carry the long form into theirs.
+export type App = PubOf<typeof chain>

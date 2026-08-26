@@ -1,4 +1,4 @@
-import { lunette } from '@lntt/wire'
+import { lunette, type PubOf } from '@lntt/wire'
 import { makeRepos } from './domain.ts'
 
 export interface Env {
@@ -12,4 +12,4 @@ export interface Env {
 export const chain = lunette<{ env: Env }>().expose(() => makeRepos())
 
 // The app Pub, inferred — what a scope's Need is reconciled against at the mount.
-export type App = Awaited<ReturnType<typeof chain.build>>['app']
+export type App = PubOf<typeof chain>
