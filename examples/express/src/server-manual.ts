@@ -62,11 +62,16 @@ import { hostEnv } from './config/env.ts'
 // Both are plumbing: no scope enters them. What they bracket is the part worth
 // writing out, below.
 
-// The capabilities THIS carrier provides: Express streams the request body, so
-// `body`; the response renders `Set-Cookie`, so `cookies`. A host that could not
-// do one of them narrows this set and every scope requiring it stops compiling
-// at its mount line (decision 34).
-type HostCaps = 'body' | 'cookies'
+// The capabilities THIS carrier provides, and the line is a claim about
+// MACHINERY, not a permission: `body` because `toWebRequest` streams the request
+// into the Web Request, `cookies` and `headers` because `renderOutcome` writes
+// both sinks onto the response. A host that could not do one of them narrows
+// this set and every scope requiring it stops compiling at its mount line (§34).
+//
+// Narrowing is always safe — it only rejects more. WIDENING is the claim, so it
+// belongs to whoever supplies the machinery: writing a capability here that
+// `toWebRequest`/`renderOutcome` do not implement would open the gate on nothing.
+type HostCaps = 'body' | 'cookies' | 'headers'
 
 // The per-request call, and the only place the two brands are named:
 // `DepGuard<App, Need>` fires if the chain's public surface does not cover what

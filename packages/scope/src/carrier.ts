@@ -4,14 +4,31 @@
 // the agnostic `scope()` reads only `params` + guard enrichments. `RequestCarrier`
 // / `JobCarrier` name the RUNTIME object a host hands to `runFold`.
 
-// The capabilities a host carrier can offer, and a scope can REQUIRE — each
-// maps a carrier extension to the hosts that support it. `body` — consuming the
-// request body stream (`@lntt/scope/body`'s `.body`/`.form`); a host with no
-// readable body (tRPC) declares it absent. `cookies` — writing `Set-Cookie`
-// (`@lntt/scope/cookies`); a host that cannot render it (tRPC drops it) declares
-// it absent. The adapter's `CarrierGuard` turns a mismatch into a compile error
-// at the wiring call site. Extensible: 'multipart', 'stream', …
-export type Capability = 'body' | 'cookies' | 'headers'
+// A capability NAME. The alphabet is OPEN — any extension may coin one, and the
+// core enumerates none (principle 6): an extension declares what it requires in
+// its own `__caps`, a mount declares what its carrier provides, and
+// `CarrierGuard` is set inclusion between the two. `@lntt/scope`'s own
+// extensions coin `body` (consuming the request body stream — `./body`'s
+// `.body`/`.form`), `cookies` (writing `Set-Cookie` — `./cookies`) and `headers`
+// (the response-header sink — `./headers`), but they are named THERE, not here.
+//
+// The two sides are deliberately asymmetric, and the asymmetry is what keeps
+// every mistake falling the safe way (§34):
+//
+//   DEMAND (the scope) is OPEN — an unknown name is still carried, so a scope
+//   requiring a capability no host has claimed mounts NOWHERE until one does.
+//   SUPPLY (the mount) is CLOSED — a written-out set. Narrowing it only rejects
+//   more; widening it is a claim about MACHINERY, so only whoever provides the
+//   machinery may widen (a `body` scope works on Express because `toWebRequest`
+//   streams the request into the Web Request — the label is the name of
+//   something that exists, never a permission).
+//
+// This used to be `'body' | 'cookies' | 'headers'`, which filtered an
+// extension's own names through a list the core kept: a third-party capability
+// became `never`, `CarrierGuard<never, …>` collapsed to `unknown`, and the gate
+// opened SILENTLY. `capability-alphabet.test-d.ts` is the negative that keeps it
+// shut.
+export type Capability = string
 
 // The body-consuming members of a Fetch `Request` — the standard `Body` mixin,
 // enumerated explicitly because this toolchain's `Request` comes from

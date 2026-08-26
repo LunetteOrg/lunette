@@ -1065,6 +1065,50 @@ call `ctx.request.json()` to sneak the body past the capability — it does not
 typecheck. A missing capability is thus impossible to forget: reading the body
 requires the declaration that flows `Cap`, which the gate reads.
 
+**Amendment — the alphabet is OPEN, and the two sides are asymmetric.** As first
+written, `Capability` was the closed union `'body' | 'cookies' | 'headers'` in
+the core, and `CapsOf` filtered an extension's own `__caps` through it. That
+contradicted principle 6 — extensions are dialects, the core names none — and it
+did so in the worst possible direction: a third-party capability was not
+rejected, it became `never`. `CarrierGuard<never, HostCaps>` collapses to
+`unknown`, the brand vanishes, and the scope mounts ANYWHERE. A silent
+fail-OPEN in the one mechanism whose entire job is to make a bad mount
+impossible. Verified as a type probe before the change, and kept as
+`packages/scope/src/capability-alphabet.test-d.ts` after it.
+
+`Capability` is now `string`. An extension coins its own names and the core
+enumerates none. The safety does not rest on the core knowing the alphabet — it
+rests on an asymmetry:
+
+- **DEMAND (the scope) is OPEN.** Any extension may coin a name, and the name is
+  carried through as it is. A capability no host has claimed appears in no
+  `HostCaps`, so `Exclude` leaves it and the mount fails EVERYWHERE. A new
+  capability mounts nowhere until a host claims it; a typo (`'bdy'`) fails the
+  same way, naming the string.
+- **SUPPLY (the mount) is CLOSED** — a written-out set in the adapter, or in the
+  hand-written mount for a host we ship nothing for.
+
+Every mistake therefore falls the safe way, and the rule that follows is worth
+stating on its own: **narrowing a host's set is always legitimate — it only
+rejects more. WIDENING is a claim about MACHINERY, so it belongs to whoever
+supplies the machinery.** `body` works on Express because `toWebRequest` streams
+the request into the Web `Request`; `cookies` and `headers` work because
+`renderOutcome` writes both sinks. A capability name is the name of something
+that exists, never a permission to be granted.
+
+What the amendment does NOT do is make the SUPPLY side extensible: a caller
+cannot widen a shipped pack's set, and the only way to serve a capability a pack
+does not claim is to write the mount (which is also the answer to "you ship no
+adapter for my host" — `examples/express/src/server-manual.ts` writes its
+`HostCaps` out). Deferred deliberately: there is no second capability per host to
+design against yet, and #41 (SSE, downloads, WebSocket upgrade) is where the
+first real divergence will appear. Tracked as #44.
+
+A capability, finally, exists because an EXTENSION demands one — not because a
+host happens to be able to do something. The alphabet mirrors the extension set,
+not an inventory of host abilities, so "does Express have more capabilities?"
+only becomes answerable when something asks for one.
+
 **Alternatives.** (a) Normalize all sources into one `.input` bag the adapter
 assembles per host: rejected — auto-merging path/query/body is "ambient magic"
 (principle 7), risks name collisions, and threatens the typed client (`hc` reads

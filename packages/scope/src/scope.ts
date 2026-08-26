@@ -97,7 +97,11 @@ type SchemaOf<T> = T extends { readonly __schema?: infer S }
     : UnitSchema
   : UnitSchema
 type ParamsOf<T> = OutputOf<SchemaOf<T>>
-type CapsOf<T> = T extends { readonly __caps?: infer M } ? (keyof M extends Capability ? keyof M : never) : never
+// An extension's own capability names, carried through as they are: `& string`
+// drops symbol/number keys and nothing else. It must NOT filter against a list
+// the core keeps — that is what silently turned an unknown capability into
+// `never` and opened the mount gate (see `Capability` in carrier.ts).
+type CapsOf<T> = T extends { readonly __caps?: infer M } ? (keyof M & string) : never
 // The effect map: every injected extension's `__effects` intersected, so
 // `outcome.effects` carries exactly the keys THIS scope can produce.
 type EffOf<T> = T extends { readonly __effects?: infer E } ? (E extends object ? E : {}) : {}

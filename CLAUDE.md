@@ -92,8 +92,11 @@ the tracker when relevant — never from here.
   (`RequestCarrier`/`JobCarrier`) · scope extension (a composable unit in a
   tree-shakable subpath — `request` read-only, `body`, `cookies`, `headers` — each
   declaring ctx/methods/deps/capability; the core names none; `.extend` gates
-  collisions, §4) · capability (`'body'`/`'cookies'`/`'headers'`, gated at mount
-  per host, §34) · dialect.
+  collisions, §4) · capability (an OPEN alphabet — an extension coins its own
+  name, the core enumerates none; shipped: `'body'`/`'cookies'`/`'headers'`.
+  Demand is open, supply is a written-out set per mount, so an unclaimed
+  capability mounts nowhere; widening a host's set is a claim about machinery,
+  §34) · dialect.
 - **Tests**: vitest with typecheck (`*.test-d.ts` included via the
   `typecheck` block in each `vitest.config.ts`; `pnpm typecheck` runs
   `tsc --noEmit` and is the separate gate). Always verify by running:
