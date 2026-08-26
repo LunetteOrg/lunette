@@ -38,9 +38,29 @@ export function buildOnce<C extends Lunette<any, any, any>>(chain: C): BuildOnce
   return {
     // The PROMISE is memoized, not the resolved app: callers racing the first
     // ensure share the one build instead of each starting a chain of their own.
-    ensure: (seed) => (built ??= build(seed())),
+    //
+    // A REJECTED promise is dropped, so the next `ensure` builds again. What is
+    // memoized is one SUCCESSFUL build, not one attempt: a rejected promise is
+    // not nullish, so keeping it would make a single transient failure — a pool
+    // that could not connect, a secret that did not resolve — permanent for the
+    // life of the process or isolate, and on a lazy build that first attempt is
+    // a REQUEST, not startup. Callers already sharing the failing build still
+    // share its failure; only a caller arriving after it settles starts a new
+    // one. Safe because a failed build unwinds: each layer's `finally` runs on
+    // the way out, so nothing it opened is left orphaned (§36).
+    ensure: (seed) =>
+      (built ??= build(seed()).catch((error: unknown) => {
+        built = undefined
+        throw error
+      })),
+    // Teardown must work in the state that calls for it, so a build that failed
+    // is not allowed to take `dispose` down with it: awaiting a rejected handle
+    // would rethrow, leaving no way to close what did succeed.
     dispose: async () => {
-      if (built) await (await built).dispose()
+      const pending = built
+      if (!pending) return
+      const handle = await pending.catch(() => undefined)
+      await handle?.dispose()
     },
   }
 }

@@ -1332,6 +1332,35 @@ sees the ban. Each Workers entry therefore carries two vitest projects, and the
 negative case is a fixture worker refused at startup — not an assertion about
 one.
 
+**Amendment — what is memoized is one SUCCESSFUL build.** As first written,
+`ensure` was `built ??= build(seed())`. A rejected promise is not nullish, so the
+memo kept it: one transient failure — a pool that could not connect, a secret
+that did not resolve — was permanent for the life of the process or isolate, and
+every later request re-awaited the same rejection. `dispose()` was poisoned with
+it, since awaiting the stored handle rethrew, so the one escape hatch did not
+work in the state that called for it. And the two failure kinds behaved
+oppositely for no reason anyone chose: a seed thunk throwing SYNCHRONOUSLY (a bad
+env) threw before the assignment and stayed retryable, while a rejection one
+layer deeper did not.
+
+None of that was decided; it followed from `??=` on a promise. A rejected build
+is now dropped, so the next `ensure` builds again, and `dispose` tolerates a
+handle that never resolved.
+
+This does not weaken the identity guarantee, and the reason it does not is worth
+stating: a failed build UNWINDS. Every layer is a bracket, so the `finally` of
+each layer that had already opened runs on the way out, and a retry starts from
+nothing rather than from a half-open graph. Nor does it weaken the memo while a
+build is in flight — callers racing a failing build still share it, and only a
+caller arriving after it settles starts a new one.
+
+The severity is a consequence of the build being LAZY. Where a container builds
+at startup, a failed build takes the process down and the supervisor restarts it,
+which is the behaviour everyone wants. Here the first attempt is a REQUEST, so
+without this the first unlucky request decides the fate of every request after
+it. #35 (`@lntt/secret`, resolving secrets by fetch at boot) is the case where
+this would have bitten hardest.
+
 **Known caveat, not solved here.** On Workers the memo's lifetime is the
 isolate's, which we do not control. Cloudflare documents that a value captured
 in global scope "might not be updated when `env` changes", and that a deploy

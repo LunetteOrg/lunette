@@ -106,3 +106,105 @@ describe('buildOnce', () => {
     await b.dispose()
   })
 })
+
+// The failure path, which the memo used to make permanent. A rejected promise is
+// not nullish, so `??=` kept it and every later request re-awaited the same
+// rejection — on a LAZY build, where the first attempt is a request rather than
+// startup, one transient blip poisoned the process or isolate until restart.
+describe('buildOnce when the build fails', () => {
+  // A chain whose layer fails a given number of times before succeeding, with
+  // a resource opened BEFORE the failing point, so teardown is observable.
+  const flaky = (failures: number) => {
+    const attempts: string[] = []
+    const torn: string[] = []
+    let left = failures
+    const chain = lunette<{ env: Env }>()
+      .use(async (ctx, next) => {
+        attempts.push(ctx.env.DATABASE_URL)
+        try {
+          return await next({ db: { url: ctx.env.DATABASE_URL } })
+        } finally {
+          torn.push(ctx.env.DATABASE_URL)
+        }
+      })
+      .use(async (ctx, next) => {
+        if (left-- > 0) throw new Error('transient: could not connect')
+        return next({ ready: true as const })
+      })
+      .expose((ctx) => ({ api: { url: () => ctx.db.url } }))
+    return { chain, attempts, torn }
+  }
+
+  it('does not cache the rejection — the next ensure builds again', async () => {
+    const { chain, attempts } = flaky(1)
+    const once = buildOnce(chain)
+
+    await expect(once.ensure(seedOf('pg://flaky'))).rejects.toThrow('transient')
+    const recovered = await once.ensure(seedOf('pg://flaky'))
+
+    expect(attempts).toEqual(['pg://flaky', 'pg://flaky'])
+    expect(recovered.app.api.url()).toBe('pg://flaky')
+    await once.dispose()
+  })
+
+  it('unwinds what the failed attempt had opened, so retrying leaks nothing', async () => {
+    const { chain, torn } = flaky(1)
+    const once = buildOnce(chain)
+
+    await expect(once.ensure(seedOf('pg://unwound'))).rejects.toThrow('transient')
+    // The layer's `finally` ran on the way out: the retry starts from nothing.
+    expect(torn).toEqual(['pg://unwound'])
+    await once.ensure(seedOf('pg://unwound'))
+    await once.dispose()
+    expect(torn).toEqual(['pg://unwound', 'pg://unwound'])
+  })
+
+  it('still shares ONE failing build between callers racing it', async () => {
+    const { chain, attempts } = flaky(1)
+    const once = buildOnce(chain)
+
+    const raced = await Promise.allSettled([
+      once.ensure(seedOf('pg://raced')),
+      once.ensure(seedOf('pg://raced')),
+      once.ensure(seedOf('pg://raced')),
+    ])
+
+    // One attempt, three rejections: the memo still does its job while the build
+    // is in flight. Only a caller arriving AFTER it settles starts a new one.
+    expect(attempts).toEqual(['pg://raced'])
+    expect(raced.map((r) => r.status)).toEqual(['rejected', 'rejected', 'rejected'])
+    await once.dispose()
+  })
+
+  it('disposes without throwing after a build that failed', async () => {
+    const { chain } = flaky(1)
+    const once = buildOnce(chain)
+
+    await expect(once.ensure(seedOf('pg://doomed'))).rejects.toThrow('transient')
+    // Teardown has to work in the state that calls for it. Awaiting the rejected
+    // handle would rethrow, leaving a caller no way to close what did succeed.
+    await expect(once.dispose()).resolves.toBeUndefined()
+  })
+
+  it('leaves a seed that throws SYNCHRONOUSLY retryable too', async () => {
+    const { chain, attempts } = flaky(0)
+    const once = buildOnce(chain)
+    let bad = true
+    const seed = () => {
+      if (bad) {
+        bad = false
+        throw new Error('invalid environment')
+      }
+      return { env: { DATABASE_URL: 'pg://after-a-bad-seed' } }
+    }
+
+    expect(() => once.ensure(seed)).toThrow('invalid environment')
+    const recovered = await once.ensure(seed)
+
+    // The thunk throws before the assignment, so nothing was ever memoized. The
+    // two failure kinds now behave the same way; they used not to.
+    expect(attempts).toEqual(['pg://after-a-bad-seed'])
+    expect(recovered.app.api.url()).toBe('pg://after-a-bad-seed')
+    await once.dispose()
+  })
+})
