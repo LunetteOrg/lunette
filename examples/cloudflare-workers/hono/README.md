@@ -47,6 +47,31 @@ it. Note what the ban covers: asynchronous **I/O**, not async work. The same
 layer's `crypto.subtle.digest` is CPU and passes at module scope — it is
 touching a BINDING that is refused.
 
+## Two ways in for the environment, compared
+
+This entry carries the same app twice, differing in one line:
+
+| entry | composition root | where the bindings come from |
+|---|---|---|
+| `src/server.ts` | `src/bootstrap/index.ts` | `import { env } from 'cloudflare:workers'`, at module scope |
+| `src/server-from-host-env.ts` | `src/bootstrap/from-host-env.ts` | Hono's per-request `c.env`, via `seedFrom(hostEnv)` |
+
+The second is the **only** use of `seedFrom`'s parameter in the repo. The Hono
+pack carries that signature for `c.env` and nothing exercised it, which left open
+whether it still earns its place now that `cloudflare:workers` exists.
+`test/env-parity.node.test.ts` drives both workers — each with its own KV
+namespace, so neither borrows the other's state — through the same sequence of
+reads, writes, a duplicate-slug 409 and a schema 422, and asserts identical
+responses.
+
+They are identical. On the host the parameter was added for, it buys nothing the
+config module does not already give.
+
+One consequence is visible rather than argued: the seed is a THUNK evaluated only
+on the build that happens (§36), so the `c.env` variant reads the FIRST request's
+env and ignores every later one. It is not a per-request seed — there is no such
+thing; a per-call axis is a window (principle 4).
+
 ## Two test projects, because one tool cannot do both
 
 | project | tool | vantage point | what it proves |

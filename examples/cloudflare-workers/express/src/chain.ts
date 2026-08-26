@@ -1,6 +1,7 @@
 import { layer, lunette } from '@lntt/wire'
 import { z } from 'zod'
-import { notFound, scope } from '@lntt/scope'
+import { httpError, notFound, scope } from '@lntt/scope'
+import { body } from '@lntt/scope/body'
 import type { Env } from './config/env.ts'
 
 // A chain of its own: nothing here comes from `@lntt/example-app`, which cannot
@@ -54,6 +55,18 @@ export const chain = lunette<{ env: Env }>()
       const url = ctx.lookup(slug)
       return url ? { slug, url } : undefined
     },
+    // The WRITE, and it writes to both: KV so the value outlives this isolate,
+    // and the in-memory store so THIS app sees its own write. They are two
+    // stores and the app owns the reconciliation — the store was read once at
+    // build (§36), so a write that only touched KV would be invisible here until
+    // an isolate started fresh. That is the same property #39 is about, seen
+    // from the inside.
+    create: async (slug: string, url: string): Promise<Link | 'slug-taken'> => {
+      if (ctx.store.has(slug)) return 'slug-taken'
+      await ctx.env.LINKS.put(slug, url)
+      ctx.store.set(slug, url)
+      return { slug, url }
+    },
   }))
   .expose('about', (ctx) => ({
     label: ctx.env.LABEL,
@@ -71,6 +84,26 @@ export const linkScope = scope()
     const link = deps.links.bySlug(ctx.params.slug)
     return link ? { link } : notFound()
   })
+
+// The WRITE scope, and the reason both Workers entries have one: `.body(schema)`
+// is a DECLARED channel, so this scope carries the `body` capability (§34) and
+// the mount gate has something to check. On Express it is also the only thing
+// that exercises `toWebRequest`'s streaming branch (`init.body = req`,
+// `duplex: 'half'`) against a `node:http` server the runtime EMULATES — the
+// least-verified path of the Node pack on this runtime.
+export const createScope = scope()
+  .extend(body)
+  .body(z.object({ slug: z.string().min(1), url: z.string().url() }))
+  .handle(
+    async (
+      deps: { links: { create(slug: string, url: string): Promise<Link | 'slug-taken'> } },
+      ctx,
+    ) => {
+      const created = await deps.links.create(ctx.body.slug, ctx.body.url)
+      // A RETURNED domain error: the slug is taken. Commit, no retry (principle 3).
+      return created === 'slug-taken' ? httpError(409, { error: 'slug-taken' }) : { link: created }
+    },
+  )
 
 // Reads the env back out through the chain, which is what proves the values the
 // config module read at module scope reached the app.

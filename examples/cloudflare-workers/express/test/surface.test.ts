@@ -45,6 +45,48 @@ describe('the Express pack, unchanged, serving from a Worker', () => {
     expect(res.status).toBe(404)
   })
 
+  // THE test this entry exists for, on the write side. No express.json(), so the
+  // body arrives through `toWebRequest`'s streaming branch — the Node request
+  // object handed to `new Request` as its body, with `duplex: 'half'` — on a
+  // `node:http` server the Workers runtime emulates. It is the least-verified
+  // path of the Node pack on this runtime, and the one where an emulation is
+  // most likely to diverge.
+  it('reads a JSON body streamed through the emulated node:http request', async () => {
+    const res = await worker.fetch('https://example.com/links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug: 'created', url: 'https://example.com/created' }),
+    })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({
+      link: { slug: 'created', url: 'https://example.com/created' },
+    })
+
+    // and the app sees its own write
+    const read = await worker.fetch('https://example.com/links/created')
+    expect(read.status).toBe(200)
+  })
+
+  it('returns the domain error for a slug already taken', async () => {
+    const again = await worker.fetch('https://example.com/links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug: 'home', url: 'https://example.com/dup' }),
+    })
+    expect(again.status).toBe(409)
+    expect(await again.json()).toEqual({ error: 'slug-taken' })
+  })
+
+  // The declared channel's own validation, before the leaf runs.
+  it('rejects a body that fails the schema with a 422', async () => {
+    const res = await worker.fetch('https://example.com/links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug: '', url: 'not-a-url' }),
+    })
+    expect(res.status).toBe(422)
+  })
+
   // The bindings reached the app the ONLY way they can on this entry: through
   // `cloudflare:workers` in the config module. There is no `c.env` on a
   // node:http path for a `seedFrom(hostEnv)` to receive.

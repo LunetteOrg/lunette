@@ -38,6 +38,20 @@ Cloudflare has supported `node:http` servers since August 2025, which fixes this
 example's minimum runtime version: `nodejs_compat`, and a compatibility date
 after 2025-08-15. Both are in `wrangler.jsonc`.
 
+## The write path, which is the part only this entry tests
+
+`POST /links` declares a `.body(schema)` channel, so the scope carries the `body`
+capability (§34) and there is something for the mount gate to check. More to the
+point: there is no `express.json()` — it would drain the stream before the Web
+Request — so the body reaches the leaf through `toWebRequest`'s streaming branch,
+the Node request object handed to `new Request` as its body with
+`duplex: 'half'`, on a `node:http` server the runtime **emulates**.
+
+That is the least-verified path of the Node pack on this runtime, and the one
+where an emulation is most likely to diverge. It does not: the write round-trips,
+a duplicate slug comes back as a RETURNED 409 domain error, and a body failing
+the schema as a 422 from the channel's own validation.
+
 ## `app.listen()` at module scope — checked, not assumed
 
 It was an open question whether binding a port while a module is being evaluated

@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { aboutScope, linkScope, listScope } from './chain.ts'
+import { aboutScope, createScope, linkScope, listScope } from './chain.ts'
 import { handler } from './bootstrap/index.ts'
 
 // The MOUNT, and nothing else — the same shape as `examples/hono/src/server.ts`
@@ -9,6 +9,9 @@ const app = new Hono()
   .get('/links', ...handler(listScope))
   .get('/links/:slug', ...handler(linkScope))
   .get('/about', ...handler(aboutScope))
+  // The WRITE: a declared `.body` channel, so this scope carries the `body`
+  // capability and the mount gate checks it against what Hono's carrier provides.
+  .post('/links', ...handler(createScope))
 
 export type AppType = typeof app
 

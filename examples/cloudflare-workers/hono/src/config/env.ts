@@ -38,11 +38,13 @@ const requiredBinding = <T>(raw: Record<string, unknown>, key: string): T => {
   return value as T
 }
 
-export const hostEnv = (): Env => {
-  const raw = env as unknown as Record<string, unknown>
-  return {
-    LABEL: requiredString(raw, 'LABEL'),
-    SIGNING_SECRET: requiredString(raw, 'SIGNING_SECRET'),
-    LINKS: requiredBinding<KVNamespace>(raw, 'LINKS'),
-  }
-}
+// The parse, separated from the SOURCE so the two can vary independently: this
+// entry has a second source (`config/env-from-host.ts`, Hono's per-request
+// `c.env`) and both must land on the same `Env`.
+export const readEnv = (raw: Record<string, unknown>): Env => ({
+  LABEL: requiredString(raw, 'LABEL'),
+  SIGNING_SECRET: requiredString(raw, 'SIGNING_SECRET'),
+  LINKS: requiredBinding<KVNamespace>(raw, 'LINKS'),
+})
+
+export const hostEnv = (): Env => readEnv(env as unknown as Record<string, unknown>)

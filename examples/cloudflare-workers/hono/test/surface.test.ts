@@ -47,6 +47,40 @@ describe('the links chain on Hono, served from a Worker', () => {
     expect(res.status).toBe(404)
   })
 
+  // The WRITE: a declared `.body` channel, validated by the fold, reaching a leaf
+  // that writes KV and the in-memory store both.
+  it('reads a declared JSON body and writes through', async () => {
+    const res = await worker.fetch('https://example.com/links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug: 'created', url: 'https://example.com/created' }),
+    })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({
+      link: { slug: 'created', url: 'https://example.com/created' },
+    })
+    expect(await links.get('created')).toBe('https://example.com/created')
+  })
+
+  it('returns the domain error for a slug already taken', async () => {
+    const res = await worker.fetch('https://example.com/links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug: 'home', url: 'https://example.com/dup' }),
+    })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'slug-taken' })
+  })
+
+  it('rejects a body that fails the schema with a 422', async () => {
+    const res = await worker.fetch('https://example.com/links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug: '', url: 'not-a-url' }),
+    })
+    expect(res.status).toBe(422)
+  })
+
   // The values `config/env.ts` read from `cloudflare:workers` at module scope,
   // travelling the whole way: into the seed, through the layer, out of the
   // chain's public surface and into a leaf's response.
