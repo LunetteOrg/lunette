@@ -116,6 +116,18 @@ the tracker when relevant — never from here.
   are not actionable; the only thing worth checking is whether the
   prototype demonstrates what it set out to. Scope `/review` and
   `/code-review` to `packages/`, `docs/`, and root config.
+- **Reviewing `examples/`**: they ARE reviewed, but as DEMONSTRATIONS, not as
+  production systems. What counts: does it teach the right thing, is every
+  claim in its prose true, does it compile and pass, would a reader copying
+  the SHAPE be led right. What does not: production hardening — concurrency
+  and races, pagination and unbounded reads, retry and backoff, N+1 access
+  patterns, exhaustion limits. An example is allowed to be the simplest thing
+  that shows its point, and simplifying is often what makes the point legible
+  (the fat eager KV read in `examples/cloudflare-workers/*` is what makes
+  build-once observable at all; a realistic lazy handle would demonstrate
+  less). Where a shortcut could mislead someone copying it, the answer is a
+  COMMENT stating the limit, not hardening the example. Findings of the
+  production-hardening kind are noted and closed, not fixed.
 
 ## Status and next steps
 

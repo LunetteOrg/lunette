@@ -23,11 +23,10 @@
 //   streams the request into the Web Request — the label is the name of
 //   something that exists, never a permission).
 //
-// This used to be `'body' | 'cookies' | 'headers'`, which filtered an
-// extension's own names through a list the core kept: a third-party capability
-// became `never`, `CarrierGuard<never, …>` collapsed to `unknown`, and the gate
-// opened SILENTLY. `capability-alphabet.test-d.ts` is the negative that keeps it
-// shut.
+// Filtering an extension's names against a list the core keeps would fail OPEN,
+// not closed — an unrecognised capability collapses to `never`, and
+// `CarrierGuard<never, …>` is `unknown`, so the brand disappears (§34).
+// `capability-alphabet.test-d.ts` is the negative that keeps it shut.
 export type Capability = string
 
 // The body-consuming members of a Fetch `Request` — the standard `Body` mixin,

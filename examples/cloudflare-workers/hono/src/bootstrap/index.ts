@@ -10,7 +10,7 @@ import { hostEnv } from '../config/env.ts'
 // is the rule: the pack holds a thunk and `ensure` evaluates it on the first
 // request (§36), because the store layer performs asynchronous I/O and Workers
 // allow none outside a request. Turn this into an `await chain.build(...)` and
-// the worker stops serving — `test/module-scope.test.ts` is that experiment,
+// the worker stops serving — `test/module-scope.node.test.ts` is that experiment,
 // run rather than described.
 //
 // `seedFrom` receives the HOST env, which on Hono is `c.env` — the reason the

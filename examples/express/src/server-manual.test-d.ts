@@ -3,6 +3,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { RequestHandler } from 'express'
 import { scope } from '@lntt/scope'
 import { body } from '@lntt/scope/body'
+import { headers } from '@lntt/scope/headers'
 import type { Capability, CarrierGuard, Handler } from '@lntt/scope'
 import { feedScope, publishPostScope } from '@lntt/example-app'
 import { makeHandler } from './server-manual.ts'
@@ -16,6 +17,19 @@ const { handler } = makeHandler()
 describe('the hand-wired mount', () => {
   it('takes a scope the chain satisfies, capabilities included', () => {
     expectTypeOf(handler(publishPostScope)).toEqualTypeOf<RequestHandler>()
+  })
+
+  // The `headers` half of what this carrier claims. Narrowing a host's set only
+  // rejects more, so it needs no evidence; WIDENING is a claim about machinery
+  // (§34), and `renderOutcome` writes the header sink on every branch — which is
+  // what this pins. Drop `'headers'` from `HostCaps` in server-manual.ts and
+  // this stops compiling.
+  it('takes a scope that writes response headers, which its carrier claims', () => {
+    const withHeaders = scope()
+      .extend(headers)
+      .headers({ 'cache-control': 'no-store' })
+      .handle(() => ({}))
+    expectTypeOf(handler(withHeaders)).toEqualTypeOf<RequestHandler>()
   })
 
   it('rejects a scope whose deps the chain does not expose', () => {

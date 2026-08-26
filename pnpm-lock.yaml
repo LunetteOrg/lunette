@@ -81,6 +81,9 @@ importers:
       '@lntt/wire':
         specifier: workspace:*
         version: link:../../../packages/wire
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@cloudflare/vitest-plugin':
         specifier: ^1.1.0
@@ -103,9 +106,6 @@ importers:
       wrangler:
         specifier: ^4.126.0
         version: 4.126.0(@cloudflare/workers-types@5.20260825.1)
-      zod:
-        specifier: ^3.25.76
-        version: 3.25.76
 
   examples/cloudflare-workers/hono:
     dependencies:
@@ -118,10 +118,16 @@ importers:
       '@lntt/wire':
         specifier: workspace:*
         version: link:../../../packages/wire
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@cloudflare/vitest-plugin':
         specifier: ^1.1.0
         version: 1.1.0(@cloudflare/workers-types@5.20260825.1)(@vitest/runner@4.1.11)(@vitest/snapshot@4.1.11)(vitest@4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2)))
+      '@hono/standard-validator':
+        specifier: ^0.2.3
+        version: 0.2.3(@standard-schema/spec@1.1.0)(hono@4.12.25)
       hono:
         specifier: ^4.12.25
         version: 4.12.25
@@ -134,9 +140,6 @@ importers:
       wrangler:
         specifier: ^4.126.0
         version: 4.126.0(@cloudflare/workers-types@5.20260825.1)
-      zod:
-        specifier: ^3.25.76
-        version: 3.25.76
 
   examples/express:
     dependencies:

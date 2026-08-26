@@ -7,9 +7,9 @@ import { beforeAll, describe, expect, it } from 'vitest'
 const worker = exports.default
 const links = env.LINKS
 
-// The mounted SURFACE, one request at a time, driven through `SELF` — the real
-// worker, loaded by workerd from `wrangler.jsonc`, answering over the runtime's
-// own fetch path. What the Node entries prove against a Node server, this proves
+// The mounted SURFACE, one request at a time, driven through `exports.default` —
+// the real worker, loaded by workerd from `wrangler.jsonc`, answering over the
+// runtime's own fetch path. What the Node entries prove against a Node server, this proves
 // against the runtime the example is about. Its sibling
 // `module-scope.node.test.ts` proves the one thing this vantage point cannot.
 //

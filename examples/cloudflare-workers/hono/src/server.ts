@@ -13,8 +13,6 @@ const app = new Hono()
   // capability and the mount gate checks it against what Hono's carrier provides.
   .post('/links', ...handler(createScope))
 
-export type AppType = typeof app
-
 // The Workers entry point: a module exporting a `fetch` handler. Hono's `app`
 // already IS one, so the whole adaptation to the runtime is this line.
 export default app

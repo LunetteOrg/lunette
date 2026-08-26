@@ -1050,8 +1050,8 @@ scope that declares either carries the `body` **capability** in its `Cap`
 axis (a phantom on `Handler`, load-bearing like `__need`/`__result`).
 
 Each host adapter declares the capabilities its carrier PROVIDES (`'body' |
-'cookies'` for Hono/Express/RR7; NONE for tRPC — one JSON `input`, no separate
-readable body, and it drops `Set-Cookie`) and intersects the wiring parameter
+'cookies' | 'headers'` for Hono/Express/RR7; NONE for tRPC — one JSON `input`, no
+separate readable body, and it drops `Set-Cookie`) and intersects the wiring parameter
 with `CarrierGuard<Cap, HostCaps>` — the
 same brand shape as `DepGuard` (decision doc §adapter-guard). When `Cap ⊆
 HostCaps` the clause vanishes and the mount compiles; otherwise it becomes an
@@ -1073,8 +1073,8 @@ did so in the worst possible direction: a third-party capability was not
 rejected, it became `never`. `CarrierGuard<never, HostCaps>` collapses to
 `unknown`, the brand vanishes, and the scope mounts ANYWHERE. A silent
 fail-OPEN in the one mechanism whose entire job is to make a bad mount
-impossible. Verified as a type probe before the change, and kept as
-`packages/scope/src/capability-alphabet.test-d.ts` after it.
+impossible. The negative that keeps it shut is
+`packages/scope/src/capability-alphabet.test-d.ts`.
 
 `Capability` is now `string`. An extension coins its own names and the core
 enumerates none. The safety does not rest on the core knowing the alphabet — it

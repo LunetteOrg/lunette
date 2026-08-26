@@ -1,18 +1,18 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { CarrierGuard, Handler, ScopeExtension } from './index.ts'
+import type { Capability, CarrierGuard, Handler, ScopeExtension } from './index.ts'
 import { scope } from './scope.ts'
 import { body } from './extensions/body.ts'
 
 // The capability alphabet is OPEN: an extension coins its own names and the core
 // enumerates none (§34). This file is the negative that keeps the gate SHUT for
-// a name the core has never heard of — which is exactly what used to fail.
+// a name the core has never heard of.
 //
-// `Capability` was `'body' | 'cookies' | 'headers'`, and `CapsOf` filtered an
-// extension's `__caps` through it. A third-party capability therefore became
-// `never`; `CarrierGuard<never, HostCaps>` collapses to `unknown`; the brand
-// vanished and the scope mounted ANYWHERE. A silent fail-OPEN in the one
-// mechanism whose whole job is to make a bad mount impossible.
+// The failure it guards against is silent and OPEN, which is why it is worth a
+// file: an unrecognised capability collapses to `never`, `CarrierGuard<never,
+// HostCaps>` is `unknown`, the brand disappears from the intersection, and the
+// scope mounts ANYWHERE — in the one mechanism whose whole job is to make a bad
+// mount impossible.
 
 // A third-party extension, written the way `./extensions/*` are but coining a
 // capability @lntt/scope does not know. The runtime is irrelevant here — the
@@ -26,15 +26,15 @@ declare const websocket: SocketExtension
 // Two mounts standing in for two hosts, written exactly as an adapter writes one
 // (`packages/integration/src/*.ts`): `Handler<…, Cap>` is what makes `Cap`
 // inferable, and the guard is the only other clause.
-declare const httpMount: <Need extends object, S extends StandardSchemaV1, R, Cap extends string>(
+declare const httpMount: <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
   h: Handler<Need, S, R, Cap> & CarrierGuard<Cap, 'body' | 'cookies' | 'headers'>,
 ) => void
 
-declare const socketMount: <Need extends object, S extends StandardSchemaV1, R, Cap extends string>(
+declare const socketMount: <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
   h: Handler<Need, S, R, Cap> & CarrierGuard<Cap, 'body' | 'cookies' | 'headers' | 'websocket'>,
 ) => void
 
-declare const bodylessMount: <Need extends object, S extends StandardSchemaV1, R, Cap extends string>(
+declare const bodylessMount: <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
   h: Handler<Need, S, R, Cap> & CarrierGuard<Cap, 'cookies'>,
 ) => void
 

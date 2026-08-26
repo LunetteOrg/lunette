@@ -31,7 +31,8 @@ app.listen(port)
 export default httpServerHandler({ port })
 ```
 
-Two lines at the bottom of `src/server.ts`. Everything above them is
+Three lines at the bottom of `src/server.ts`, plus the `cloudflare:node`
+import at the top. Everything above them is
 `examples/express` with a different chain.
 
 Cloudflare has supported `node:http` servers since August 2025, which fixes this
