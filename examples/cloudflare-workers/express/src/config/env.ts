@@ -1,9 +1,9 @@
 import { env } from 'cloudflare:workers'
+import { z } from 'zod'
 
-// The ONE host-specific file, and on Workers it is the whole point of the
-// arrangement: the Node entries read `process.env` here, this one reads the
-// Workers binding namespace, and NOTHING downstream changes — the chain, the
-// scopes and the mount take `Env` as a value and never ask where it was read.
+// The ONE host-specific file: where the environment comes from. Everything
+// downstream takes `Env` as a value and never asks where it was read, which is
+// what keeps the rest of the app portable.
 //
 // `import { env } from 'cloudflare:workers'` is available at MODULE SCOPE, and
 // on THIS entry it is not one way to reach the bindings but the ONLY one. The
@@ -11,41 +11,50 @@ import { env } from 'cloudflare:workers'
 // no such channel — Express hands its handlers a `req`, not a platform env. So
 // the claim that a config module is all it takes to move runtimes is not a
 // convenience here, it is what makes the example possible at all.
-// What is not allowed is USING a binding here — a KV read outside a request is
-// asynchronous I/O, which the runtime refuses. Hence the split this file makes
-// visible: the environment is read eagerly, the app is built lazily (§36), and
-// `test/module-scope.node.test.ts` holds the runtime to it.
-export interface Env {
-  readonly LABEL: string
-  readonly SIGNING_SECRET: string
-  // A binding is environment too — it just arrives as an object rather than a
-  // string. On Node the equivalent is a DATABASE_URL that a layer opens; here
-  // the platform hands the handle over and the layer uses it.
-  readonly LINKS: KVNamespace
-}
+//
+// What is NOT allowed here is USING a binding — a KV read outside a request is
+// asynchronous I/O, which the runtime refuses. The environment is read eagerly,
+// the app is built lazily (§36), and `test/module-scope.node.test.ts` holds the
+// runtime to it.
+//
+// Same shape as `examples/app/app/config/env.ts`: a schema, one parse, an
+// aggregated throw. Only the SOURCE differs, which is the claim §37 makes.
+const EnvSchema = z.object({
+  LABEL: z.string().min(1),
+  SIGNING_SECRET: z.string().min(1),
+  // A binding is environment too — it just arrives as an opaque object rather
+  // than a string. `z.custom` is an ASSERTION, not a proof: nothing structural
+  // distinguishes a KV namespace from a D1 database, so all that can be checked
+  // is that the platform put something there. That is worth checking anyway —
+  // the generated types describe the LOCAL wrangler.jsonc, while a deployment
+  // (a `--env` that forgot the binding, one removed in the dashboard) can hand
+  // over `undefined`. Without this the failure surfaces three frames down a
+  // layer as "Cannot read properties of undefined".
+  LINKS: z.custom<KVNamespace>((v) => v != null && typeof v === 'object', {
+    message: 'the binding is missing — declare it in wrangler.jsonc',
+  }),
+})
 
-// A bad config is infrastructure → throw and fail loud (§17). On Workers this
-// runs on the first request rather than at boot, so the message has to name the
-// key: there is no startup log to read it from.
-const requiredString = (raw: Record<string, unknown>, key: string): string => {
-  const value = raw[key]
-  if (typeof value !== 'string' || value === '')
-    throw new Error(`Invalid environment: ${key} is required`)
-  return value
-}
+// Inferred from the schema, so the shape has ONE source and the keys cannot
+// drift from what is validated.
+export type Env = z.infer<typeof EnvSchema>
 
-const requiredBinding = <T>(raw: Record<string, unknown>, key: string): T => {
-  const value = raw[key]
-  if (value == null || typeof value !== 'object')
-    throw new Error(`Invalid environment: the ${key} binding is missing`)
-  return value as T
-}
-
-export const hostEnv = (): Env => {
-  const raw = env as unknown as Record<string, unknown>
-  return {
-    LABEL: requiredString(raw, 'LABEL'),
-    SIGNING_SECRET: requiredString(raw, 'SIGNING_SECRET'),
-    LINKS: requiredBinding<KVNamespace>(raw, 'LINKS'),
+// A bad config is infrastructure → throw and fail loud (§17). The aggregated
+// message names every offending key at once, which matters more here than on
+// Node: this runs on the first REQUEST, not at boot, so there is no startup log
+// to go back to.
+//
+// `raw` is `unknown` because `safeParse` takes `unknown`, so the typed `env`
+// from `cloudflare:workers` goes in exactly as it is — no cast anywhere.
+export const readEnv = (raw: unknown): Env => {
+  const result = EnvSchema.safeParse(raw)
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`)
+      .join('\n')
+    throw new Error(`Invalid environment:\n${issues}`)
   }
+  return result.data
 }
+
+export const hostEnv = (): Env => readEnv(env)

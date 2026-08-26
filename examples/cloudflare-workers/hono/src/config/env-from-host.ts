@@ -18,5 +18,4 @@ import { readEnv } from './env.ts'
 // the `c.env` of the FIRST request and ignores every later one. It is not a
 // per-request seed — there is no such thing (a per-call axis is a window,
 // principle 4) — and the parameter's name promises more than it delivers.
-export const fromHostEnv = (hostEnv: unknown): Env =>
-  readEnv((hostEnv ?? {}) as Record<string, unknown>)
+export const fromHostEnv = (hostEnv: unknown): Env => readEnv(hostEnv ?? {})
