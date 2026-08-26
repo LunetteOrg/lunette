@@ -29,8 +29,11 @@ the `errore` library (errors as values) applied to DI.
                         cases as @lntt/scope scopes); per-host entries mount
                         it via @lntt/integration/*, one of them ALSO wired by
                         hand with no adapter (runScope directly, §33);
-                        examples/two-chains is standalone — two independent
-                        chains on one Express app
+                        examples/two-chains and examples/bare-express are
+                        standalone (no example-app import); examples/
+                        cloudflare-workers/{hono,express} are standalone too and
+                        run on workerd — the entries where the no-I/O-outside-a-
+                        request rule is enforced rather than described (§36)
   research/             live research prototypes (prior art, not products) —
                         PoC code proving out @lntt/wire's behaviour and DX,
                         OUT OF SCOPE for code review (correctness/security/

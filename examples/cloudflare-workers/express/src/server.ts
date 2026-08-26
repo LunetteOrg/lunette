@@ -5,7 +5,8 @@ import { handler } from './bootstrap/index.ts'
 
 // The MOUNT — the same route table as `examples/cloudflare-workers/hono`, on
 // Express's native `app.get`, and the same shape as `examples/express` (§37).
-// Nothing here is Workers-specific except the last two lines.
+// Nothing here is Workers-specific except the last three lines and the
+// `cloudflare:node` import above.
 export const app: Express = expressApp()
 
 app.get('/links', handler(listScope))

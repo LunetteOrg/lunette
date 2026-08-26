@@ -93,10 +93,11 @@ describe('the shipped capabilities keep behaving', () => {
 })
 
 // The gate holds for mounts whose type arguments are INFERRED — which is every
-// mount anyone writes — and it has to hold when they are NAMED too. `Cap` lives
-// only in a phantom (`__cap`), so unlike `Need`, which is a real field and
-// contradicts a lie structurally, nothing else in `Handler` objects if a caller
-// declares a capability the scope does not have. `__cap` puts `Cap` in both
+// mount anyone writes — and it has to hold when they are NAMED too. `__need` and
+// `__cap` are phantoms of the SAME shape, so what separates them is the
+// direction of each predicate against the bottom type: `Pub extends never` is
+// false, so `DepGuard` fires, while `Exclude<never, HostCaps>` is vacuously
+// `never`, so `CarrierGuard` used to vanish. `__cap` puts `Cap` in both
 // positions to make it invariant, which is what refuses the assignment (§34).
 describe('a mount that names its type arguments', () => {
   it('cannot declare away a capability the scope requires', () => {
@@ -106,5 +107,21 @@ describe('a mount that names its type arguments', () => {
 
   it('still takes a scope whose capability the carrier does provide', () => {
     httpMount<object, StandardSchemaV1, unknown, 'body'>(bodyScope)
+  })
+})
+
+// A capability key that is not a string: dropping it would leave `never`, which
+// is the fail-OPEN this file exists to prevent. It becomes a name no carrier
+// claims instead, so the scope mounts nowhere (§34).
+interface OddExtension extends ScopeExtension {
+  readonly __caps?: { readonly [k: symbol]: true }
+}
+declare const odd: OddExtension
+
+describe('a capability key that is not a string', () => {
+  it('mounts nowhere rather than silently carrying nothing', () => {
+    const oddScope = scope().extend(odd).handle(() => ({ ok: true }))
+    // @ts-expect-error CarrierGuard: a non-string capability key is claimed by no carrier
+    httpMount(oddScope)
   })
 })

@@ -1108,16 +1108,25 @@ is assignable to everything. One axis is protected on both moves, the other on
 neither.
 
 `__cap` is now `(c: Cap) => Cap`, present in both positions and therefore
-invariant, which refuses the assignment. What that also forbids is naming a
-capability WIDER than the scope requires — harmless in itself, and checked
-against the one pattern where it could have mattered: a table of routes iterated
-over. With real scopes that does not compile either way, since scopes differ on
-every axis (deps, schema, result, effects) and no union reconciles them. So the
-hole and the collateral are the same door — writing type arguments by hand and
-saying something other than the truth — and neither is reachable by accident.
+invariant, which refuses the assignment. The ONLY assignment that becomes newly
+illegal is NARROWING the capability slot by hand, which is the unsound direction.
+Widening it, and collecting handlers of different capabilities in one array or
+record, were already refused before — by contravariance, and independently by
+`__need`/`__eff`/`__result` once real scopes differ on those axes too. Verified
+by running the same probes against both trees with the real packs and real
+scopes, rather than handlers whose other parameters were held artificially
+uniform, which is what made an earlier reading of this wrong.
 
-Measured before taking it: 7 extra instantiations across @lntt/integration,
-0.003%, no change in type count or check time. The negative lives in
+The gate was genuinely open at all five shipped mount sites (`toProcedure`,
+`toMutation`, the Hono and Express `handler`, `toLoader`), each of which would
+take a body-reading scope onto a carrier without a readable body when the type
+arguments were named; all five now refuse it.
+
+Cost measured on two trees that both COMPILE, which is the part easy to get
+wrong — diagnostics are still emitted for a tree with type errors, and reading
+those is how the first figure came out backwards. Across @lntt/integration:
+274,353 → 274,347 instantiations, 101,990 → 101,985 types, check time within
+noise. The change does not cost, it saves a little. The negative lives in
 `capability-alphabet.test-d.ts`.
 
 Every mistake therefore falls the safe way, and the rule that follows is worth
@@ -1368,23 +1377,43 @@ one.
 `ensure` was `built ??= build(seed())`. A rejected promise is not nullish, so the
 memo kept it: one transient failure — a pool that could not connect, a secret
 that did not resolve — was permanent for the life of the process or isolate, and
-every later request re-awaited the same rejection. `dispose()` was poisoned with
-it, since awaiting the stored handle rethrew, so the one escape hatch did not
-work in the state that called for it. And the two failure kinds behaved
-oppositely for no reason anyone chose: a seed thunk throwing SYNCHRONOUSLY (a bad
-env) threw before the assignment and stayed retryable, while a rejection one
-layer deeper did not.
+every later request re-awaited the same rejection. The two failure kinds also
+behaved oppositely for no reason anyone chose: a seed thunk throwing
+SYNCHRONOUSLY (a bad env) threw before the assignment and stayed retryable, while
+a rejection one layer deeper did not.
+
+`dispose` tolerates a handle that never resolved. Dropping the rejection already
+covers the SEQUENTIAL case — a failed build leaves no memo, so teardown finds
+nothing to await — and what remains is CONCURRENT: `dispose` called while a build
+is still in flight, which then fails. A process shutting down during a connection
+timeout would otherwise have the build's rejection thrown out of its teardown.
 
 None of that was decided; it followed from `??=` on a promise. A rejected build
 is now dropped, so the next `ensure` builds again, and `dispose` tolerates a
 handle that never resolved.
 
-This does not weaken the identity guarantee, and the reason it does not is worth
-stating: a failed build UNWINDS. Every layer is a bracket, so the `finally` of
-each layer that had already opened runs on the way out, and a retry starts from
-nothing rather than from a half-open graph. Nor does it weaken the memo while a
-build is in flight — callers racing a failing build still share it, and only a
-caller arriving after it settles starts a new one.
+This does not weaken the identity guarantee, for a reason worth stating: a failed
+build UNWINDS, so a retry starts from nothing rather than from a half-open graph.
+That rests on every layer being a BRACKET — `try { return await next(x) } finally
+{ close() }` — which is the documented idiom but a CONVENTION, not something the
+types enforce: `return next({ pool })` with no `finally` compiles. For a layer
+written that way the change makes things WORSE, turning one leaked resource into
+one per failing request; measured on such a chain, six attempts left six live
+resources where the old memo left one. The bracket is the price of a retryable
+build, and it is load-bearing now rather than merely idiomatic.
+
+Nor does it weaken the memo while a build is in flight — callers racing a failing
+build still share it, and only a caller arriving after it settles starts a new
+one, so attempts are self-limiting to one per build duration with no stampede.
+
+Two consequences it does NOT solve, recorded rather than fixed. There is no
+backoff: against a PERSISTENT failure every request now pays the full build
+timeout, where the old memo rejected instantly after the first — the right trade
+for a transient fault and the wrong one for a lasting outage, and a caller who
+needs backoff must impose it. And the seed thunk is re-evaluated on each attempt,
+so on a host that seeds from the request (`hono.ts` passes `c.env`) the app ends
+up built from the FIRST REQUEST THAT SUCCEEDED rather than the first that
+arrived.
 
 The severity is a consequence of the build being LAZY. Where a container builds
 at startup, a failed build takes the process down and the supervisor restarts it,

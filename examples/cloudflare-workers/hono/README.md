@@ -65,7 +65,7 @@ namespace, so neither borrows the other's state — through the same sequence of
 reads, writes, a duplicate-slug 409 and a schema 422, and asserts identical
 responses. They are identical.
 
-Read that for exactly what it is. From outside a worker, `c.env` and
+Read that for exactly what it is. Within one worker, `c.env` and
 `import { env } from 'cloudflare:workers'` are the SAME bindings object, so no
 response can reveal which one a seed read: this file proves the two wirings
 behave alike, NOT that the parameter is redundant. What the parameter actually

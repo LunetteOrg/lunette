@@ -107,10 +107,10 @@ describe('buildOnce', () => {
   })
 })
 
-// The failure path, which the memo used to make permanent. A rejected promise is
-// not nullish, so `??=` kept it and every later request re-awaited the same
-// rejection — on a LAZY build, where the first attempt is a request rather than
-// startup, one transient blip poisoned the process or isolate until restart.
+// The failure path. A rejected promise is not nullish, so a memo that kept it
+// would make one transient failure permanent — and on a LAZY build, where the
+// first attempt is a request rather than startup, that is every request after
+// the first unlucky one, until the process or isolate is replaced.
 describe('buildOnce when the build fails', () => {
   // A chain whose layer fails a given number of times before succeeding, with
   // a resource opened BEFORE the failing point, so teardown is observable.
@@ -186,6 +186,32 @@ describe('buildOnce when the build fails', () => {
     await expect(once.dispose()).resolves.toBeUndefined()
   })
 
+  it('disposes while a build is IN FLIGHT that then fails', async () => {
+    // The only path `dispose`'s own catch serves. Sequentially it is unreachable:
+    // a failed build has already cleared the memo, so `dispose` returns at the
+    // empty check. Here the handle is still pending when teardown starts — a
+    // process shutting down while a connection times out — and awaiting it would
+    // rethrow the build's rejection out of `dispose`.
+    let release!: (fail: Error) => void
+    const gate = new Promise<never>((_, reject) => {
+      release = reject
+    })
+    const chain = lunette<{ env: Env }>()
+      .use(async (_ctx, next) => {
+        await gate
+        return next({ db: { url: 'unreachable' } })
+      })
+      .expose((ctx) => ({ api: { url: () => ctx.db.url } }))
+    const once = buildOnce(chain)
+
+    const building = once.ensure(seedOf('pg://in-flight'))
+    const tearing = once.dispose()
+    release(new Error('transient: connection timed out'))
+
+    await expect(building).rejects.toThrow('transient')
+    await expect(tearing).resolves.toBeUndefined()
+  })
+
   it('leaves a seed that throws SYNCHRONOUSLY retryable too', async () => {
     const { chain, attempts } = flaky(0)
     const once = buildOnce(chain)
@@ -201,8 +227,10 @@ describe('buildOnce when the build fails', () => {
     expect(() => once.ensure(seed)).toThrow('invalid environment')
     const recovered = await once.ensure(seed)
 
-    // The thunk throws before the assignment, so nothing was ever memoized. The
-    // two failure kinds now behave the same way; they used not to.
+    // The thunk throws before the assignment, so nothing is ever memoized. Both
+    // failure kinds are therefore retryable — this one by construction, a
+    // rejected build because the memo drops it. Characterisation, not a guard:
+    // this path holds either way.
     expect(attempts).toEqual(['pg://after-a-bad-seed'])
     expect(recovered.app.api.url()).toBe('pg://after-a-bad-seed')
     await once.dispose()

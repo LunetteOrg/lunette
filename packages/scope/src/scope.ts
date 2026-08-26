@@ -77,8 +77,8 @@ export interface Handler<
   // contravariance, since the handler's own `Need` no longer fits. `CarrierGuard`
   // asks whether `Exclude<Cap, HostCaps>` is `never`, which `never` satisfies
   // VACUOUSLY — and contravariance waves it through, since `never` is assignable
-  // to everything. Protected on both moves versus neither (§34). Measured: 7
-  // extra instantiations across @lntt/integration, 0.003%.
+  // to everything. Protected on both moves versus neither (§34). Measured across
+  // @lntt/integration: 274,353 → 274,347 instantiations — it saves a little.
   readonly __cap?: (c: Cap) => Cap
   // Phantom, load-bearing: the shape of `outcome.effects` for THIS scope, so a
   // host reads `effects.cookies` typed, and a scope that never injected the
@@ -113,11 +113,23 @@ type SchemaOf<T> = T extends { readonly __schema?: infer S }
     : UnitSchema
   : UnitSchema
 type ParamsOf<T> = OutputOf<SchemaOf<T>>
-// An extension's own capability names, carried through as they are: `& string`
-// drops symbol/number keys and nothing else. It must NOT filter against a list
-// the core keeps — that is what silently turned an unknown capability into
-// `never` and opened the mount gate (see `Capability` in carrier.ts).
-type CapsOf<T> = T extends { readonly __caps?: infer M } ? (keyof M & string) : never
+// An extension's own capability names, carried through as they are. Two rules,
+// and both are about which way a mistake falls (§34).
+//
+// It must NOT filter the names against a list the core keeps: an unrecognised
+// one would collapse to `never`, `CarrierGuard<never, …>` is `unknown`, the
+// brand disappears and the scope mounts ANYWHERE — fail-OPEN in the one
+// mechanism meant to make a bad mount impossible.
+//
+// A non-string key is not dropped either, for the same reason: dropping the only
+// key leaves `never`, which is that same fail-open. It becomes a name no carrier
+// claims, so such a scope mounts NOWHERE until someone declares it — fail-closed,
+// and visible in the error.
+type CapsOf<T> = T extends { readonly __caps?: infer M }
+  ? [keyof M] extends [string]
+    ? keyof M
+    : '__NON_STRING_CAPABILITY_KEY'
+  : never
 // The effect map: every injected extension's `__effects` intersected, so
 // `outcome.effects` carries exactly the keys THIS scope can produce.
 type EffOf<T> = T extends { readonly __effects?: infer E } ? (E extends object ? E : {}) : {}
