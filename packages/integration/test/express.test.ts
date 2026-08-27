@@ -54,9 +54,9 @@ describe('Express pack — mount middleware + real HTTP round-trip', () => {
   })
 })
 
-// The carrier options reach the lift, so `ctx.request.url` carries a REAL
-// origin instead of a placeholder — and a spoofed `Host` does not travel into
-// it once `allowedHosts` is set.
+// The origin comes from EXPRESS — `req.protocol`/`req.host`, i.e. whatever
+// `app.set('trust proxy')` says — so `ctx.request.url` carries a real origin
+// without this pack holding a proxy policy of its own (§40).
 describe('Express pack — the request origin', () => {
   const urlScope = scope()
     .extend(request)
@@ -70,7 +70,7 @@ describe('Express pack — the request origin', () => {
     return { ...(await startServer(app)), dispose: pack.dispose }
   }
 
-  it('reflects the Host the client reached when nothing constrains it', async () => {
+  it('reflects what Express reports, port included', async () => {
     const { url, close, dispose } = await serve()
     const res = await fetch(`${url}/where`)
     expect(await res.json()).toEqual({ url: `${url}/where` })
@@ -78,12 +78,16 @@ describe('Express pack — the request origin', () => {
     await dispose()
   })
 
-  it('discards a Host outside the allowlist', async () => {
-    const { url, close, dispose } = await serve({
-      carrier: { allowedHosts: ['app.example.com'], origin: 'https://app.example.com' },
-    })
-    const res = await fetch(`${url}/where`, { headers: { host: 'evil.example' } })
-    expect(await res.json()).toEqual({ url: 'https://app.example.com/where' })
+  it('does not let a request target smuggle in another origin', async () => {
+    // `//evil.example/where` is a legal target and reaches Express as one; the
+    // route still matches, so without re-anchoring the scope would read an
+    // attacker's origin from an otherwise ordinary authenticated request.
+    const { url, close, dispose } = await serve()
+    const res = await fetch(`${url}//evil.example/where`, { redirect: 'manual' })
+    if (res.status === 200) {
+      const seen = (await res.json()) as { url: string }
+      expect(new URL(seen.url).origin).toBe(url)
+    }
     await close()
     await dispose()
   })

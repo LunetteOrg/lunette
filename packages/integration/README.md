@@ -54,9 +54,9 @@ const app = expressApp()
 app.get('/courses/:courseId', w.handler(courseHandler)) // params validated at runtime
 ```
 
-A third argument carries the options: `carrier` for how the request's origin is
-recovered (see below) and `contextKey` for `mount`'s slot —
-`express(chain, seed, { carrier: { allowedHosts: ['app.example.com'] } })`.
+A third argument carries the options: `contextKey` for `mount`'s slot —
+`express(chain, seed, { contextKey: '__billingApp' })`. The request's origin is
+not among them: it comes from Express itself (see below).
 
 ### The primitives — `/http` and `/node`
 
@@ -86,13 +86,21 @@ const handler = (h) => async (req, res) =>
 tested side by side with the pack it replaces.
 
 `new Request(...)` demands an absolute url while Node hands over a path, so an
-origin has to be recovered from the request — and `Host` is a **client header**.
-Taken as sent it can be spoofed into anything a scope builds from
-`ctx.request.url` (a canonical link, an absolute redirect). The default matches
-Express, Fastify and Koa themselves — the host as sent — and `allowedHosts`
-narrows it to the hosts your app answers to, falling back to `origin`
-(`http://localhost` unless given). `X-Forwarded-Proto`/`X-Forwarded-Host` are
-ignored unless `trustProxy` says a proxy rewrites them.
+origin has to come from somewhere — and `toWebRequest` **does not guess it**.
+`Host` and `X-Forwarded-*` are client headers, and deciding which to believe is
+a policy about proxies that the host framework already owns: on Express it is
+`app.set('trust proxy')`, which `req.protocol`/`req.host` answer to. The Express
+pack reads the origin from there, so configuring Express configures this too.
+`toWebRequest(req, origin)` takes it as a REQUIRED argument — a default would be
+the same guess in different clothes, so a hand-wired host has to say where its
+URLs resolve from (§40).
+
+The URL a scope reads is also **re-anchored** on that origin: a request target
+may carry an origin of its own (`GET http://elsewhere/p HTTP/1.1` is legal, and
+so is `//elsewhere/p`), and `new URL(target, base)` would let it replace the
+base. Only path and query survive — which also means the URL is normalised while
+the router matched the raw target, so do not re-derive routing decisions from
+`ctx.request.url`.
 
 ### React Router 7 — the loader/action recipe
 

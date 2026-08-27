@@ -21,7 +21,8 @@ the `errore` library (errors as values) applied to DI.
                         subpaths ("./hono", "./express", "./react-router",
                         "./trpc") — wire as a guest, per-host native routing;
                         "./node" is the shared IncomingMessage→Request lift the
-                        non-Fetch Node hosts share (origin recovery + allowlist),
+                        non-Fetch Node hosts share (the origin is GIVEN, not
+                        guessed — the host framework owns that policy, §40),
                         "./http" the codec a hand-wired Fetch host composes
   packages/{cli,listener,flow}       scaffolds only — no shipped design;
                         their stories live in the tracker

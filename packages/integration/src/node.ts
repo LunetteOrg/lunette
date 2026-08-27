@@ -12,69 +12,24 @@ import { serializeCookie } from './http.ts'
 // and hand back a `Response` (`outcomeToResponse` in `./http.ts`).
 //
 // `new Request(...)` demands an ABSOLUTE url while Node hands over a path, so
-// an origin has to come from somewhere. That somewhere is the request itself,
-// which means it is ATTACKER-CONTROLLED: `Host` is whatever the client typed.
-// Hence `allowedHosts` — the one defence that works (an allowlist of expected
-// hosts), offered rather than imposed, because trusting `Host` unfiltered is
-// what Express, Fastify and Koa themselves do and this must not be the odd one
-// out.
-
-export interface NodeCarrierOptions {
-  // The hosts this app answers to, INCLUDING the port when clients send one
-  // (`app.example.com:8443`). A host outside the list is discarded for `origin`,
-  // so a spoofed `Host` cannot travel into whatever the scope builds from
-  // `ctx.request.url`. Unset = the host is taken as sent.
-  readonly allowedHosts?: readonly string[]
-  // Used when no host is available or the one sent is not allowed.
-  readonly origin?: string
-  // Read `X-Forwarded-Proto` / `X-Forwarded-Host`. ONLY behind a proxy that
-  // rewrites them: they are client headers like any other, and a proxy that
-  // merely appends leaves the client's value first in the list.
-  readonly trustProxy?: boolean
-}
-
-const DEFAULT_ORIGIN = 'http://localhost'
-
-const header = (req: IncomingMessage, name: string): string | undefined => {
-  const raw = req.headers[name]
-  return Array.isArray(raw) ? raw[0] : raw
-}
-
-// `X-Forwarded-*` are comma-separated hop lists — the first entry is the
-// outermost hop, the one the client actually reached.
-const firstHop = (value: string | undefined): string | undefined =>
-  value?.split(',')[0]?.trim() || undefined
-
-const scheme = (req: IncomingMessage, trustProxy: boolean): string => {
-  if (trustProxy) {
-    const forwarded = firstHop(header(req, 'x-forwarded-proto'))
-    if (forwarded === 'http' || forwarded === 'https') return forwarded
-  }
-  // `encrypted` is present on a TLSSocket and nothing else.
-  return 'encrypted' in req.socket && req.socket.encrypted === true ? 'https' : 'http'
-}
-
-const originOf = (req: IncomingMessage, options: NodeCarrierOptions): string => {
-  const fallback = options.origin ?? DEFAULT_ORIGIN
-  const trustProxy = options.trustProxy === true
-  const host = trustProxy
-    ? (firstHop(header(req, 'x-forwarded-host')) ?? header(req, 'host'))
-    : header(req, 'host')
-  if (host === undefined) return fallback
-  if (options.allowedHosts !== undefined && !options.allowedHosts.includes(host)) return fallback
-  try {
-    return new URL(`${scheme(req, trustProxy)}://${host}`).origin
-  } catch {
-    // A host that cannot form a URL is a malformed header, not a route.
-    return fallback
-  }
-}
+// an origin has to come from somewhere — and this lift DOES NOT GUESS IT. It
+// takes the origin it is given, because deciding which `Host` to believe is a
+// policy about proxies, and the host framework already owns that policy: on
+// Express it is `app.set('trust proxy')`, which `req.protocol`/`req.host` then
+// answer to. A second allowlist here would be that decision made twice, in two
+// places, by whoever wrote the adapter rather than whoever runs the app (§40).
+//
+// So the origin is a REQUIRED argument, not an option with a default. A default
+// would be the same guess wearing different clothes — `http://localhost` instead
+// of `Host`, and wrong more often. Requiring it puts the decision where someone
+// can make it: the pack takes it from Express (see `express.ts`), a hand-wired
+// host writes the one its app answers to.
 
 // Lift a Node request into the Web `Request` a `RequestCarrier` carries. The
 // scope sees it narrowed to `RequestHead` (no body accessors), so the body stays
 // reachable ONLY through the declared `.body`/`.form` channels (decision 34) —
 // the runtime object being a full `Request` is what lets those channels read it.
-export function toWebRequest(req: IncomingMessage, options: NodeCarrierOptions = {}): Request {
+export function toWebRequest(req: IncomingMessage, origin: string): Request {
   const headers = new Headers()
   for (const [key, value] of Object.entries(req.headers)) {
     if (Array.isArray(value)) for (const v of value) headers.append(key, v)
@@ -94,8 +49,20 @@ export function toWebRequest(req: IncomingMessage, options: NodeCarrierOptions =
   // `originalUrl` is Express's (it survives sub-router mounting, where `url` is
   // rewritten relative to the mount point); `url` is what bare Node gives. Read
   // in that order the lift serves both without depending on Express's types.
-  const path = (req as IncomingMessage & { originalUrl?: string }).originalUrl ?? req.url ?? '/'
-  return new Request(new URL(path, originOf(req, options)), init)
+  // RE-ANCHORED on the origin, keeping only path and query. `new URL(target,
+  // base)` DISCARDS the base whenever the target carries an origin of its own,
+  // and a request target is client-controlled: absolute-form (`GET
+  // http://elsewhere/p HTTP/1.1`, legal HTTP/1.1), authority-relative
+  // (`//elsewhere/p`), and `/\elsewhere/p` (WHATWG reads `\` as `/` in an
+  // authority) all replace it. Parsing then re-anchoring keeps the origin the
+  // host established, whatever the target claims.
+  //
+  // Note the consequence: the URL a scope reads is NORMALISED, while the router
+  // matched on the raw target. They can differ (`/a/../b` here is `/b`), so a
+  // scope must not re-derive routing decisions from `ctx.request.url`.
+  const target = (req as IncomingMessage & { originalUrl?: string }).originalUrl ?? req.url ?? '/'
+  const parsed = new URL(target, origin)
+  return new Request(new URL(`${parsed.pathname}${parsed.search}`, origin), init)
 }
 
 // The outcome render for a node `ServerResponse` — the counterpart of
@@ -114,12 +81,30 @@ export function renderOutcome(res: ServerResponse, outcome: Outcome<unknown, obj
   // Each effect through its extension's reader; neither injected reads empty.
   for (const [name, value] of readHeaders(outcome)) headers[name] = value
   const cookies = readCookies(outcome)
-  if (cookies.length > 0) headers['set-cookie'] = cookies.map(serializeCookie)
+  if (cookies.length > 0) {
+    // APPEND, never assign. A `set-cookie` can arrive from the headers
+    // extension as well as from the cookie sink, and more cookies means more
+    // `Set-Cookie` headers — that is HTTP, not a preference. Assigning here
+    // dropped whatever the other extension wrote, so the same scope answered
+    // differently on a node host than on a Fetch one, where `outcomeToResponse`
+    // appends.
+    const existing = headers['set-cookie']
+    headers['set-cookie'] = [
+      ...(existing === undefined ? [] : Array.isArray(existing) ? existing : [existing]),
+      ...cookies.map(serializeCookie),
+    ]
+  }
 
   if (outcome.ok) {
+    // SERIALISE FIRST. `writeHead` commits the status line to the wire, so a
+    // value that will not stringify (a bigint, a cycle) must fail while the
+    // response can still become a 500 — otherwise the throw leaves the socket
+    // destroyed and the client gets nothing at all. `outcomeToResponse` has the
+    // same ordering, which is what keeps the two codecs telling one story.
+    const body = JSON.stringify(outcome.value)
     headers['content-type'] = 'application/json'
     res.writeHead(200, headers)
-    res.end(JSON.stringify(outcome.value))
+    res.end(body)
     return
   }
 
@@ -135,7 +120,8 @@ export function renderOutcome(res: ServerResponse, outcome: Outcome<unknown, obj
     res.end()
     return
   }
+  const body = JSON.stringify(intent.body)
   headers['content-type'] = 'application/json'
   res.writeHead(intent.status, headers)
-  res.end(JSON.stringify(intent.body))
+  res.end(body)
 }

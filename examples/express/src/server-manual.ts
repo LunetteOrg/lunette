@@ -93,7 +93,11 @@ export const makeHandler = () => {
         await runScope<RequestCarrier, S, R>(
           h,
           (await ensure(() => ({ env: hostEnv() }))).app,
-          { request: toWebRequest(req) },
+          // The origin is REQUIRED: `toWebRequest` does not guess one, so a
+          // hand-wired host says where its URLs resolve from. Express knows,
+          // because `req.protocol`/`req.host` obey `app.set('trust proxy')`
+          // (§40) — a pack does exactly this line.
+          { request: toWebRequest(req, `${req.protocol}://${req.host}`) },
           req.params,
         ),
       )

@@ -29,85 +29,66 @@ const nodeRequest = (init: {
 
 describe('toWebRequest — the path', () => {
   it('keeps path and query', () => {
-    const req = toWebRequest(nodeRequest({ url: '/posts/42?draft=1&tag=x' }))
+    const req = toWebRequest(nodeRequest({ url: '/posts/42?draft=1&tag=x' }), 'http://localhost')
     expect(new URL(req.url).pathname).toBe('/posts/42')
     expect(new URL(req.url).search).toBe('?draft=1&tag=x')
   })
 
   it('prefers originalUrl, so an Express sub-router keeps its mount prefix', () => {
-    const req = toWebRequest(nodeRequest({ url: '/42', originalUrl: '/api/posts/42' }))
+    const req = toWebRequest(nodeRequest({ url: '/42', originalUrl: '/api/posts/42' }), 'http://localhost')
     expect(new URL(req.url).pathname).toBe('/api/posts/42')
   })
 })
 
-describe('toWebRequest — the origin', () => {
-  it('uses the Host header when no allowlist constrains it', () => {
-    const req = toWebRequest(nodeRequest({ headers: { host: 'app.example.com' } }))
-    expect(new URL(req.url).origin).toBe('http://app.example.com')
-  })
-
-  it('falls back to the default origin when there is no Host at all', () => {
-    expect(new URL(toWebRequest(nodeRequest({})).url).origin).toBe('http://localhost')
-  })
-
-  it('honours a caller-supplied fallback origin', () => {
-    const req = toWebRequest(nodeRequest({}), { origin: 'https://canonical.example' })
+describe('toWebRequest — the origin is GIVEN, never guessed', () => {
+  it('resolves against the origin the caller supplies', () => {
+    const req = toWebRequest(nodeRequest({}), 'https://canonical.example')
     expect(new URL(req.url).origin).toBe('https://canonical.example')
   })
 
-  it('accepts a Host that is on the allowlist', () => {
-    const req = toWebRequest(nodeRequest({ headers: { host: 'app.example.com' } }), {
-      allowedHosts: ['app.example.com'],
-    })
-    expect(new URL(req.url).origin).toBe('http://app.example.com')
-  })
-
-  it('rejects a spoofed Host and falls back — no header injection', () => {
-    const req = toWebRequest(nodeRequest({ headers: { host: 'evil.example' } }), {
-      allowedHosts: ['app.example.com'],
-      origin: 'https://app.example.com',
-    })
-    expect(new URL(req.url).origin).toBe('https://app.example.com')
-  })
-
-  it('marks the request https when the socket is encrypted', () => {
-    const req = toWebRequest(nodeRequest({ headers: { host: 'app.example.com' }, encrypted: true }))
-    expect(new URL(req.url).origin).toBe('https://app.example.com')
-  })
-})
-
-describe('toWebRequest — forwarded headers', () => {
-  const forwarded = {
-    host: 'internal:8080',
-    'x-forwarded-host': 'app.example.com',
-    'x-forwarded-proto': 'https',
-  }
-
-  it('ignores X-Forwarded-* unless the caller trusts the proxy', () => {
-    expect(new URL(toWebRequest(nodeRequest({ headers: forwarded })).url).origin).toBe(
-      'http://internal:8080',
+  it('falls back to localhost when none is supplied — a non-answer, not a guess', () => {
+    expect(new URL(toWebRequest(nodeRequest({}), 'http://localhost').url).origin).toBe(
+      'http://localhost',
     )
   })
 
-  it('reads them when trustProxy is set', () => {
-    const req = toWebRequest(nodeRequest({ headers: forwarded }), { trustProxy: true })
+  it('IGNORES the Host header, which is the client speaking', () => {
+    // Deciding which `Host` to believe is the host framework's policy — on
+    // Express `app.set('trust proxy')`, which the pack reads through
+    // `req.protocol`/`req.host` (§40). This lift holds no second opinion.
+    const req = toWebRequest(nodeRequest({ headers: { host: 'evil.example' } }), 'https://app.example.com')
     expect(new URL(req.url).origin).toBe('https://app.example.com')
   })
 
-  it('takes the first hop of a comma-separated X-Forwarded-Host', () => {
+  it('IGNORES X-Forwarded-*, for the same reason', () => {
     const req = toWebRequest(
-      nodeRequest({ headers: { 'x-forwarded-host': 'app.example.com, inner.local' } }),
-      { trustProxy: true },
+      nodeRequest({ headers: { 'x-forwarded-host': 'evil.example', 'x-forwarded-proto': 'https' } }),
+      'http://app.example.com',
     )
     expect(new URL(req.url).origin).toBe('http://app.example.com')
   })
 
-  it('still applies the allowlist to a forwarded host', () => {
-    const req = toWebRequest(
-      nodeRequest({ headers: { 'x-forwarded-host': 'evil.example' } }),
-      { trustProxy: true, allowedHosts: ['app.example.com'], origin: 'https://app.example.com' },
-    )
-    expect(new URL(req.url).origin).toBe('https://app.example.com')
+  // The request TARGET is client-controlled too, and `new URL(target, base)`
+  // drops the base whenever the target carries an origin. Each of these is a
+  // legal thing to put on the wire.
+  it('re-anchors a target that carries its own origin', () => {
+    for (const target of [
+      'http://evil.example/where',
+      '//evil.example/where',
+      '/\\evil.example/where',
+      'https://evil.example:8443/where',
+    ]) {
+      const req = toWebRequest(nodeRequest({ url: target }), 'https://app.example.com')
+      expect(new URL(req.url).origin).toBe('https://app.example.com')
+    }
+  })
+
+  it('keeps path and query while re-anchoring', () => {
+    const req = toWebRequest(nodeRequest({ url: '/posts?page=2&q=a b' }), 'https://app.example.com')
+    const url = new URL(req.url)
+    expect(url.pathname).toBe('/posts')
+    expect(url.searchParams.get('page')).toBe('2')
+    expect(url.searchParams.get('q')).toBe('a b')
   })
 })
 
@@ -115,6 +96,7 @@ describe('toWebRequest — method, headers and body', () => {
   it('carries the method and every header, repeated ones included', () => {
     const req = toWebRequest(
       nodeRequest({ method: 'POST', headers: { cookie: ['a=1', 'b=2'], accept: 'application/json' } }),
+      'http://localhost',
     )
     expect(req.method).toBe('POST')
     expect(req.headers.get('accept')).toBe('application/json')
@@ -130,13 +112,14 @@ describe('toWebRequest — method, headers and body', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ title: 'hello' }),
       }),
+      'http://localhost',
     )
     expect(await req.json()).toEqual({ title: 'hello' })
   })
 
   it('gives GET and HEAD no body', () => {
-    expect(toWebRequest(nodeRequest({ method: 'GET' })).body).toBeNull()
-    expect(toWebRequest(nodeRequest({ method: 'HEAD' })).body).toBeNull()
+    expect(toWebRequest(nodeRequest({ method: 'GET' }), 'http://localhost').body).toBeNull()
+    expect(toWebRequest(nodeRequest({ method: 'HEAD' }), 'http://localhost').body).toBeNull()
   })
 })
 
@@ -236,5 +219,73 @@ describe('renderOutcome', () => {
     renderOutcome(goodbye.res, aborted(redirect('/'), cookies))
     expect(goodbye.written.status).toBe(302)
     expect(goodbye.written.headers?.['set-cookie']).toEqual(['session=abc; Path=/; HttpOnly'])
+  })
+})
+
+// The status line is committed by `writeHead`, so anything that can throw must
+// happen before it — otherwise the failure destroys the socket instead of
+// becoming a response.
+describe('renderOutcome when the value will not serialise', () => {
+  it('fails before the status line is committed, so the host can still send a 500', () => {
+    const { res, written } = nodeResponse()
+    expect(() => renderOutcome(res, ok({ n: 1n }))).toThrow(TypeError)
+    expect(written.status).toBeUndefined()
+  })
+})
+
+// A `set-cookie` can come from either extension, and both have to survive —
+// the Fetch codec appends, so this one must too or the same scope answers
+// differently depending on the host.
+describe('renderOutcome — two sources of Set-Cookie', () => {
+  it('keeps a cookie written through the headers extension alongside the sink', () => {
+    const { res, written } = nodeResponse()
+    renderOutcome(res, {
+      ok: true,
+      value: { done: true },
+      effects: {
+        headers: [['set-cookie', 'from_headers=1']],
+        cookies: [{ name: 'from_sink', value: 'y', options: { path: '/' } }],
+      },
+    } as never)
+    expect(written.headers?.['set-cookie']).toEqual(['from_headers=1', 'from_sink=y; Path=/'])
+  })
+})
+
+// `Secure` and `SameSite` are the two attributes a session cookie needs and
+// that the sink could not express at all — not a limitation an app could work
+// around, since the sink is the only way a scope writes one.
+describe('serializeCookie — Secure and SameSite', () => {
+  it('emits both, with SameSite capitalised the way the header wants', () => {
+    const { res, written } = nodeResponse()
+    renderOutcome(
+      res,
+      ok({ done: true }, [
+        {
+          name: 'session',
+          value: 'abc',
+          options: { path: '/', httpOnly: true, secure: true, sameSite: 'lax' },
+        },
+      ]),
+    )
+    expect(written.headers?.['set-cookie']).toEqual([
+      'session=abc; Path=/; SameSite=Lax; Secure; HttpOnly',
+    ])
+  })
+
+  it('omits them when unset — no default is applied on the app behalf', () => {
+    const { res, written } = nodeResponse()
+    renderOutcome(res, ok({ done: true }, [{ name: 'a', value: 'b', options: { path: '/' } }]))
+    expect(written.headers?.['set-cookie']).toEqual(['a=b; Path=/'])
+  })
+
+  it('accepts SameSite=None, which a cross-site embed needs', () => {
+    const { res, written } = nodeResponse()
+    renderOutcome(
+      res,
+      ok({ done: true }, [
+        { name: 'a', value: 'b', options: { sameSite: 'none', secure: true } },
+      ]),
+    )
+    expect(written.headers?.['set-cookie']).toEqual(['a=b; SameSite=None; Secure'])
   })
 })

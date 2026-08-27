@@ -9,7 +9,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { Capability, CarrierGuard, DepGuard, Handler, RequestCarrier } from '@lntt/scope'
 import { scope, runScope } from '@lntt/scope'
 import { request } from '@lntt/scope/request'
-import { renderOutcome, toWebRequest, type NodeCarrierOptions } from './node.ts'
+import { renderOutcome, toWebRequest } from './node.ts'
 
 // Express is NOT Fetch-based: there is no Response to hand back, so the pack is
 // the composition of the two node primitives (`./node.ts`) — lift the request
@@ -21,10 +21,6 @@ import { renderOutcome, toWebRequest, type NodeCarrierOptions } from './node.ts'
 type WireReq = ExReq & Record<string, unknown>
 
 export interface ExpressOptions {
-  // How the request's origin is recovered — see `NodeCarrierOptions`. Worth
-  // setting `allowedHosts` for any app whose scopes read `ctx.request.url`
-  // beyond its path: `Host` is a client header, so unfiltered it can be spoofed.
-  readonly carrier?: NodeCarrierOptions
   // Where `mount` stashes the app on the request. Default `'__wireApp'`; give
   // two packs in one app different keys.
   readonly contextKey?: string
@@ -42,7 +38,6 @@ export function express<C extends Lunette<any, any, any>>(
   type Pub = PubOf<C>
   const { ensure, dispose } = buildOnce(chain)
   const base = scope().extend(request)
-  const carrier = options.carrier ?? {}
   const key = options.contextKey ?? '__wireApp'
 
   // OPTIONAL. Handlers do not need it — each reads the app from THIS pack's
@@ -59,6 +54,17 @@ export function express<C extends Lunette<any, any, any>>(
   // reads the app from THIS pack's `ensure` — the build-once handle it closes
   // over — so different chains genuinely can serve routes in the SAME app: there
   // is no shared slot on the request for a second pack to overwrite (§33).
+  // The origin comes from EXPRESS, not from a policy of ours: `req.protocol` and
+  // `req.host` are what `app.set('trust proxy')` configures, so an app that has
+  // told Express which proxies to believe has told this pack too. `req.host`
+  // carries the port; `req.hostname` does not, which is why it is the wrong one
+  // here. An explicit `carrier.origin` still wins, for a host that wants it
+  // pinned (§40).
+  // There is no option to override this: Express already owns the decision, and
+  // a second way to say the same thing is a second thing to keep in agreement.
+  const originOf = (req: ExReq): string =>
+    req.host ? `${req.protocol}://${req.host}` : 'http://localhost'
+
   // The `DepGuard<Pub, Need>` intersection fires the deps-vs-Pub brand at the
   // `w.handler(...)` call site. There is NO compile-time path check — params
   // are validated at RUNTIME by `runScope` (a bad/missing param → a RETURNED
@@ -76,7 +82,7 @@ export function express<C extends Lunette<any, any, any>>(
         await runScope<RequestCarrier, S, R>(
           h,
           (await ensure(() => seedFrom())).app as object,
-          { request: toWebRequest(req, carrier) },
+          { request: toWebRequest(req, originOf(req)) },
           req.params,
         ),
       )
