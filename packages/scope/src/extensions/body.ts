@@ -32,17 +32,39 @@ export interface BodyExtension extends ScopeExtension {
 // named ctx key, or RETURN a 422 abort. Pushed as a core `prepare` step, so the
 // fold runs it without knowing what it is.
 const channel =
-  (key: 'body' | 'form', read: (req: Request) => Promise<unknown>) =>
+  (key: 'body' | 'form', parse: (bytes: ArrayBuffer, headers: Headers) => Promise<unknown>) =>
   (schema: StandardSchemaV1): Prepare =>
   async (carrier): Promise<object | Abort> => {
     const req = (carrier as { request?: Request }).request
-    const raw = req ? await read(req).catch(() => undefined) : undefined
+    // READING and PARSING are separated, because they fail for opposite
+    // reasons and the error convention (principle 3) sends them opposite ways.
+    //
+    // `arrayBuffer()` is the I/O: it rejects when the stream dies — a reset
+    // socket, an aborted upload — and that THROW is left to propagate as
+    // infrastructure. Catching it here (which is what a single
+    // `read(req).catch(() => undefined)` did) told the client its payload was
+    // malformed when the truth was that the connection broke, and hid a 5xx
+    // behind a 4xx.
+    //
+    // Parsing the bytes is the domain half: malformed JSON, a body that is not
+    // a form. That IS the client's mistake, so it collapses to `undefined` and
+    // the schema turns it into the RETURNED 422 this convention wants.
+    const raw =
+      req === undefined
+        ? undefined
+        : await parse(await req.arrayBuffer(), req.headers).catch(() => undefined)
     const v = await validateInput(schema, raw)
     return v.ok ? { [key]: v.params } : v.abort
   }
 
-const bodyStep = channel('body', (req) => req.json())
-const formStep = channel('form', async (req) => Object.fromEntries(await req.formData()))
+const bodyStep = channel('body', async (bytes) =>
+  JSON.parse(new TextDecoder().decode(bytes)),
+)
+// Parsing bytes already in hand: `Response` is the standard form parser, and
+// handing it a buffer keeps the parse free of any I/O of its own.
+const formStep = channel('form', async (bytes, headers) =>
+  Object.fromEntries(await new Response(bytes, { headers }).formData()),
+)
 
 // `.body`/`.form` push their prepare step onto the builder state.
 const bodyRuntime: ScopeExtensionValue = {

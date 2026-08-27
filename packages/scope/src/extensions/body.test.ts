@@ -56,3 +56,33 @@ describe('body — the prepare step (unit, off the fold)', () => {
     expect(out).toEqual({ form: { email: 'user@example.com' } })
   })
 })
+
+// The two halves of a body read fail for opposite reasons, and the error
+// convention sends them opposite ways (principle 3).
+describe('body — reading vs parsing', () => {
+  const bodyStep = stepFor((m) => m.body(z.object({ title: z.string() })))
+
+  it('RETURNS a 422 for malformed JSON, which is the client mistake', async () => {
+    const out = await bodyStep({
+      request: new Request('http://x/', { method: 'POST', body: '{oops' }),
+    })
+    expect(isAbort(out)).toBe(true)
+    if (isAbort(out)) expect(out.intent).toMatchObject({ kind: 'status', status: 422 })
+  })
+
+  it('THROWS when the request stream dies, which is not', async () => {
+    const dead = new Request('http://x/', {
+      method: 'POST',
+      body: new ReadableStream({
+        start(c) {
+          c.error(new Error('socket reset'))
+        },
+      }),
+      // `duplex` is required for a stream body and missing from the DOM lib.
+      ...({ duplex: 'half' } as object),
+    })
+    // A returned 422 here would tell the client its payload was malformed when
+    // what actually broke is the connection — a 5xx hidden behind a 4xx.
+    await expect(bodyStep({ request: dead })).rejects.toThrow('socket reset')
+  })
+})
