@@ -15,6 +15,10 @@ export function serializeCookie({ name, value, options }: SetCookie): string {
   const parts = [`${name}=${value}`]
   if (options.path !== undefined) parts.push(`Path=${options.path}`)
   if (options.maxAge !== undefined) parts.push(`Max-Age=${options.maxAge}`)
+  if (options.sameSite !== undefined) {
+    parts.push(`SameSite=${options.sameSite[0]!.toUpperCase()}${options.sameSite.slice(1)}`)
+  }
+  if (options.secure === true) parts.push('Secure')
   if (options.httpOnly === true) parts.push('HttpOnly')
   return parts.join('; ')
 }

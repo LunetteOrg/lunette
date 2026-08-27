@@ -17,6 +17,14 @@ export interface CookieOptions {
   readonly path?: string
   readonly httpOnly?: boolean
   readonly maxAge?: number
+  // `Secure` and `SameSite` have no defaults here, and that is deliberate: the
+  // sink is the ONLY way a scope writes a cookie, so a default would apply to
+  // every cookie of every app. `secure: true` would break plain-`http` local
+  // development silently, and browsers already default `SameSite` to Lax — a
+  // default of ours would only add a second place to look. Explicit over
+  // convenient (principle 7).
+  readonly secure?: boolean
+  readonly sameSite?: 'strict' | 'lax' | 'none'
 }
 
 export interface SetCookie {
