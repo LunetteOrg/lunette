@@ -236,3 +236,86 @@ describe('buildOnce when the build fails', () => {
     await once.dispose()
   })
 })
+
+// The handle's lifecycle ends at `dispose`. Before this, none of these threw:
+// the memo outlived its own teardown, so `ensure` handed back an app whose
+// layers had already run their `finally` — an object that still answers, on
+// resources that are closed. The failure surfaced wherever the app next touched
+// one, never at the call that asked for it (§38).
+describe('buildOnce after dispose', () => {
+  it('refuses to hand the app back — the one it built runs on closed resources', async () => {
+    const { chain, built, torn } = counted()
+    const once = buildOnce(chain)
+
+    await once.ensure(seedOf('pg://ended'))
+    await once.dispose()
+
+    expect(() => once.ensure(seedOf('pg://ended'))).toThrow('was disposed')
+    // Neither re-armed nor rebuilt: a second app is a second `buildOnce`.
+    expect(built).toEqual(['pg://ended'])
+    expect(torn).toEqual(['pg://ended'])
+  })
+
+  it('refuses a FIRST ensure too — the handle is spent, not merely emptied', async () => {
+    const { chain, built } = counted()
+    const once = buildOnce(chain)
+
+    await once.dispose()
+
+    expect(() => once.ensure(seedOf('pg://never'))).toThrow('was disposed')
+    expect(built).toEqual([])
+  })
+
+  it('makes the second dispose a refusal instead of a silent repeat', async () => {
+    const { chain, torn } = counted()
+    const once = buildOnce(chain)
+    const handle = await once.ensure(seedOf('pg://twice'))
+    let calls = 0
+    const chainDispose = handle.dispose.bind(handle)
+    handle.dispose = () => {
+      calls += 1
+      return chainDispose()
+    }
+
+    await once.dispose()
+    await once.dispose()
+
+    // The chain absorbs a repeated teardown, which is exactly why the second
+    // call used to reach it and leave no trace.
+    expect(calls).toBe(1)
+    expect(torn).toEqual(['pg://twice'])
+  })
+
+  it('tears down a build still IN FLIGHT and refuses it to the caller waiting', async () => {
+    let open!: () => void
+    const gate = new Promise<void>((resolve) => {
+      open = resolve
+    })
+    const built: string[] = []
+    const torn: string[] = []
+    const chain = lunette<{ env: Env }>()
+      .use(async (ctx, next) => {
+        await gate
+        built.push(ctx.env.DATABASE_URL)
+        try {
+          return await next({ db: { url: ctx.env.DATABASE_URL } })
+        } finally {
+          torn.push(ctx.env.DATABASE_URL)
+        }
+      })
+      .expose((ctx) => ({ api: { url: () => ctx.db.url } }))
+    const once = buildOnce(chain)
+
+    const waiting = once.ensure(seedOf('pg://in-flight'))
+    const tearing = once.dispose()
+    open()
+
+    // The app is built and torn down — teardown must reach a handle that did
+    // not exist yet when it was asked for — and the caller gets the refusal
+    // rather than an app that is already closed.
+    await expect(waiting).rejects.toThrow('was disposed')
+    await expect(tearing).resolves.toBeUndefined()
+    expect(built).toEqual(['pg://in-flight'])
+    expect(torn).toEqual(['pg://in-flight'])
+  })
+})

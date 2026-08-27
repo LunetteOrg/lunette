@@ -62,17 +62,21 @@ describe('React Router 7 pack — loaders speak RR7, not HTTP', () => {
     expect(out.headers.get('set-cookie')).toContain('sid=u-admin')
   })
 
+  // On a pack of its OWN, because `dispose` ends a build-once handle for good
+  // (§38) and the rest of this file still mounts on the shared one. Two packs
+  // over the same chain is the supported way to get a second app.
   it('builds once across loaders, and disposes', async () => {
-    const first = await pack.toLoader(courseHandler)({
+    const own = reactRouter(chain, (env) => ({ env: (env ?? { label: 'rr7' }) as Env }))
+    const first = await own.toLoader(courseHandler)({
       request: bearer('u-admin'),
       params: { courseId: 'c1' },
     })
-    const second = await pack.toLoader(courseHandler)({
+    const second = await own.toLoader(courseHandler)({
       request: bearer('u-admin'),
       params: { courseId: 'c1' },
     })
     expect(second).toEqual(first)
-    await pack.dispose()
+    await own.dispose()
   })
 })
 

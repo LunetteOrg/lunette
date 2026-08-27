@@ -27,13 +27,31 @@ export interface BuildOnce<C> {
   // signature must not promise a per-request seed it ignores. A seed that
   // varies per call is therefore never even computed — the per-call axis is the
   // window (principle 4), never a second app (§36).
+  // THROWS after `dispose`: a disposed handle has no app to hand back, and the
+  // one it built is running on closed resources. Infrastructure, so thrown
+  // rather than returned (principle 3).
   ensure(seed: () => SeedOf<C>): Promise<BuiltOf<C>>
-  // Tear the chain down. A handle that never built has nothing to close.
+  // Tear the chain down, ONCE. A handle that never built has nothing to close,
+  // and a handle already disposed has nothing left to do.
   dispose(): Promise<void>
 }
 
+// The handle is SINGLE-LIFECYCLE: `dispose` ends it and nothing re-arms it. A
+// second app is a second `buildOnce`, which is what the free-function shape is
+// for — the chain stays a value.
+const disposedHandle = () =>
+  new Error('buildOnce: this handle was disposed — build a new one for a new app')
+
 export function buildOnce<C extends Lunette<any, any, any>>(chain: C): BuildOnce<C> {
+  // TWO references to the same build, and they are not interchangeable. `built`
+  // is the RAW build, which is what teardown must await: it has to reach the
+  // handle even when the app is on its way out. `delivered` is that build plus
+  // the disposed check, and is what callers get — so a build still in flight
+  // when `dispose` arrives is torn down AND refused to whoever was waiting,
+  // instead of being handed over already closed.
   let built: Promise<BuiltOf<C>> | undefined
+  let delivered: Promise<BuiltOf<C>> | undefined
+  let disposed = false
   const build = chain.build.bind(chain) as unknown as (seed: SeedOf<C>) => Promise<BuiltOf<C>>
   return {
     // The PROMISE is memoized, not the resolved app: callers racing the first
@@ -48,15 +66,33 @@ export function buildOnce<C extends Lunette<any, any, any>>(chain: C): BuildOnce
     // share its failure; only a caller arriving after it settles starts a new
     // one. Safe because a failed build unwinds: each layer's `finally` runs on
     // the way out, so nothing it opened is left orphaned (§36).
-    ensure: (seed) =>
-      (built ??= build(seed()).catch((error: unknown) => {
-        built = undefined
-        throw error
-      })),
+    ensure: (seed) => {
+      // Sequentially this is the whole guard; the check inside `delivered`
+      // covers only the build that was already in flight. Thrown SYNCHRONOUSLY,
+      // which is the shape `ensure` already had for a seed thunk that throws.
+      if (disposed) throw disposedHandle()
+      if (!delivered) {
+        built = build(seed()).catch((error: unknown) => {
+          built = undefined
+          delivered = undefined
+          throw error
+        })
+        delivered = built.then((handle) => {
+          if (disposed) throw disposedHandle()
+          return handle
+        })
+      }
+      return delivered
+    },
     // Teardown must work in the state that calls for it, so a build that failed
     // is not allowed to take `dispose` down with it: awaiting a rejected handle
     // would rethrow, leaving no way to close what did succeed.
     dispose: async () => {
+      // Idempotent by refusal, not by accident: the chain's own `dispose` is
+      // inert the second time, so without this the repeat was a call that did
+      // nothing and said nothing.
+      if (disposed) return
+      disposed = true
       const pending = built
       if (!pending) return
       const handle = await pending.catch(() => undefined)
