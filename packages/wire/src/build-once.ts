@@ -31,8 +31,9 @@ export interface BuildOnce<C> {
   // one it built is running on closed resources. Infrastructure, so thrown
   // rather than returned (principle 3).
   ensure(seed: () => SeedOf<C>): Promise<BuiltOf<C>>
-  // Tear the chain down, ONCE. A handle that never built has nothing to close,
-  // and a handle already disposed has nothing left to do.
+  // Tear the chain down, ONCE. A handle that never built has nothing to close.
+  // Called again it returns the FIRST teardown's promise rather than repeating
+  // it, so a second caller sees the same outcome — including a failure.
   dispose(): Promise<void>
 }
 
@@ -52,6 +53,12 @@ export function buildOnce<C extends Lunette<any, any, any>>(chain: C): BuildOnce
   let built: Promise<BuiltOf<C>> | undefined
   let delivered: Promise<BuiltOf<C>> | undefined
   let disposed = false
+  // Teardown is memoized the way the build is, and for the same reason: the
+  // repeat must report what the first one did. A boolean could only say
+  // "already handled", which turns a teardown that FAILED into a second call
+  // that resolves — two shutdown paths, and the later one believes the app
+  // closed cleanly.
+  let teardown: Promise<void> | undefined
   const build = chain.build.bind(chain) as unknown as (seed: SeedOf<C>) => Promise<BuiltOf<C>>
   return {
     // The PROMISE is memoized, not the resolved app: callers racing the first
@@ -81,22 +88,27 @@ export function buildOnce<C extends Lunette<any, any, any>>(chain: C): BuildOnce
           if (disposed) throw disposedHandle()
           return handle
         })
+        // `delivered` is a SECOND promise, and `dispose` handles only `built`.
+        // Left bare, a caller who does not await `ensure` turns the in-flight
+        // refusal into an unhandled rejection — which on Node ends the process,
+        // during a shutdown. The no-op handler makes dropping the promise safe
+        // without hiding anything from a caller who does await it.
+        delivered.catch(() => {})
       }
       return delivered
     },
     // Teardown must work in the state that calls for it, so a build that failed
     // is not allowed to take `dispose` down with it: awaiting a rejected handle
     // would rethrow, leaving no way to close what did succeed.
-    dispose: async () => {
-      // Idempotent by refusal, not by accident: the chain's own `dispose` is
-      // inert the second time, so without this the repeat was a call that did
-      // nothing and said nothing.
-      if (disposed) return
-      disposed = true
-      const pending = built
-      if (!pending) return
-      const handle = await pending.catch(() => undefined)
-      await handle?.dispose()
-    },
+    dispose: () =>
+      (teardown ??= (async () => {
+        // Set BEFORE the first await, so a concurrent `ensure` is refused from
+        // the moment teardown starts rather than from the moment it finishes.
+        disposed = true
+        const pending = built
+        if (!pending) return
+        const handle = await pending.catch(() => undefined)
+        await handle?.dispose()
+      })()),
   }
 }

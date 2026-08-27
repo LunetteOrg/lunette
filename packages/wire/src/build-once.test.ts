@@ -319,3 +319,52 @@ describe('buildOnce after dispose', () => {
     expect(torn).toEqual(['pg://in-flight'])
   })
 })
+
+// The two costs of handing callers a promise DERIVED from the build, rather
+// than the build itself (§38).
+describe('buildOnce teardown, as something callers observe', () => {
+  it('reports a FAILED teardown to the second caller too', async () => {
+    let closes = 0
+    const chain = lunette<{ env: Env }>()
+      .use(async (ctx, next) => {
+        try {
+          return await next({ db: { url: ctx.env.DATABASE_URL } })
+        } finally {
+          closes += 1
+          throw new Error('close failed: socket busy')
+        }
+      })
+      .expose((ctx) => ({ api: { url: () => ctx.db.url } }))
+    const once = buildOnce(chain)
+    await once.ensure(seedOf('pg://stuck'))
+
+    // Two shutdown paths — a `finally` and a signal handler, say — must not
+    // disagree about whether the app closed. Memoizing the teardown is what
+    // makes the repeat report the first one's outcome instead of "handled".
+    await expect(once.dispose()).rejects.toThrow('close failed')
+    await expect(once.dispose()).rejects.toThrow('close failed')
+    // Reported twice, attempted once.
+    expect(closes).toBe(1)
+  })
+
+  it('does not turn an unawaited ensure into an unhandled rejection', async () => {
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown) => unhandled.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const { chain } = counted()
+      const once = buildOnce(chain)
+
+      // A warm-up nobody awaits, racing shutdown. `dispose` only ever attaches
+      // a handler to the RAW build, so without one of its own the refusal
+      // `delivered` carries would reach Node's default — which ends the process.
+      void once.ensure(seedOf('pg://floating'))
+      await once.dispose()
+      await new Promise((resolve) => setTimeout(resolve, 10))
+
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
+  })
+})
