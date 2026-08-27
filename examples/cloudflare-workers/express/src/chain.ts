@@ -61,6 +61,14 @@ export const chain = lunette<{ env: Env }>()
     // build (§36), so a write that only touched KV would be invisible here until
     // an isolate started fresh. That is the same property #39 is about, seen
     // from the inside.
+    //
+    // The taken-slug check is NOT ATOMIC, and this example does not pretend
+    // otherwise. `has` reads the in-memory snapshot rather than KV, and the
+    // `await` on `put` yields control: two concurrent creates of the same slug
+    // both pass the check, both answer 200, and the later write wins. The
+    // answer for a write that must be atomic on this runtime is a Durable
+    // Object — one single-threaded owner per slug — not a check-then-write
+    // inside a Worker. Copy the SHAPE of the dual write, not this check.
     create: async (slug: string, url: string): Promise<Link | 'slug-taken'> => {
       if (ctx.store.has(slug)) return 'slug-taken'
       await ctx.env.LINKS.put(slug, url)
