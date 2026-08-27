@@ -57,8 +57,8 @@ export function hono<C extends Lunette<any, any, any>>(
     await next()
   }
 
-  // THE terminal. GENERIC over the route Input `I` (the load-bearing point,
-  // spike 1): Hono's `.get` overload solves `I` to the handler's OWN constraint
+  // THE terminal. GENERIC over the route Input `I`, and that is the
+  // load-bearing part: Hono's `.get` overload solves `I` to the handler's OWN constraint
   // — the scope's schema — and records `ToSchema<M, P, I.in, R>`, so `hc`
   // reads request `{ param: InferInput<S> }` and response@200 = R. Reads the
   // built app from the mount'd context, runs OUR fold, returns via `c.json` so
@@ -104,7 +104,8 @@ export function hono<C extends Lunette<any, any, any>>(
   // Bind validator + terminal to ONE schema (from `handler.schema`) so they
   // cannot diverge — Hono's native 3-arg placement never cross-checks the
   // validator's contributed input against the terminal's required input, so
-  // sharing the object is the only safety mechanism (spike 1, caveat 1). This
+  // sharing the object is the only safety mechanism — annotate the two
+  // separately and they can drift with nothing to catch it. This
   // is also the single place the deps brand fires (Need ⊆ Pub) — at the call
   // site, before the tuple is spread into the native chain.
   // Hono's carrier streams a readable request, so it PROVIDES the `body`

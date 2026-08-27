@@ -6,9 +6,11 @@ import { readHeaders } from '@lntt/scope/headers'
 // host we ship no pack for composes the same pieces instead of copying them.
 // A returned domain result → 200; a returned abort → its intent (redirect /
 // 4xx); a THROW never reaches here — it stays infrastructure and the host maps
-// it to 5xx. `outcomeToResponse` serves the Fetch hosts (Hono, React Router);
-// hosts on a node `ServerResponse` use `renderOutcome` from `./node.ts`, which
-// speaks the same contract onto a different response object.
+// it to 5xx. `outcomeToResponse` is for a Fetch host wired BY HAND — the shipped
+// Fetch packs (Hono, React Router) inline their own codec, because each returns
+// through its host's own channel (`c.json`, RR7's `data()`), not through a plain
+// `Response`. Hosts on a node `ServerResponse` use `renderOutcome` from
+// `./node.ts`, which speaks the same contract onto a different response object.
 export function serializeCookie({ name, value, options }: SetCookie): string {
   const parts = [`${name}=${value}`]
   if (options.path !== undefined) parts.push(`Path=${options.path}`)

@@ -24,8 +24,10 @@ different chains really can serve routes in the same app. `mount` is therefore
 **optional** on Hono and Express — register it only to reach the app OUTSIDE a
 scope (your own middleware, a hand-written route, a healthcheck), where it
 stashes the app under `contextKey` (default `'__wireApp'`; give two packs in one
-app different keys). On React Router it is NOT optional: there `mount` IS
-`getLoadContext`, the only channel RR7 has for handing the host env to a loader.
+app different keys). React Router is the same: `mount` is `getLoadContext`
+there, useful only in a custom-server app that has somewhere to register one —
+under `react-router-serve` there is nowhere, and loaders reach the app through
+the pack regardless.
 
 ### Hono — native routing, typed `hc` client preserved
 
@@ -62,8 +64,10 @@ A pack is not magic: it is build-once plus two primitives, both public, so a hos
 we ship no pack for composes the same pieces instead of copying them.
 
 `@lntt/integration/http` is host-agnostic — `serializeCookie`, and
-`outcomeToResponse(outcome)` for hosts that RETURN a `Response` (Hono, React
-Router). `@lntt/integration/node` is its counterpart for hosts that WRITE onto
+`outcomeToResponse(outcome)` for a hand-wired host that RETURNS a `Response`
+(`examples/cloudflare-workers/bare` is the one that uses it; the Hono and React
+Router packs inline their own codec, since each answers through its host's
+channel rather than a plain `Response`). `@lntt/integration/node` is its counterpart for hosts that WRITE onto
 one: `toWebRequest(req, options)` lifts an `IncomingMessage` into the Web
 `Request` a `RequestCarrier` carries, and `renderOutcome(res, outcome)` writes
 the outcome onto a `ServerResponse`. Express's `Response` and Fastify's

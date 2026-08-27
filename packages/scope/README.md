@@ -97,8 +97,9 @@ const out = await runScope(courseHandler,
 ## The adapter contract
 
 A scope binds to a concrete app only at the host adapter. A **missing
-dependency** is a compile error at the adapter (`DepGuard` brand: the chain's
-public surface must satisfy the scope's accumulated `Need`). See
+dependency** is a compile error at the adapter (`DepGuard` brand: what the host
+carries must satisfy the scope's accumulated `Need` — the chain's public surface
+where a pack holds it, the tRPC context where the app travels in it). See
 `@lntt/integration` for the per-host adapters (Hono, Express, React Router,
 tRPC), each preserving its host's native routing and typed client.
 

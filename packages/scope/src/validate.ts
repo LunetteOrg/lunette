@@ -6,7 +6,7 @@ import type { OutputOf } from './schema.ts'
 // RETURNED abort, never a throw. A URL/param that will not coerce is a client
 // mistake (4xx), not an infrastructure fault (5xx). Status 422 (not 400) keeps
 // Hono's RPC response union unambiguous vs `sValidator`'s own native 400
-// (see integrations/hono.ts §caveat) — domain guards should likewise avoid 400.
+// (`packages/integration/src/hono.ts`) — domain guards should likewise avoid 400.
 //
 // Consumed by the hosts WITHOUT a native validator (RR7, Express, bus) via
 // `runScope`. Hono and tRPC validate natively with the SAME schema, so they

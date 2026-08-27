@@ -11,16 +11,16 @@ A realistic React Router 7 + Drizzle composition root dissolved into an
 `@lntt/wire` chain (config, db, repos, domain, use cases, feature modules). Its
 use cases are host-agnostic `@lntt/scope` scopes (`app/handlers.ts`) that
 declare their dependencies **explicitly** (the exact function shapes they call).
-`app/handlers.test.ts` **unit-tests** each scope in isolation with plain fake
-deps — no host, no chain, no database — showing a scope is a testable unit on
-its own. The per-host wiring lives in the entry packages below, which import
+`app/handlers/*.test.ts` **unit-test** the pure functions those scopes delegate
+to — no host, no chain, no database — while the scope wiring itself is exercised
+by the per-host entries below. The per-host wiring lives in the entry packages below, which import
 `@lntt/example-app`.
 
 ## Per-host entries — mount the same app on each host
 
 Each is a thin package: it imports `app`'s scopes and mounts them via
-`@lntt/integration/<host>`, and its **`surface.test.ts`** drives the mounted host
-against the real (in-memory PGlite) chain.
+`@lntt/integration/<host>`, and its tests drive the mounted host against the
+real (in-memory PGlite) chain.
 
 All four share **one layout** (§37), so that what differs between two of them is
 only what is genuinely about the host:
@@ -48,9 +48,10 @@ import, one call and a comment.
 
 ### What each layer of test actually proves
 
-The two files in each entry — `surface.test.ts` and `e2e.test.ts` — share a
-setup: the real chain, the real host, a real round-trip. They differ in what
-they ask. `surface` judges each request on its own (does every route answer with
+The two kinds of file — `surface.test.ts` and `e2e.test.ts` — share a setup: the
+real chain, the real host, a real round-trip. They differ in what they ask.
+(`rr7` carries only the `e2e` half: its loaders are invoked directly, so a
+per-route surface pass would repeat what the journey already covers.) `surface` judges each request on its own (does every route answer with
 the shape its scope promises); `e2e` asks for a JOURNEY (a session cookie minted
 by one request and honoured by the next). Neither is an *integration* test in
 the isolate-one-component sense, and deliberately so: what they exercise is the
@@ -86,8 +87,9 @@ Two findings from building them, both correcting an assumption:
   rule.** It loads modules through Vitest's module runner from within a request,
   so a module-scope `fetch()` goes straight through. `createTestHarness`
   (wrangler) starts a worker the way a deployment does and there the ban is
-  real — hence two vitest projects per entry, `workerd` for behaviour and `node`
-  for the rule.
+  real — hence the `hono` and `express` entries carry two vitest projects,
+  `workerd` for behaviour and `node` for the rule. (`bare` carries only the
+  `workerd` one: the rule is proved once per pack shape, not once per entry.)
 - **The ban covers asynchronous I/O, not async work.** `crypto.subtle.digest` at
   module scope is fine; touching a BINDING is not. An in-memory chain proves
   nothing here, which is why these read KV.

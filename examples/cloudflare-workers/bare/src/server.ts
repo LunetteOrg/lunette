@@ -6,7 +6,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 // than writing onto one: the outcome codec. Its node counterpart is
 // `renderOutcome`; no scope enters either.
 import { outcomeToResponse } from '@lntt/integration/http'
-import { aboutScope, chain, createScope, linkScope, listScope } from './chain.ts'
+import { aboutScope, chain, linkScope, listScope } from './chain.ts'
 import { hostEnv } from './config/env.ts'
 
 // The scope runtime with NO pack, on Cloudflare Workers. `examples/bare-express`
@@ -76,5 +76,7 @@ export default {
 // path. `createScope` declares a `.body` channel, so it carries the `body`
 // capability and `CarrierGuard` refuses it against `HostCaps` above — mounting
 // it is a compile error, correctly, until this carrier learns to read a body.
-// `src/server-bare.test-d.ts` pins that, and it is the gate working with nothing
-// from @lntt/integration in the picture beyond the outcome codec.
+// `src/server.test-d.ts` pins that, and it is the gate working with nothing
+// from @lntt/integration in the picture beyond the outcome codec. It is also
+// why `createScope` is NOT imported here: an unmountable scope in this module
+// would ride into the bundle for nothing.

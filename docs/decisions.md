@@ -1053,7 +1053,7 @@ Each host adapter declares the capabilities its carrier PROVIDES (`'body' |
 'cookies' | 'headers'` for Hono/Express/RR7; NONE for tRPC — one JSON `input`, no
 separate readable body, and it drops `Set-Cookie`) and intersects the wiring parameter
 with `CarrierGuard<Cap, HostCaps>` — the
-same brand shape as `DepGuard` (decision doc §adapter-guard). When `Cap ⊆
+same brand shape as `DepGuard` (`packages/scope/src/adapter-guard.ts`). When `Cap ⊆
 HostCaps` the clause vanishes and the mount compiles; otherwise it becomes an
 unsatisfiable branded object (`__ERROR_host_missing_capability`) and the mount
 (`toProcedure`/`w.handler`/`toLoader`) is a COMPILE ERROR naming the gap.
@@ -1493,8 +1493,9 @@ instead of burying it in four bespoke arrangements.
 
 **Decision.** A `BuildOnce` handle has ONE life. `dispose` closes it, and after
 that `ensure` THROWS rather than handing an app back, a second `dispose` returns
-without touching the chain, and a build still in flight when `dispose` arrives is
-torn down AND refused to whoever was waiting for it. A second app is a second
+the FIRST teardown's promise instead of repeating it, and a build still in
+flight when `dispose` arrives is torn down AND refused to whoever was waiting
+for it. A second app is a second
 `buildOnce` — the chain stays a value that can be built as many times as you
 like (§36), so the factory already exists and does not need the handle to become
 one.
@@ -1511,7 +1512,7 @@ and teardowns:
 | sequence | before | after |
 |---|---|---|
 | `ensure` → `dispose` → `ensure` | the SAME app, already torn down | throws |
-| `ensure` → `dispose` → `dispose` | `handle.dispose()` called twice, chain absorbs it | second call returns |
+| `ensure` → `dispose` → `dispose` | `handle.dispose()` called twice, chain absorbs it | attempted once, REPORTED to both |
 | `ensure` in flight → `dispose` | torn down, and the waiter still got the handle | torn down, waiter gets the refusal |
 
 None of them announced itself, and that is the reason this is a decision rather
@@ -1525,8 +1526,9 @@ was missing was anything stopping you from asking for the app afterwards.
 It was reachable in this repo, not merely in theory: `packages/integration/test/
 react-router.test.ts` disposed a module-level pack halfway through the file and
 five later tests kept mounting on it. They passed because the disposed app still
-answered and that fixture holds no real resource. Those tests now use a pack of
-their own.
+answered and that fixture holds no real resource. The DISPOSING test now takes a
+pack of its own, so the shared one is never torn down mid-file and the five that
+follow it mount on a live app.
 
 **Why it matters more now than it used to.** Where a container builds at
 startup, "after dispose" means "after the process decided to die" and nobody
@@ -1546,22 +1548,40 @@ one. Rejected as a half-rule: "after `dispose`, `ensure` never yields an app" is
 a sentence worth being able to say without an exception, and the cost is one
 `.then` on the build rather than on each call.
 
-**Cost.** Two references to the same build instead of one, and they are not
-interchangeable: teardown must await the RAW build (it has to reach a handle
-that may not exist yet), while callers get that build plus the check. Getting
-that wrong the other way — disposing through the guarded promise — would make a
-teardown during an in-flight build skip the app entirely.
+**Cost**, and it is larger than the rule looks. Two references to the same build
+instead of one, and they are not interchangeable: teardown must await the RAW
+build (it has to reach a handle that may not exist yet), while callers get that
+build plus the check. Getting that wrong the other way — disposing through the
+guarded promise — would make a teardown during an in-flight build skip the app
+entirely.
+
+Handing callers a DERIVED promise costs two more things, both of which the first
+version of this rule got wrong and neither of which is visible from the rule
+itself. The derived promise needs a handler of its own: `dispose` only ever
+attaches one to the raw build, so a caller who does not await `ensure` — a
+warm-up racing shutdown — turned the in-flight refusal into an unhandled
+rejection, which on Node ends the process. And teardown is now MEMOIZED rather
+than flagged: a boolean could only report "already handled", which made a second
+`dispose` resolve after a teardown that had FAILED, so two shutdown paths
+disagreed about whether the app closed. Both are guarded by tests that die when
+their guard is removed.
 
 ### 39. The mount signature's type parameters stay; the one-parameter form does not infer
 
-**Decision.** The mount factories in `@lntt/integration` keep their four type
-parameters:
+**Decision.** The mount factories in `@lntt/integration` keep the type
+parameters the brands need. On the three HTTP packs that is four:
 
 ```ts
 <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
   h: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body' | 'cookies' | 'headers'>,
 )
 ```
+
+(`hono.ts` orders them `<S, Need, R, Cap>`; the set is the same.) On tRPC it is
+SEVEN, because that mount is generic over the host's own context as well —
+`TContext`, `TMeta`, `TContextOverrides` come from the `ProcedureBuilder` it
+takes, and the deps are reconciled against the context rather than a pack's
+`Pub`, since on tRPC the app travels in the context (§33).
 
 They are not knobs and nobody should ever write them: they exist only because a
 brand must NAME the axis it tests, and a brand has to sit in the same parameter
@@ -1591,7 +1611,9 @@ that is wrong, which is the failure mode principle 1 exists to prevent.
 
 **What would change the verdict.** A way to apply a predicate to an inferred
 type parameter without referencing it from the inference site. Nothing in the
-current type system offers one; if that appears, all four packs move at once.
+current type system offers one; if that appears, every mount moves at once —
+though tRPC would keep the three parameters it owes to its own host, since those
+are not there for the brands.
 
 The related hole — naming `Cap` by hand to declare away a capability the carrier
 lacks — is closed separately by making `__cap` invariant (§34), so what remains

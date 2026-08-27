@@ -1,7 +1,8 @@
 // The host-agnostic scope core. `scope()` is the carrier-agnostic base
 // (`.input`/`.guard`/`.handle`); carrier capabilities live in tree-shakable
 // subpaths, imported ONLY when needed — `@lntt/scope/request` (`ctx.request`),
-// `.../body` (`.body`/`.form`), `.../cookies` (the sink). This barrel carries the
+// `.../body` (`.body`/`.form`), `.../cookies` (the Set-Cookie sink), `.../headers`
+// (the response headers). This barrel carries the
 // entry, the extension SPI, the carrier shapes, the fold, the input schema
 // projections, and the adapter brand.
 

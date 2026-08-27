@@ -34,7 +34,8 @@ export type SinkFactory = () => Sink
 // host hands to its native validator) alongside phantom markers. `__need` and
 // `__result` stay phantom and LOAD-BEARING: drop them and two Handlers with the
 // same schema become structurally identical, the adapter infers `unknown`, and
-// the deps check silently disables (spike 1, caveat 2). The `schema` field is
+// the deps check silently disables — it stops being a check without becoming an
+// error. The `schema` field is
 // what pins `InferInput`/`InferOutput` for every host's native validator.
 export interface Handler<
   Need extends object,
