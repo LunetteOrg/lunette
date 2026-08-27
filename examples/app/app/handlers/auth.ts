@@ -116,9 +116,15 @@ export const verifyForm = z.object({
 })
 
 // ── auth: POST /logout ──────────────────────────────────────────────────────
-// Drops the session cookie through the sink and redirects. No app dependency
-// beyond the cookie helper — the server keeps no session row to revoke here. A
-// leaf, so the composed `logoutScope` in ../handlers.ts is thin wiring.
+// Drops the session cookie through the sink and redirects. A leaf, so the
+// composed `logoutScope` in ../handlers.ts is thin wiring.
+//
+// It does NOT revoke: the session row stays, and `sessionReader` never consults
+// the `expiresAt` that `verifyCode` writes, so a copy of the cookie taken before
+// the logout still resolves. The 7-day lifetime is enforced only by the cookie's
+// own `Max-Age`, which is the client's to ignore. A real app deletes the row
+// here and checks expiry on every read; this leaf shows the scope shape and the
+// cookie sink, not the session lifecycle.
 export const logoutHandler = (
   deps: { sessionCookie: Pick<SessionCookie, 'drop'> },
   ctx: { cookies: CookieSink },

@@ -76,6 +76,11 @@ export const chain = lunette<{ env: Env }>()
       return { slug, url }
     },
   }))
+  // `keyId` is a BARE digest of the signing secret, published unauthenticated by
+  // `/about`. Fine for showing that a value derived at build time reaches a
+  // scope; not how a real key id is made — deriving it from the secret with a
+  // plain hash hands a client an offline check against secret guesses. Use HKDF
+  // with a fixed label, or an unrelated random id.
   .expose('about', (ctx) => ({
     label: ctx.env.LABEL,
     keyId: ctx.keyId,

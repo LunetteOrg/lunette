@@ -5,6 +5,15 @@ Example apps built on the shipped packages ([`@lntt/wire`](../packages/wire),
 Unlike `research/` (PoC proving wire's behaviour, out of review scope), these are
 usage references — in scope for review, meant to be read and copied.
 
+**What they demonstrate, and what they do not.** These entries exist to show how
+the framework meets an application: where the chain is built, how a scope reaches
+a host, what the mount gate checks, where the environment enters. They are NOT
+working applications in the product sense, and their application logic is
+deliberately the simplest thing that makes the wiring legible — a session that is
+not revoked server-side, a cache read whole into memory, a check that is not
+atomic. Copy the SHAPE of the wiring; do not copy the app around it. Where a
+particular shortcut could mislead on its own, the file says so on the spot.
+
 ## [`app/`](./app) — the shared app (issue #1 structure)
 
 A realistic React Router 7 + Drizzle composition root dissolved into an
