@@ -73,7 +73,10 @@ describe('example-app on Express — the mounted surface', () => {
     // logout clears the session cookie and redirects (manual, don't follow)
     const out = await fetch(`${url}/logout`, { method: 'POST', redirect: 'manual' })
     expect(out.status).toBe(302)
+    // `Max-Age=0` is what CLEARS it — an empty value alone is a cookie the
+    // browser keeps for the session.
     expect(out.headers.get('set-cookie')).toMatch(/^session=;/)
+    expect(out.headers.get('set-cookie')).toContain('Max-Age=0')
 
     await close()
   })

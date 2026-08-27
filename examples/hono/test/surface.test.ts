@@ -102,6 +102,10 @@ describe('example-app on Hono — the mounted surface', () => {
     const res = await app.request('/logout', { method: 'POST' })
     expect(res.status).toBe(302)
     expect(res.headers.get('location')).toBe('/')
+    // `Max-Age=0` is what CLEARS it. An empty value alone leaves a session
+    // cookie the browser keeps until it is closed, so asserting only the empty
+    // value would let logout break here without a red test.
     expect(res.headers.get('set-cookie')).toMatch(/^session=;/)
+    expect(res.headers.get('set-cookie')).toContain('Max-Age=0')
   })
 })

@@ -2,7 +2,9 @@ import { data, isRouteErrorResponse, redirect } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { scope } from '@lntt/scope'
 import { cookies } from '@lntt/scope/cookies'
+import { lunette } from '@lntt/wire'
 import { chain, type Env } from './fixture/chain.ts'
+import { makeRepos } from './fixture/domain.ts'
 import { courseHandler, loginHandler } from './fixture/handlers.ts'
 import { reactRouter } from '../src/react-router.ts'
 
@@ -65,8 +67,18 @@ describe('React Router 7 pack — loaders speak RR7, not HTTP', () => {
   // On a pack of its OWN, because `dispose` ends a build-once handle for good
   // (§38) and the rest of this file still mounts on the shared one. Two packs
   // over the same chain is the supported way to get a second app.
+  //
+  // The chain is local and COUNTS its builds: deep-equal loader data is the
+  // same whether the app was built once or once per request, so equality alone
+  // would not notice build-once being removed from the pack entirely.
   it('builds once across loaders, and disposes', async () => {
-    const own = reactRouter(chain, (env) => ({ env: (env ?? { label: 'rr7' }) as Env }))
+    let builds = 0
+    const counting = lunette<{ env: Env }>().expose(() => {
+      builds += 1
+      return makeRepos()
+    })
+    const own = reactRouter(counting, (env) => ({ env: (env ?? { label: 'rr7' }) as Env }))
+
     const first = await own.toLoader(courseHandler)({
       request: bearer('u-admin'),
       params: { courseId: 'c1' },
@@ -75,8 +87,17 @@ describe('React Router 7 pack — loaders speak RR7, not HTTP', () => {
       request: bearer('u-admin'),
       params: { courseId: 'c1' },
     })
+
     expect(second).toEqual(first)
+    // One app across two loader calls — the property `buildOnce` exists for.
+    expect(builds).toBe(1)
+
     await own.dispose()
+    // And the teardown is real: the handle is spent, so the next loader on this
+    // pack cannot reach an app at all (§38).
+    await expect(
+      own.toLoader(courseHandler)({ request: bearer('u-admin'), params: { courseId: 'c1' } }),
+    ).rejects.toThrow('was disposed')
   })
 })
 

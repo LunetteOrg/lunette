@@ -215,6 +215,15 @@ describe('renderOutcome', () => {
   })
 
   it('emits the cookie sink on the ok branch AND on an abort', () => {
+    // `maxAge: 0` is the CLEARING form, and it is the one a logout writes, so
+    // the serializer is pinned on it here rather than only on its siblings.
+    const cleared = nodeResponse()
+    renderOutcome(
+      cleared.res,
+      ok({ done: true }, [{ name: 'session', value: '', options: { path: '/', maxAge: 0 } }]),
+    )
+    expect(cleared.written.headers?.['set-cookie']).toEqual(['session=; Path=/; Max-Age=0'])
+
     const cookies = [{ name: 'session', value: 'abc', options: { path: '/', httpOnly: true } }]
 
     const good = nodeResponse()

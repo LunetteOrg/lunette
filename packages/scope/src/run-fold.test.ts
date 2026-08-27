@@ -54,6 +54,26 @@ describe('the scope fold at runtime', () => {
     expect(anon.ok).toBe(false)
     if (!anon.ok) expect(anon.abort.intent).toEqual({ kind: 'status', status: 401 })
   })
+
+  // ACCUMULATES, not replaces. The chain above only ever reads the guard
+  // immediately before it, so a fold that overwrote each enrichment with the
+  // last would satisfy it. Real scopes read across hops — a leaf using a
+  // session two guards back — so the leaf here reaches past its neighbour.
+  it('keeps every enrichment reachable, not only the last one', async () => {
+    const across = scope()
+      .guard(() => ({ first: 'one' as const }))
+      .guard(() => ({ second: 'two' as const }))
+      .guard(() => ({ third: 'three' as const }))
+      .handle((_deps: {}, ctx) => ({ seen: [ctx.first, ctx.second, ctx.third] }))
+
+    const out = await runFold<RequestCarrier, { seen: string[] }>(
+      across,
+      {},
+      { request: new Request('http://x/') },
+      {},
+    )
+    expect(out).toEqual({ ok: true, value: { seen: ['one', 'two', 'three'] }, effects: {} })
+  })
 })
 
 // The fold runs extension `prepare` steps FIRST, over the raw carrier, and owns
