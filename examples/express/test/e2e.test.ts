@@ -1,5 +1,4 @@
-import { createServer } from 'node:http'
-import type { AddressInfo } from 'node:net'
+import { start } from './serve.ts'
 import { describe, expect, it } from 'vitest'
 import { outbox } from '@lntt/example-app'
 import { app } from '../src/server.ts'
@@ -24,19 +23,10 @@ const cookie = (res: Response, name: string): string => {
   return all.map((c) => c.split(';')[0] ?? '').find((c) => c.startsWith(`${name}=`)) ?? ''
 }
 
-const start = async () => {
-  const server = createServer(app)
-  await new Promise<void>((resolve) => server.listen(0, resolve))
-  const { port } = server.address() as AddressInfo
-  return {
-    url: `http://localhost:${port}`,
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
-  }
-}
 
 describe('example-app on Express — authenticated end-to-end', () => {
   it('sign in → publish → read back over a real HTTP socket', async () => {
-    const { url, close } = await start()
+    const { url, close } = await start(app)
 
     const form = new FormData()
     form.set('email', 'e2e-express@example.com')

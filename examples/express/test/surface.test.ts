@@ -1,5 +1,4 @@
-import { createServer } from 'node:http'
-import type { AddressInfo } from 'node:net'
+import { start } from './serve.ts'
 import { describe, expect, it } from 'vitest'
 import { app } from '../src/server.ts'
 
@@ -18,19 +17,10 @@ import { app } from '../src/server.ts'
 // Its sibling `e2e.test.ts` shares this setup and differs in what it asks: a
 // JOURNEY across requests (a session cookie surviving from one to the next)
 // rather than each request judged on its own.
-const start = async () => {
-  const server = createServer(app)
-  await new Promise<void>((resolve) => server.listen(0, resolve))
-  const { port } = server.address() as AddressInfo
-  return {
-    url: `http://localhost:${port}`,
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
-  }
-}
 
 describe('example-app on Express — the mounted surface', () => {
   it('drives feed / post / login through a real HTTP round-trip', async () => {
-    const { url, close } = await start()
+    const { url, close } = await start(app)
 
     const feed = await fetch(`${url}/feed`)
     expect(feed.status).toBe(200)
@@ -54,7 +44,7 @@ describe('example-app on Express — the mounted surface', () => {
   })
 
   it('drives the new reads / gated writes / logout through a real socket', async () => {
-    const { url, close } = await start()
+    const { url, close } = await start(app)
 
     // public read: unknown post → empty comment list
     const comments = await fetch(`${url}/posts/nope/comments`)

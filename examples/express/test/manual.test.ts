@@ -1,3 +1,4 @@
+import { start } from './serve.ts'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { Express } from 'express'
@@ -22,15 +23,6 @@ interface Snapshot {
   readonly body: string
 }
 
-const start = async (app: Express) => {
-  const server = createServer(app)
-  await new Promise<void>((resolve) => server.listen(0, resolve))
-  const { port } = server.address() as AddressInfo
-  return {
-    url: `http://localhost:${port}`,
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
-  }
-}
 
 const snapshot = async (res: Response): Promise<Snapshot> => ({
   status: res.status,

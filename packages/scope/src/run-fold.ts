@@ -1,8 +1,7 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { type Abort, isAbort } from './abort.ts'
-import type { Handler } from './scope.ts'
+import type { Handler, Sink } from './scope.ts'
 import type { Outcome } from './carrier.ts'
-import type { Sink } from './scope.ts'
 import { validateInput } from './validate.ts'
 
 // The guard fold, shared by every host pack. It is a dialect fold over wire,
