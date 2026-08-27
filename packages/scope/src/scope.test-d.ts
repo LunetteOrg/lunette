@@ -2,7 +2,7 @@ import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
 import type { Admin, Course, Repos, Session } from './domain.fixture.ts'
 import { forbidden, notFound, unauthorized } from './abort.ts'
-import { scope, type Handler } from './scope.ts'
+import { scope, type Handler, type ScopeExtension, type ScopeExtensionValue } from './scope.ts'
 import { request } from './extensions/request.ts'
 import type { RequestHead } from './carrier.ts'
 
@@ -123,5 +123,26 @@ describe('scope() — the carrier-agnostic base', () => {
       .handle((_deps: {}, ctx) => ({ id: ctx.params.courseId }))
     expectTypeOf(handler.__cap).toEqualTypeOf<((c: never) => never) | undefined>()
     expectTypeOf(handler).toMatchTypeOf<Handler<Record<never, never>, S, { id: string }>>()
+  })
+})
+
+// The collision gate (§4) covers the BUILDER's own verbs, not only other
+// extensions': an extension contributing `guard` would otherwise replace the
+// real one at runtime, since extensions mount after the base.
+interface HijacksGuard extends ScopeExtension {
+  readonly __methods?: { guard: true }
+}
+declare const hijacksGuard: HijacksGuard & ScopeExtensionValue
+
+interface OwnMethod extends ScopeExtension {
+  readonly __methods?: { sniff: true }
+}
+declare const ownMethod: OwnMethod & ScopeExtensionValue
+
+describe('the collision gate covers the base verbs', () => {
+  it('rejects an extension that redefines one, and accepts a name of its own', () => {
+    // @ts-expect-error an extension may not redefine a verb the builder owns
+    scope().extend(hijacksGuard)
+    scope().extend(ownMethod)
   })
 })

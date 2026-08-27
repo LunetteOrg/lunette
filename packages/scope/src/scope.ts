@@ -1,7 +1,7 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { Abort } from './abort.ts'
 import type { Capability } from './carrier.ts'
-import { unit, type OutputOf } from './schema.ts'
+import { unit, type OutputOf, type UnitSchema } from './schema.ts'
 
 // A PREPARE step, part of the extension SPI: reads the raw carrier (the host's
 // full object, e.g. a Fetch `Request` with a readable body) and returns an
@@ -136,10 +136,6 @@ type CapsOf<T> = T extends { readonly __caps?: infer M }
 type EffOf<T> = T extends { readonly __effects?: infer E } ? (E extends object ? E : {}) : {}
 type MethodsOf<T> = T extends { readonly __methods?: infer M } ? keyof M : never
 
-// The unit schema type: a scope that never calls `.input` runs with `P = {}`.
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-type UnitSchema = StandardSchemaV1<{}, {}>
-
 // The ctx a guard/leaf reads: the validated `params` + every extension's ctx
 // (`__ctx` — `request`, `cookies`, …) + every prior guard enrichment (`__acc`).
 // The agnostic base commits to no carrier, so it adds nothing of its own.
@@ -169,7 +165,14 @@ export interface Scope {
   readonly __ctx?: object
   readonly __need?: object
   readonly __caps?: object
-  readonly __methods?: object
+  // The builder DECLARES its own verbs, and that is what makes the collision
+  // gate cover them. `MethodsOf` reads `keyof M`, so leaving this `object` made
+  // `keyof object` — that is, `never` — and `Redefines` could never match
+  // against the base: an extension contributing a `guard` passed the gate, and
+  // since `Object.assign` mounts extensions AFTER the base, it replaced the
+  // real one. Extension-vs-extension always worked, because there `Self`
+  // already carries a real `__methods` (§4).
+  readonly __methods?: { input: true; guard: true; handle: true; extend: true }
   readonly __effects?: object
 
   // `.input` fixes the params schema (first call wins; a second intersects and
