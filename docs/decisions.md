@@ -1435,6 +1435,9 @@ three-line version is unsafe with requests in flight (it closes a pool others
 are using) and the safe version needs refcounting — a real feature, deferred
 until someone has the case in hand (principle 5). Tracked as #39.
 
+What `dispose` does to that memo is the other half of the sentence, and it is
+§38: the handle is single-lifecycle, so teardown ends it rather than emptying it.
+
 ### 37. The example entries share one shape; the composition root is a module singleton
 
 **Decision.** Every host entry under `examples/` is laid out the same way, and
@@ -1485,3 +1488,111 @@ caller whatever app it built, so it needs no environment variable at all, while
 the HTTP suites — whose routes are registered on a pack — set one. That
 divergence is the host's, and the shared skeleton is what makes it visible
 instead of burying it in four bespoke arrangements.
+
+### 38. `buildOnce`'s handle is single-lifecycle: `dispose` ends it
+
+**Decision.** A `BuildOnce` handle has ONE life. `dispose` closes it, and after
+that `ensure` THROWS rather than handing an app back, a second `dispose` returns
+without touching the chain, and a build still in flight when `dispose` arrives is
+torn down AND refused to whoever was waiting for it. A second app is a second
+`buildOnce` — the chain stays a value that can be built as many times as you
+like (§36), so the factory already exists and does not need the handle to become
+one.
+
+The error is THROWN, not returned: a container that no longer exists is
+infrastructure, not a domain outcome (principle 3). It is thrown SYNCHRONOUSLY
+from `ensure`, which is the shape that call already had for a seed thunk that
+throws.
+
+**What it replaces.** The memo outlived its own teardown, because `dispose`
+never cleared it. Three consequences, all measured on a chain that counts builds
+and teardowns:
+
+| sequence | before | after |
+|---|---|---|
+| `ensure` → `dispose` → `ensure` | the SAME app, already torn down | throws |
+| `ensure` → `dispose` → `dispose` | `handle.dispose()` called twice, chain absorbs it | second call returns |
+| `ensure` in flight → `dispose` | torn down, and the waiter still got the handle | torn down, waiter gets the refusal |
+
+None of them announced itself, and that is the reason this is a decision rather
+than a footnote: **after teardown the `app` object is not dead**. Its closures
+are intact, its methods answer, its types hold. What is dead is underneath — the
+pool closed, the client ended — so the failure surfaces inside a driver, far
+from the `ensure` that handed out a spent app. `examples/app` already had the
+test proving the resource really closes (`a query after dispose fails`); what
+was missing was anything stopping you from asking for the app afterwards.
+
+It was reachable in this repo, not merely in theory: `packages/integration/test/
+react-router.test.ts` disposed a module-level pack halfway through the file and
+five later tests kept mounting on it. They passed because the disposed app still
+answered and that fixture holds no real resource. Those tests now use a pack of
+their own.
+
+**Why it matters more now than it used to.** Where a container builds at
+startup, "after dispose" means "after the process decided to die" and nobody
+gets there. With the build LAZY (§36) the first `ensure` is a REQUEST, so the
+handle's life is no longer bracketed by the process's.
+
+**Alternatives.** (a) Document the boundary and change nothing — one sentence
+saying the handle is single-lifecycle and using it afterwards is undefined.
+Rejected: it costs nothing and buys nothing, leaving a silent wrong answer
+reachable and a documented boundary that no test enforces; the five green tests
+above are what that option looks like in practice. (b) Re-arm the memo (`built =
+undefined` after teardown) so a later `ensure` rebuilds. Rejected: it
+contradicts the identity guarantee this module opens with — singletons would
+exist once PER LIFECYCLE, not once — and it answers a need already met by a
+second `buildOnce`. (c) Close only the sequential paths and leave the in-flight
+one. Rejected as a half-rule: "after `dispose`, `ensure` never yields an app" is
+a sentence worth being able to say without an exception, and the cost is one
+`.then` on the build rather than on each call.
+
+**Cost.** Two references to the same build instead of one, and they are not
+interchangeable: teardown must await the RAW build (it has to reach a handle
+that may not exist yet), while callers get that build plus the check. Getting
+that wrong the other way — disposing through the guarded promise — would make a
+teardown during an in-flight build skip the app entirely.
+
+### 39. The mount signature's type parameters stay; the one-parameter form does not infer
+
+**Decision.** The mount factories in `@lntt/integration` keep their four type
+parameters:
+
+```ts
+<Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
+  h: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body' | 'cookies' | 'headers'>,
+)
+```
+
+They are not knobs and nobody should ever write them: they exist only because a
+brand must NAME the axis it tests, and a brand has to sit in the same parameter
+position as the value it guards. Recorded as a decision rather than left as a
+smell to rediscover, because the better-looking shape has been tried and
+measured, and the result is negative.
+
+**What does not work.** One parameter with the axes extracted:
+
+```ts
+<H extends AnyHandler>(h: H & DepGuard<Pub, NeedOf<H>> & CarrierGuard<CapOf<H>, HostCaps>)
+```
+
+TypeScript cannot infer `H` from a parameter position that also references `H`
+inside a computed type. It falls back to the constraint, `Need` collapses to the
+constraint's shape, and the brand then fires on VALID handlers — the gate starts
+rejecting good mounts, which is worse than the verbosity. Isolated so the cause
+is not guessed at: the same one-parameter signature WITHOUT the intersection
+infers perfectly, so it is the self-reference and not the extraction.
+
+**Alternatives.** (a) A second parameter with a computed default (`N =
+NeedOf<H>`). Rejected: the default is still a computed type over `H` resolved at
+the inference site, so it reintroduces the same self-reference. (b) Put the
+brand on the RETURN type. It infers cleanly, and is rejected anyway: the error
+would land at the assignment of the mount's result instead of on the argument
+that is wrong, which is the failure mode principle 1 exists to prevent.
+
+**What would change the verdict.** A way to apply a predicate to an inferred
+type parameter without referencing it from the inference site. Nothing in the
+current type system offers one; if that appears, all four packs move at once.
+
+The related hole — naming `Cap` by hand to declare away a capability the carrier
+lacks — is closed separately by making `__cap` invariant (§34), so what remains
+here is only the shape of the signature, not a gap in the gate.
