@@ -81,6 +81,14 @@ on the build that happens (§36), so the `c.env` variant reads the FIRST request
 env and ignores every later one. It is not a per-request seed — there is no such
 thing; a per-call axis is a window (principle 4).
 
+## The same app with no pack at all
+
+[`examples/cloudflare-workers/bare`](../bare) serves this chain and these scopes
+from a hand-written `fetch` handler: `buildOnce` called directly, the carrier
+assembled by hand, `runScope`, and the two brands named in one signature. Read
+side by side with `src/server.ts`, the difference is the routing table and
+nothing else — which is what a pack is worth.
+
 ## Two test projects, because one tool cannot do both
 
 | project | tool | vantage point | what it proves |

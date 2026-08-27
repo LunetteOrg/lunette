@@ -1,8 +1,8 @@
 {
-  "name": "@lntt/example-workers-hono",
+  "name": "@lntt/example-workers-bare",
   "version": "0.0.0",
   "private": true,
-  "description": "Example: a standalone chain mounted on Hono and served from a Cloudflare Worker, with the tests running inside workerd.",
+  "description": "Example: the scope runtime on Cloudflare Workers with NO pack \u2014 a fetch handler calling runScope by hand, where the lazy build is mandatory rather than advisable.",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
@@ -19,8 +19,6 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.1.0",
-    "@hono/standard-validator": "^0.2.3",
-    "hono": "^4.12.25",
     "typescript": "^5.9.2",
     "vitest": "^4.1.0",
     "wrangler": "^4.126.0"

@@ -78,6 +78,7 @@ a comment.
 |---|---|
 | [`cloudflare-workers/hono/`](./cloudflare-workers/hono) | `config/env.ts` swaps `process.env` for `import { env } from 'cloudflare:workers'` and nothing downstream changes; a module-scope build is REFUSED by the runtime; #39's mechanism reproduced (a KV write after the first request is not picked up) |
 | [`cloudflare-workers/express/`](./cloudflare-workers/express) | the Node Express pack running UNCHANGED on `node:http` emulated by Workers (`httpServerHandler`), where `seedFrom` has no `c.env` to receive — so the config module is the only way bindings can arrive |
+| [`cloudflare-workers/bare/`](./cloudflare-workers/bare) | the same chain with NO pack — `runScope` by hand, where the lazy build is mandatory rather than advisable, and the only thing an adapter turns out to buy is routing |
 
 Two findings from building them, both correcting an assumption:
 

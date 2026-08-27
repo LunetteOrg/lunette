@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lntt-example-workers-bare",
+  "main": "src/server.ts",
+  // `import { env } from 'cloudflare:workers'` needs a runtime that ships it.
+  "compatibility_date": "2026-08-01",
+  // The binding the store layer reads at build time — and the reason the build
+  // here MUST be lazy: a KV read is asynchronous I/O, which Workers refuse
+  // outside a request (§36).
+  "kv_namespaces": [{ "binding": "LINKS", "id": "links-namespace-bare" }],
+  "vars": {
+    "LABEL": "no pack at all",
+    "SIGNING_SECRET": "dev-secret-not-for-deployment"
+  }
+}
