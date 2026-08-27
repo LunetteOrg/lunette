@@ -1,5 +1,6 @@
 import type { PubOf } from '@lntt/wire'
 import { Hono } from 'hono'
+import { initTRPC } from '@trpc/server'
 import expressApp, { type Express } from 'express'
 import { describe, it } from 'vitest'
 import { chain, type Env } from './fixture/chain.ts'
@@ -8,6 +9,7 @@ import { scope } from '@lntt/scope'
 import { express as expressPack } from '../src/express.ts'
 import { hono, type WireEnv } from '../src/hono.ts'
 import { reactRouter } from '../src/react-router.ts'
+import { toMutation, toProcedure } from '../src/trpc.ts'
 
 type Pub = PubOf<typeof chain>
 
@@ -58,5 +60,18 @@ describe('adapter contract — deps by brand (Need ⊆ Pub) at each call site', 
     // missing dep is caught at `handler`, independent of the route path
     // @ts-expect-error — chain Pub is missing the scope's required deps
     ex.handler(needsBilling)
+  })
+
+  // tRPC holds no pack, so the app travels in the CONTEXT and the context is
+  // what the deps are reconciled against. Same axis, different source.
+  it('tRPC: deps-vs-context is checked at toProcedure and toMutation', () => {
+    const t = initTRPC.context<Pub & { request: Request }>().create()
+    // courseHandler's Need ⊆ the context → accepted on both verbs
+    toProcedure(t.procedure, courseHandler)
+    toMutation(t.procedure, courseHandler)
+    // @ts-expect-error — the tRPC context is missing the scope's required deps
+    toProcedure(t.procedure, needsBilling)
+    // @ts-expect-error — the tRPC context is missing the scope's required deps
+    toMutation(t.procedure, needsBilling)
   })
 })

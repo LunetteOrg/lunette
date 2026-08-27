@@ -25,7 +25,15 @@ import type {
   StandardSchemaV1,
   UnsetMarker,
 } from '@trpc/server/unstable-core-do-not-import'
-import type { Abort, Capability, CarrierGuard, Handler, OutputOf, RequestCarrier } from '@lntt/scope'
+import type {
+  Abort,
+  Capability,
+  CarrierGuard,
+  DepGuard,
+  Handler,
+  OutputOf,
+  RequestCarrier,
+} from '@lntt/scope'
 import { isAbort, runFold } from '@lntt/scope'
 
 // The schema OUTPUT is the ctx.input type — the SAME projection guards and leaf
@@ -127,11 +135,17 @@ export function toProcedure<
     UnsetMarker,
     false
   >,
-  // tRPC has ONE JSON `input`, no separate readable body — its carrier provides
-  // NO capabilities (`CarrierGuard<Cap, never>`). A scope that declared
-  // `.body`/`.form` (Cap ⊇ 'body') is a COMPILE ERROR here, at the mount site,
-  // naming the missing capability — instead of silently reading an empty body.
-  handler: Handler<Need, S, R, Cap> & CarrierGuard<Cap, never>,
+  // Two gates, the same two every other host applies. `DepGuard` reconciles the
+  // scope's deps against the CONTEXT, because on tRPC the context is where the
+  // app travels (§33) — there is no pack holding a `Pub`, so `TContext` plays
+  // that role. And tRPC has ONE JSON `input`, no separate readable body, so its
+  // carrier provides NO capabilities (`CarrierGuard<Cap, never>`): a scope that
+  // declared `.body`/`.form` (Cap ⊇ 'body') is a COMPILE ERROR here, at the
+  // mount site, naming the missing capability — instead of silently reading an
+  // empty body.
+  handler: Handler<Need, S, R, Cap> &
+    DepGuard<TContext & TContextOverrides, Need> &
+    CarrierGuard<Cap, never>,
 ) {
   return procedure.input(handler.schema).query(async (opts): Promise<R> => {
     // `opts` is contextually typed by tRPC's resolver signature; the constraint
@@ -177,7 +191,9 @@ export function toMutation<
     UnsetMarker,
     false
   >,
-  handler: Handler<Need, S, R, Cap> & CarrierGuard<Cap, never>,
+  handler: Handler<Need, S, R, Cap> &
+    DepGuard<TContext & TContextOverrides, Need> &
+    CarrierGuard<Cap, never>,
 ) {
   return procedure.input(handler.schema).mutation(async (opts): Promise<R> => {
     const ctx = opts.ctx as { request: Request }
