@@ -1,7 +1,8 @@
 import { data, isRouteErrorResponse, redirect } from 'react-router'
 import { describe, expect, it } from 'vitest'
-import { scope } from '@lntt/scope'
-import { cookies } from '@lntt/scope/cookies'
+import { httpError, scope } from '@lntt/scope'
+import { cookies as cookiesExt } from '@lntt/scope/cookies'
+import { headers as headersExt } from '@lntt/scope/headers'
 import { lunette } from '@lntt/wire'
 import { chain, type Env } from './fixture/chain.ts'
 import { makeRepos } from './fixture/domain.ts'
@@ -134,7 +135,7 @@ describe('a leaf that speaks React Router itself', () => {
     // The regression this exists for: wrapping a `data()` in another `data()`
     // dropped the status and serialized RR7's internal carrier as the body.
     const s = scope()
-      .extend(cookies)
+      .extend(cookiesExt)
       .handle((_deps: {}, ctx) => {
         ctx.cookies.set('probe', '1')
         return data({ via: 'data+cookie' }, { status: 202 })
@@ -151,7 +152,7 @@ describe('a leaf that speaks React Router itself', () => {
 
   it('keeps a Response the leaf built, and adds the effects to it', async () => {
     const s = scope()
-      .extend(cookies)
+      .extend(cookiesExt)
       .handle((_deps: {}, ctx) => {
         ctx.cookies.set('probe', '2')
         return new Response('plain text', { status: 201, headers: { 'content-type': 'text/plain' } })
@@ -177,5 +178,44 @@ describe('a leaf that speaks React Router itself', () => {
     expect(thrown).toBeInstanceOf(Response)
     expect((thrown as Response).status).toBe(302)
     expect((thrown as Response).headers.get('location')).toBe('/elsewhere')
+  })
+})
+
+// The sinks ride BOTH branches, and the thrown one is the branch RR7 alone did
+// not pin: Express and Hono both have this test, so removing the effects here
+// left the whole monorepo green. A logout that redirects is the everyday case;
+// a logout that 4xxs still has to emit its Set-Cookie.
+describe('the thrown abort carries the effects too', () => {
+  it('attaches the cookie sink and the header sink to the thrown data()', async () => {
+    const s = scope()
+      .extend(cookiesExt)
+      .extend(headersExt)
+      .handle((_deps: {}, ctx) => {
+        ctx.cookies.set('sid', '', { maxAge: 0 })
+        ctx.headers.set('x-trace', 't')
+        return httpError(409, { error: 'conflict' })
+      })
+
+    const thrown = await thrownBy(() =>
+      pack.toLoader(s)({ request: new Request('http://x/'), params: {} }),
+    )
+    const init = (thrown as { init?: ResponseInit }).init
+    const sent = new Headers(init?.headers)
+    expect(init?.status).toBe(409)
+    expect(sent.get('set-cookie')).toBe('sid=; Max-Age=0')
+    expect(sent.get('x-trace')).toBe('t')
+  })
+})
+
+// `contextKey` is only pinned for Express (`two-chains.test.ts`); ignoring the
+// option here used to change nothing observable.
+describe('mount honours contextKey', () => {
+  it('stashes the app under the key the pack was given', async () => {
+    const own = reactRouter(chain, (env) => ({ env: (env ?? { label: 'rr7' }) as Env }), {
+      contextKey: '__billing',
+    })
+    const context = await own.mount({ label: 'rr7' } as Env)
+    expect(Object.keys(context)).toEqual(['__billing'])
+    await own.dispose()
   })
 })

@@ -4,6 +4,7 @@ import { forbidden, httpError, notFound, unauthorized } from './abort.ts'
 import { scope } from './scope.ts'
 import { request } from './extensions/request.ts'
 import { runFold } from './run-fold.ts'
+import { cookies, readCookies } from './extensions/cookies.ts'
 import type { RequestCarrier } from './carrier.ts'
 import { makeRepos, type Repos } from './domain.fixture.ts'
 
@@ -170,5 +171,24 @@ describe('the fold — prepare steps and extension sinks', () => {
       {},
     )
     expect(out.effects).toEqual({})
+  })
+})
+
+// The effects ride the abort on EVERY branch. The guard branch is pinned above;
+// the leaf branch was only pinned by the adapters' tests, so within this package
+// the core's own contract leaned on its consumers.
+describe('the fold — effects on a leaf abort', () => {
+  it('carries what the leaf wrote before it aborted', async () => {
+    const s = scope()
+      .extend(cookies)
+      .handle((_deps: {}, ctx) => {
+        // A logout is exactly this shape: drop the cookie AND redirect.
+        ctx.cookies.set('session', '', { maxAge: 0 })
+        return forbidden()
+      })
+
+    const out = await runFold<object, never>(s, {}, {}, {})
+    expect(out.ok).toBe(false)
+    expect(readCookies(out)).toEqual([{ name: 'session', value: '', options: { maxAge: 0 } }])
   })
 })

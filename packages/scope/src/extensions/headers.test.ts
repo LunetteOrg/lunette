@@ -112,3 +112,42 @@ describe('the headers extension', () => {
     )
   })
 })
+// The sink is created PER INVOCATION. Its twin in `cookies.test.ts` has always
+// pinned this; without it here, hoisting the `Headers` into module scope — one
+// bag shared by every request, so one caller's `x-user-id` rides on everyone
+// else's response — passes the whole suite.
+describe('the headers sink is per invocation', () => {
+  const s = scope()
+    .extend(headers)
+    .handle((_deps: {}, ctx) => {
+      ctx.headers.set('x-seen', 'yes')
+      return { ok: true }
+    })
+
+  it('starts empty on every invocation', async () => {
+    const first = await run<{ ok: boolean }>(s)
+    expect([...readHeaders(first)]).toEqual([['x-seen', 'yes']])
+
+    const second = await run<{ ok: boolean }>(s)
+    // Exactly one, not two: the second run must not inherit the first.
+    expect([...readHeaders(second)]).toEqual([['x-seen', 'yes']])
+  })
+
+  it('keeps concurrent runs of the SAME scope apart', async () => {
+    const tagged = (tag: string) =>
+      scope()
+        .extend(headers)
+        .handle(async (_deps: {}, ctx) => {
+          ctx.headers.set('x-who', tag)
+          await new Promise((r) => setTimeout(r, tag === 'slow' ? 20 : 0))
+          return { ok: true }
+        })
+
+    const [slow, fast] = await Promise.all([
+      run<{ ok: boolean }>(tagged('slow')),
+      run<{ ok: boolean }>(tagged('fast')),
+    ])
+    expect([...readHeaders(slow)]).toEqual([['x-who', 'slow']])
+    expect([...readHeaders(fast)]).toEqual([['x-who', 'fast']])
+  })
+})

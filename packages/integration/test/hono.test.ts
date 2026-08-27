@@ -78,3 +78,22 @@ describe('the host env reaches seedFrom', () => {
     await w.dispose()
   })
 })
+
+// `contextKey` was pinned for Express only; ignoring it here changed nothing
+// observable, while two packs in one app depend on it to stay apart (§33).
+describe('mount honours contextKey', () => {
+  it('stashes the app under the key the pack was given', async () => {
+    const w = hono(chain, () => ({ env: { label: 'hono' } satisfies Env }), {
+      contextKey: '__billing',
+    })
+    const app = new Hono().use(w.mount())
+    let seen: unknown
+    app.get('/probe', (c) => {
+      seen = c.get('__billing' as never)
+      return c.json({ ok: true })
+    })
+    await app.request('/probe')
+    expect(seen).toBeDefined()
+    await w.dispose()
+  })
+})
