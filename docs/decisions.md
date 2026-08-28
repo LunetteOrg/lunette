@@ -664,7 +664,7 @@ into the binder as `.by`.
   (`bind.with(window, record)`): the best ergonomics, but keeps the arity
   hole of (a) — rejected on principle 1.
 - (d) A separate helper (`leaves`/`bound`/`wired`, proved userland-viable
-  in `research/module-shapes/`): a new verb to teach what `bind` already
+  in a prototype): a new verb to teach what `bind` already
   means.
 - Naming: `.with` kept for the per-call property (Python's `with`
   statement, Effect's `with*` combinators, the HOF `withX` convention; the
@@ -927,3 +927,850 @@ add) and its own recorded flow convention; untouched.
 **Pinned.** The refusal on every patch door, the union member-wise
 judgment, the empty-patch pass, the namespaced green twin, and the
 runtime net under a cast (`keyed.test.ts`).
+
+---
+
+## The scope runtime
+
+### 33. Three seeding cadences collapse to two; the request window nests the transaction window
+
+**Decision.** The Seed of decision 7 is read at cadences distinguished by
+lifetime. The exploration first framed three (boot-time, first-request-time,
+per-request); it collapses to **two**, because the host pack ALWAYS does
+first-request build-once (uniform across Node, Bun/Elysia, Cloudflare
+Workers). Boot-time and first-request are the same cadence with different
+seed SOURCES (`process.env` on Node, `c.env` on a Worker), not two
+mechanisms. Node MAY warm the memo eagerly at startup (opt-in fail-fast),
+but that is the same cadence triggered early — not a third one.
+
+- **Tier 1 — build-once.** The pack takes the **chain** (never a built app)
+  and owns a first-seed-wins promise-memo per isolate, cleared on failure.
+  `mount` is the framework middleware registered once: it reads the host
+  context (`c.env` on Cloudflare, a preceding middleware, or static env on
+  Node), seeds the memoized build, and places the built app in the host
+  context for the per-handler functions to read back. Distinct context keys
+  let multiple chains coexist in one app. This generalizes the lazy
+  memoized boot of decision 12 (issue #12's concern) to every host.
+- **Tier 2 — per-request.** The scope window: the guard/leaf fold. Each
+  invocation gets a fresh cookie sink + enrichment bag; the built app is
+  threaded read-only; the handler's requirement (`deps`) and the route
+  params are reconciled against the chain's `Pub` and the host's route at
+  the adapter — a missing dep or a wrong param is a compile error THERE.
+  This mirrors wire's Seed-vs-Ctx mount check (decisions 7/8).
+
+**Window nesting.** The request window (outer) and a transaction window
+(inner — a wire `window()` / `.with`) are independent and compose ONLY
+through the error convention (decision 14): a RETURNED domain value means
+the inner transaction committed AND the outer scope emits its 2xx/4xx; a
+THROWN infrastructure error means the inner rolled back AND propagates as
+5xx. No ambient storage, no implicit join (principle 7).
+
+**Alternatives.** (a) The pack takes a BUILT app plus a separate boot step:
+splits lifecycle ownership across two callers and reopens the two-teardown
+ambiguity decision 8 rejected. (b) A per-request build keyed by the seed:
+defeats the isolate-static model, turning cold-start cost into per-request
+cost. (c) A transaction shared implicitly across the whole request via
+ambient storage: rejected by principle 7 (implicit join is the behaviour
+you debug in postmortems).
+
+**Why.** One mechanism (first-seed-wins promise-memo per isolate) covers
+every host; the only thing that varies is where the seed is read from.
+Keeping the two windows composed by the error convention alone means the
+scope tier adds no new lifecycle concept — it reuses the pivot (decision
+14) the rest of the design already turns on.
+
+**Open follow-up.** Whether a SINGLE transaction should bracket the whole
+fold (multiple guards + the leaf) is unresolved. Principle 7 dictates an
+explicit named window a guard OPENS and later guards receive as an
+enrichment, never an ambient join — left until a real case demands it
+(principle 5).
+
+**Amendment: the `headers` capability.** A third extension joins `body` and
+`cookies`: `@lntt/scope/headers` puts a response-header sink on `ctx.headers` and
+flows a `headers` capability, so a scope that decorates its response is rejected
+on a host with no response to decorate (tRPC). It is a SEPARATE subpath rather
+than a merge with `cookies` (a `response` extension covering both was weighed):
+a cookie has typed options and its own serialization, a header is a raw pair, and
+keeping them apart keeps each opt-in and leaves the existing `cookies` untouched.
+`Set-Cookie` stays the cookie sink's alone — writing it through the header sink
+would bypass the `cookies` gate. The declarative `.headers({...})` is the form to
+reach for (the policy sits at the wiring, next to the route, and the leaf stays a
+domain function); the sink is for guards, where cross-cutting concerns belong. A
+leaf that writes headers has stopped being a use case.
+
+The step behind `.headers({...})` is ALSO exported as `setHeaders`, so the same
+policy can be composed as an ordinary guard (`.guard(setHeaders({...}))`). Two
+forms of one thing is a considered exception to principle 5: the fluent method is
+discoverable straight off `.extend(headers)`, the function is what a policy
+shared between scopes wants, and it makes the position in the guard chain
+visible. Neither has precedence over the other — the step runs where it is
+called, exactly like any guard, which is the whole reason `.headers` is not a
+"before everything" hook.
+
+**Amendment: a leaf may speak the host's own language.** On React Router a leaf
+can return `data(value, { status })`, return a `Response` it built, or throw
+`redirect(...)`. This is SUPPORTED, not accidental: the pack does not re-wrap
+what the leaf already built, it merges the sinks' effects into it. Wrapping it —
+the naive path, and what the code did before this was found — silently dropped
+the status the leaf chose and serialized React Router's internal carrier as the
+body; the failure was invisible until a sink happened to be non-empty, since
+without effects there was nothing to wrap with. Two things are given up
+knowingly: the scope imports the framework, so it no longer runs on the other
+hosts (which is why no scope in the shared example app does it), and a
+`Set-Cookie` written INSIDE a leaf-built response is invisible to the `cookies`
+capability — taking over the response means taking over its contract (§34).
+
+**Amendment: how the app reaches the handler.** The build-once memo is
+per PACK; what used to be shared was the TRANSPORT to the handler — `mount`
+stashed the app on the host context under a fixed `'__wireApp'` key and the
+handler read it back. With two packs in one app the last `mount` registered won,
+so a route answered from the WRONG chain, silently: `DepGuard` is satisfied by
+any chain whose public surface fits. Verified with a failing test before the fix
+(`test/two-chains.test.ts`), on Express and on Hono.
+
+Handlers are now self-sufficient: each reads the app from its own pack's
+`ensure`, so the claim "different chains can serve routes in the same app" holds
+by construction. `mount` survives as an OPTIONAL accessory on Hono and Express —
+it exists to reach the app outside a scope (a user middleware, a hand-written
+route, a healthcheck), which is the idiomatic Hono `Variables` channel and worth
+keeping — with `contextKey` making the slot per-pack. On React Router `mount`
+stays mandatory: there it IS `getLoadContext`, the only channel through which
+RR7 hands the host env to a loader, so the app necessarily travels through the
+context and only the key is made configurable.
+
+### 34. Carrier capabilities gate host portability; the body is a declared channel
+
+**Decision.** A scope's input splits by SOURCE, and each host maps `.input`
+to its own native notion — SUPERSEDED by decision 40, which gives the verb to
+the carrier instead (`.params` on HTTP, `.input` on tRPC) so one name no longer
+means two things; the rest of this decision, and the capability gate above all,
+stands: the HTTP hosts (Hono/Express/React Router) map it to
+the ROUTE PARAMS (validated by the native `param` validator), while tRPC maps it
+to the single RPC payload. The request BODY is therefore NOT `.input`; it is a
+SEPARATE, DECLARED channel — `.body(schema)` for JSON, `.form(schema)` for
+multipart/urlencoded — validated into `ctx.body` / `ctx.form` by the fold. A
+scope that declares either carries the `body` **capability** in its `Cap`
+axis (a phantom on `Handler`, load-bearing like `__need`/`__result`).
+
+Each host adapter declares the capabilities its carrier PROVIDES (`'body' |
+'cookies' | 'headers'` for Hono/Express/RR7; NONE for tRPC — one JSON `input`, no
+separate readable body, and it drops `Set-Cookie`) and intersects the wiring parameter
+with `CarrierGuard<Cap, HostCaps>` — the
+same brand shape as `DepGuard` (`packages/scope/src/adapter-guard.ts`). When `Cap ⊆
+HostCaps` the clause vanishes and the mount compiles; otherwise it becomes an
+unsatisfiable branded object (`__ERROR_host_missing_capability`) and the mount
+(`toProcedure`/`w.handler`/`toLoader`) is a COMPILE ERROR naming the gap.
+
+Enforcement is by CONSTRUCTION, not by convention: `ctx.request` is narrowed to
+a headless `RequestHead` (url/method/headers, NO body accessors), so the body is
+UNREACHABLE except through the declared `.body`/`.form` channels. A guard cannot
+call `ctx.request.json()` to sneak the body past the capability — it does not
+typecheck. A missing capability is thus impossible to forget: reading the body
+requires the declaration that flows `Cap`, which the gate reads.
+
+**Amendment — the alphabet is OPEN, and the two sides are asymmetric.** As first
+written, `Capability` was the closed union `'body' | 'cookies' | 'headers'` in
+the core, and `CapsOf` filtered an extension's own `__caps` through it. That
+contradicted principle 6 — extensions are dialects, the core names none — and it
+did so in the worst possible direction: a third-party capability was not
+rejected, it became `never`. `CarrierGuard<never, HostCaps>` collapses to
+`unknown`, the brand vanishes, and the scope mounts ANYWHERE. A silent
+fail-OPEN in the one mechanism whose entire job is to make a bad mount
+impossible. The negative that keeps it shut is
+`packages/scope/src/capability-alphabet.test-d.ts`.
+
+`Capability` is now `string`. An extension coins its own names and the core
+enumerates none. The safety does not rest on the core knowing the alphabet — it
+rests on an asymmetry:
+
+- **DEMAND (the scope) is OPEN.** Any extension may coin a name, and the name is
+  carried through as it is. A capability no host has claimed appears in no
+  `HostCaps`, so `Exclude` leaves it and the mount fails EVERYWHERE. A new
+  capability mounts nowhere until a host claims it; a typo (`'bdy'`) fails the
+  same way, naming the string.
+- **SUPPLY (the mount) is CLOSED** — a written-out set in the adapter, or in the
+  hand-written mount for a host we ship nothing for.
+
+**The gate had to be made invariant, and the reason is not the one it looks
+like.** Declared `(c: Cap) => void`, the capability phantom is contravariant, so
+`Handler<…, 'body'>` is assignable to `Handler<…, never>`: a caller NAMING the
+type arguments at a mount (`w.handler<…, never>(scope)`) satisfied the guard
+while the scope still required a capability the carrier lacked, with no cast
+anywhere. Inferred mounts — which is how every mount is actually written — were
+never affected.
+
+`DepGuard` was never exposed this way, and NOT because `Need` is somehow more
+real: `__need` has the identical shape, a contravariant phantom. What differs is
+the DIRECTION of each predicate against the bottom type. `DepGuard` asks
+`Pub extends Need`, and `never` makes that FALSE — nothing extends `never` — so
+the brand fires; naming a smaller object instead is refused earlier, by
+contravariance, since the handler's own `Need` no longer fits the named one.
+`CarrierGuard` asks whether `Exclude<Cap, HostCaps>` is `never`, which `never`
+satisfies VACUOUSLY — and contravariance waves the value through, since `never`
+is assignable to everything. One axis is protected on both moves, the other on
+neither.
+
+`__cap` is now `(c: Cap) => Cap`, present in both positions and therefore
+invariant, which refuses the assignment. The ONLY assignment that becomes newly
+illegal is NARROWING the capability slot by hand, which is the unsound direction.
+Widening it, and collecting handlers of different capabilities in one array or
+record, were already refused before — by contravariance, and independently by
+`__need`/`__eff`/`__result` once real scopes differ on those axes too. Verified
+by running the same probes against both trees with the real packs and real
+scopes, rather than handlers whose other parameters were held artificially
+uniform, which is what made an earlier reading of this wrong.
+
+The gate was genuinely open at all five shipped mount sites (`toProcedure`,
+`toMutation`, the Hono and Express `handler`, `toLoader`), each of which would
+take a body-reading scope onto a carrier without a readable body when the type
+arguments were named; all five now refuse it.
+
+Cost measured on two trees that both COMPILE, which is the part easy to get
+wrong — diagnostics are still emitted for a tree with type errors, and reading
+those is how the first figure came out backwards. Across @lntt/integration:
+274,353 → 274,347 instantiations, 101,990 → 101,985 types, check time within
+noise. The change does not cost, it saves a little. The negative lives in
+`capability-alphabet.test-d.ts`.
+
+Every mistake therefore falls the safe way, and the rule that follows is worth
+stating on its own: **narrowing a host's set is always legitimate — it only
+rejects more. WIDENING is a claim about MACHINERY, so it belongs to whoever
+supplies the machinery.** `body` works on Express because `toWebRequest` streams
+the request into the Web `Request`; `cookies` and `headers` work because
+`renderOutcome` writes both sinks. A capability name is the name of something
+that exists, never a permission to be granted.
+
+What the amendment does NOT do is make the SUPPLY side extensible: a caller
+cannot widen a shipped pack's set, and the only way to serve a capability a pack
+does not claim is to write the mount (which is also the answer to "you ship no
+adapter for my host" — `examples/express/src/server-manual.ts` writes its
+`HostCaps` out). Deferred deliberately: there is no second capability per host to
+design against yet, and #41 (SSE, downloads, WebSocket upgrade) is where the
+first real divergence will appear. Tracked as #44.
+
+A capability, finally, exists because an EXTENSION demands one — not because a
+host happens to be able to do something. The alphabet mirrors the extension set,
+not an inventory of host abilities, so "does Express have more capabilities?"
+only becomes answerable when something asks for one.
+
+**Alternatives.** (a) Normalize all sources into one `.input` bag the adapter
+assembles per host: rejected — auto-merging path/query/body is "ambient magic"
+(principle 7), risks name collisions, and threatens the typed client (`hc` reads
+Hono's native `param`/`json` split). (b) Content-type negotiation inside one
+`.body` (json vs form auto-detected): the "magic" convenience, deferred until a
+real case — explicit `.body`/`.form` first (principle 5, "one way to do each
+thing"). (c) A declaration-only marker (`.reads('body')`) NOT enforced by the
+carrier type: a scope could forget it and still read the body, so the gate
+would give false safety; the headless `RequestHead` closes that hole. (d) A
+runtime proxy whose `.json()` throws on a body-less host: turns a silent
+empty-body read into a loud failure, but stays RUNTIME — kept only as a possible
+backstop, not the primary mechanism.
+
+**Why.** The capability axis is the `DepGuard` idiom applied to the carrier: the
+same "brand at the wiring call site, named gap, compile error" the deps check
+already gives — no new concept, one more phantom on `Handler`. It makes the real
+constraint (a raw-body write is HTTP-dialect and cannot ride RPC) VISIBLE where a
+user looks (the `to*` line), before runtime. It also types and validates the
+body as a bonus. tRPC keeps only the scopes whose whole input is the payload
+(the reads); a future dedicated tRPC write path would deliver the body AS
+`input`, a DIFFERENT authoring channel — so the gate stays correct rather than
+loosening. `Cap` defaults to `never`, so every param-only/read scope and
+every existing `*.test-d.ts` is unaffected (additive).
+
+### 35. The scope builder: `scope(profile)` over an agnostic base; carriers are `*Carrier`
+
+**Decision.** The request-handler builder in `@lntt/scope` — previously
+`fragment()` — is named `scope()`, aligning the abstraction with the package it
+headlines: you declare a `scope` (an input contract + a guard chain + a leaf)
+and mount it on a host. The runtime environment types it runs in — previously
+`RequestScope` / `JobScope` — are renamed `RequestCarrier` / `JobCarrier`: they
+are the host's transport (a `Request` + cookie sink, a `Message` + sink), the
+thing prose already called "the carrier", NOT the DI scope. Freeing "scope" for
+the builder and standardising the environment as `*Carrier` removes an existing
+ambiguity rather than adding one.
+
+Carriers are injected as EXTENSIONS through a fluent `.extend(ext)`, and no
+carrier is the privileged default:
+
+- **`scope()`** — the carrier-agnostic base (`.input`/`.guard`/`.handle`). `ctx`
+  exposes only the validated `params` + guard enrichments — no `request`, no
+  `cookies`, no `.body`/`.form`. A
+  scope that stays within this surface is portable across ANY host (all four HTTP
+  hosts today, the bus at #10). The moment a guard reaches for `ctx.request` it
+  does not typecheck — the compiler steers you to `.extend(request)` (principle 1).
+  SUPERSEDED on both counts by decision 40: `.input` is a carrier's verb, so the
+  agnostic base has no input channel and no way to abort either, and `ctx.request`
+  now comes from the carrier that has one rather than from a shared extension.
+- Carriers are injected as THREE tree-shakable extensions, each mapping to a host
+  boundary tRPC actually has (it reads headers, but has no readable body and drops
+  `Set-Cookie`):
+  - **`@lntt/scope/request`** — `ctx.request` (read headers/session). Read-only,
+    NO capability → mounts everywhere, tRPC included.
+  - **`@lntt/scope/body`** — `.body`/`.form` + the `body` capability → gated off
+    tRPC (§34).
+  - **`@lntt/scope/cookies`** — the `Set-Cookie` sink `ctx.cookies` + the `cookies`
+    capability → gated off tRPC.
+  An app that only uses `scope()` imports none of them; each subpath bundles only
+  when injected.
+
+**Why three, not one bundle.** A scope authored for tRPC is `scope().extend(request)`
+— it cannot call `.body` (the method is not on the builder) and has no `ctx.cookies`,
+so a body/cookie mistake is IMPOSSIBLE by construction, not merely caught late at
+the mount. Splitting `request` (read) from `body`/`cookies` (write, gated) puts the
+protection at authoring. The `cookies` capability also fixes a pre-existing smell:
+tRPC silently DROPPED `Set-Cookie`; now a cookie scope is a compile error there.
+
+An extension is DEFINED BY FOUR DECLARATIVE AXES, none named by the core: fluent
+`methods` (`body`'s `.body`/`.form`), `__ctx` (extra ctx fields — `request`,
+`cookies`), `__need` (extra app deps), `__caps` (capabilities — `'body'`,
+`'cookies'`, the §34 gate). The core reads each axis back generically off the
+builder and composes; nothing is baked into the base. Real apps compose several —
+a login scope is `scope().extend(body).extend(cookies)` — exercising the very
+multi-extension composition the array approach could not do (alternative (j)).
+
+**No `guard` override, and multiple extensions COMPOSE.** The builder is
+this-based: every method takes an explicit `this: Self` and returns `Self &
+<delta>`, so `guard` (defined ONCE) preserves every injected extension's methods
+through the chain — no per-carrier `guard` override. Two method-adding extensions
+(`.extend(request).extend(sse)`) compose: both method-sets survive, `Acc`/`Need`
+accumulate by intersection, `Cap` as a union (an object-map read with `keyof`),
+and `.handle` extracts a CONCRETE `Handler` the adapters consume. The one idiom
+the whole builder follows is `this: Self` (it sidesteps TypeScript's `this`-type
+query restrictions); fluent method SIGNATURES stay hand-written interfaces
+(TypeScript cannot synthesise a generic method like `body<B>` from data), while
+ctx/deps/caps are pure phantom data.
+
+**`.extend` also gates incompatibility (§4).** An extension lists its method
+names in `__methods`; `.extend` rejects a second extension that redefines one
+(`.extend(request).extend(evil)` where `evil` also declares `body`) as a COMPILE
+ERROR at the `.extend` call, naming the method — the same "collisions are compile
+errors naming the key" contract as the chain's key-collision guard.
+
+A new carrier (the bus at #10) is a NEW SUBPATH — a value + its extension
+interface — with ZERO change to the core `scope`, `Scope`, or `ScopeExtension`
+(principle 6 / §10, open-closed made literal). The agnostic base never sees the
+request methods, in the types OR at runtime.
+
+**Alternatives.** (a) `pipeline` — describes the guard→leaf mechanism but is
+crowded (CI/data-eng) and undersells the input contract. (b) `handler` —
+collides with the leaf-naming convention (`feedHandler`, `postHandler` are the
+LEAVES) and with the adapters' `w.handler` mount factory. (c) Keep `fragment` —
+neutral but not self-describing, collides for the web audience (React
+`<Fragment>`, GraphQL fragment, URL fragment), AND overloads the wire
+feature-module sense of "fragment"; the rename disambiguates both. (d) Keep
+"scope" meaning the carrier (`RequestScope`) and name the builder otherwise —
+rejected: `RequestScope` is the carrier/transport (prose already says
+"carrier"), so `*Carrier` is the more accurate home and "scope" belongs to the
+declared handler. (e) A bare `scope()` defaulting to `RequestCarrier` — rejected:
+it privileges HTTP and limits extensibility; the profile must always be
+explicit. (f) `scope(http)` as the label — rejected for `scope().extend(request)`: tRPC
+(RPC, not "http") also rides the request carrier, so "http" is dissonant; the
+label names the CARRIER, and the non-HTTP profile will be `scope(bus)`. (g) A
+separate `scope(trpc)` profile — rejected: tRPC shares `RequestCarrier` with the
+HTTP hosts and differs only by CAPABILITY (no readable body), which §34 already
+gates at the mount site; it is not a distinct carrier or builder surface. (h) A
+config-object `scope({ http })` injecting verbs — rejected as adjacent to
+"verbs grafted into the core" (§10). (i) A per-carrier builder interface
+(`RequestScope extends Scope<RequestCarrier>`) selected by the entry — rejected:
+it forces a `guard` override in every method-adding carrier (to keep `.body`/
+`.form` through the chain), and two such carriers do NOT compose (the return face
+is a union, neither method callable). (j) A config-object entry
+`scope({ exts: [request] })` deriving the face from the extension list — same
+composition failure as (i) (`StartOf<E>` unions the faces), and no per-step hook
+to detect incompatible extensions. Both (i) and (j) were built and measured
+before `.extend`; the this-based `.extend` composes AND gates (§4). (k) A keyed
+registry augmented via `declare module` — composes, but the global augmentation
+is magic and its errors route through a registry indirection (worse than the
+this-based idiom).
+
+**Why.** `.extend` is the extensibility seam: fluent, composable, and the natural
+per-step hook for the incompatibility gate (§4). `.body`/`.form` live exactly
+where the carrier supports them (the `request` extension), answering "these
+methods are HTTP-only" at the extension level instead of leaking onto a generic
+surface. §34's capability gate stays intact and necessary: within the shared
+`RequestCarrier`, it is what rejects a `.body` scope on tRPC at
+`toProcedure`/`toMutation`. The removed `scopeFor` primitive (exported, unused —
+YAGNI) and the carrier-parametrised `fragmentFor` are both absorbed by the
+extension model. The accepted cost: the builder is this-based with phantom
+accumulators (cleverer than plain type params), disciplined by the single
+`this: Self` idiom.
+
+**Open follow-up.** When the bus lands (#10), `.extend(bus)` joins as a
+`JobCarrier` extension (its own subpath). A scope that reads `ctx.request` WITHOUT declaring `.body` carries no
+capability, so a bus adapter cannot gate it by capability alone — decide there
+whether the bus mount simply refuses request-carrier handlers, or whether
+reading `request` needs its own capability. Left until the real case (principle
+5).
+
+### 36. Build-once is a free function the host holds; the seed is process-static
+
+**Decision.** An app is built ONCE per process (per isolate on Workers) and
+memoized, LAZILY on first use. That memo is `buildOnce(chain)` — a free function
+in `@lntt/wire` returning `{ ensure, dispose }`, NOT a method on `Lunette` and
+NOT a copy inside each host pack. Its purpose is IDENTITY, not speed: the
+chain's singletons (a db pool, a client) must exist once, and a second build
+would open a second pool and orphan the first. `ensure` takes the seed as a
+THUNK, evaluated only on the build that actually happens; the seed is read once
+and never again. A seed that varies per call is therefore not "ignored" — it is
+never computed. Multiplicity per tenant is expressed with a WINDOW (per call,
+principle 4), never with a second app; a genuinely different env means a
+different handle (which is how tests get a second app).
+
+**Alternatives.** (a) Memoize inside the chain — `chain.once()` or a memoizing
+`build`. Rejected: `build` is deliberately REPEATABLE, and that repeatability IS
+the mocking device (the seed, principle 5) and what lets tests build with a
+different env; memoizing in the shared chain value hides state in an object that
+is otherwise pure. (b) Keep the ten lines copied in each pack (they were, three
+times byte-identical). Rejected on "one way to do each thing" — and the copies
+had already drifted into the examples. (c) Key the memo by seed, so a changed
+env yields a new app. Rejected: it needs a key function for an arbitrary seed
+object, and it multiplies lifecycles (N pools, and a `dispose` that must close
+them all) to serve a case the window already covers. (d) Fail fast when a
+different seed arrives after the build. Rejected for now: comparing seeds needs
+either referential identity or a caller-supplied key, and with the thunk the
+later seeds are not even computed, so there is nothing to compare.
+
+**Why.** The prior art splits cleanly. Sharing INSTANCES is always the
+container's job (Symfony `shared: true`, Spring's singleton registry, .NET's
+singleton lifetime, Effect's layer memoization by reference equality) — that is
+the chain, and it already holds. Building the container ONCE is almost always
+the caller's, and containers defend themselves by FAILING rather than
+memoizing: .NET's "Build can only be called once.", Spring's "does not support
+multiple refresh attempts"; Guice and Dagger simply hand you a second graph.
+The one container that memoizes its own boot is Symfony (`if ($this->booted)
+return;` plus the dumped container), which answers a problem we do not have — a
+process that dies each request; tellingly, moving to worker mode (FrankenPHP,
+Swoole) made Symfony add a RESET, not more memoization. Where the memo must
+outlive a request, the industry puts it in the integration (NestJS's cached
+server on Lambda) or in a caller-held handle (Effect's `ManagedRuntime.make`,
+a free function beside the core, lazily built and explicitly disposed) — which
+is exactly the shape adopted here.
+
+The build is LAZY because of a constraint no classic container faces: on
+Cloudflare Workers the bindings exist only inside the fetch handler, so there is
+no startup moment at which the seed is available. Every other framework surveyed
+assumes configuration is ready before the first request.
+
+**Amendment — the constraint, as measured.** `examples/cloudflare-workers/*` now
+runs this rather than describing it, and two details came back sharper than they
+were stated.
+
+The ban is on asynchronous **I/O**, not on async work. A layer awaiting
+`crypto.subtle.digest` at module scope is allowed; a layer reading KV is not.
+The line is TOUCHING A BINDING, which is also why an in-memory example proves
+nothing about it and those entries read KV. When it does bite, the worker does
+not fail a request — it fails to START: "Disallowed operation called within
+global scope. Asynchronous I/O (ex: fetch() or connect()), setting a timeout,
+and generating random values are not allowed within global scope."
+
+Binding a port is not I/O. On the Express entry `app.listen()` runs at module
+scope (with `httpServerHandler` from `cloudflare:node`, `nodejs_compat`, and a
+compatibility date after 2025-08-15) and the worker starts: nothing is opened, a
+port is registered with an emulated server. That was an open question and is now
+a passing test.
+
+Where the rule can be OBSERVED is not where one would expect.
+`@cloudflare/vitest-plugin` (the renamed `vitest-pool-workers`) runs test bodies
+inside workerd, which makes it right for behaviour — but it loads modules
+through Vitest's own module runner, from within a request, so under it module
+scope is always an I/O context and a module-scope `fetch()` succeeds. Only
+`createTestHarness` (wrangler), which starts a worker the way a deployment does,
+sees the ban. Each Workers entry therefore carries two vitest projects, and the
+negative case is a fixture worker refused at startup — not an assertion about
+one.
+
+**Amendment — what is memoized is one SUCCESSFUL build.** As first written,
+`ensure` was `built ??= build(seed())`. A rejected promise is not nullish, so the
+memo kept it: one transient failure — a pool that could not connect, a secret
+that did not resolve — was permanent for the life of the process or isolate, and
+every later request re-awaited the same rejection. The two failure kinds also
+behaved oppositely for no reason anyone chose: a seed thunk throwing
+SYNCHRONOUSLY (a bad env) threw before the assignment and stayed retryable, while
+a rejection one layer deeper did not.
+
+`dispose` tolerates a handle that never resolved. Dropping the rejection already
+covers the SEQUENTIAL case — a failed build leaves no memo, so teardown finds
+nothing to await — and what remains is CONCURRENT: `dispose` called while a build
+is still in flight, which then fails. A process shutting down during a connection
+timeout would otherwise have the build's rejection thrown out of its teardown.
+
+None of that was decided; it followed from `??=` on a promise. A rejected build
+is now dropped, so the next `ensure` builds again, and `dispose` tolerates a
+handle that never resolved.
+
+This does not weaken the identity guarantee, for a reason worth stating: a failed
+build UNWINDS, so a retry starts from nothing rather than from a half-open graph.
+That rests on every layer being a BRACKET — `try { return await next(x) } finally
+{ close() }` — which is the documented idiom but a CONVENTION, not something the
+types enforce: `return next({ pool })` with no `finally` compiles. For a layer
+written that way the change makes things WORSE, turning one leaked resource into
+one per failing request; measured on such a chain, six attempts left six live
+resources where the old memo left one. The bracket is the price of a retryable
+build, and it is load-bearing now rather than merely idiomatic.
+
+Nor does it weaken the memo while a build is in flight — callers racing a failing
+build still share it, and only a caller arriving after it settles starts a new
+one, so attempts are self-limiting to one per build duration with no stampede.
+
+Two consequences it does NOT solve, recorded rather than fixed. There is no
+backoff: against a PERSISTENT failure every request now pays the full build
+timeout, where the old memo rejected instantly after the first — the right trade
+for a transient fault and the wrong one for a lasting outage, and a caller who
+needs backoff must impose it. And the seed thunk is re-evaluated on each attempt,
+so on a host that seeds from the request (`hono.ts` passes `c.env`) the app ends
+up built from the FIRST REQUEST THAT SUCCEEDED rather than the first that
+arrived.
+
+The severity is a consequence of the build being LAZY. Where a container builds
+at startup, a failed build takes the process down and the supervisor restarts it,
+which is the behaviour everyone wants. Here the first attempt is a REQUEST, so
+without this the first unlucky request decides the fate of every request after
+it. #35 (`@lntt/secret`, resolving secrets by fetch at boot) is the case where
+this would have bitten hardest.
+
+**Known caveat, not solved here.** On Workers the memo's lifetime is the
+isolate's, which we do not control. Cloudflare documents that a value captured
+in global scope "might not be updated when `env` changes", and that a deploy
+touching ONLY bindings may reuse running isolates — so a memoized app can serve
+stale configuration. There is no reliable detection on our side: `c.env` carries
+opaque bindings (KV namespaces, DO stubs) that cannot be compared structurally.
+The operational mitigation is to make binding-only changes ride a deploy that
+also touches code, which costs no API. A `reset()` on the handle (dispose +
+clear) is the obvious escape hatch and was deliberately NOT added: the
+three-line version is unsafe with requests in flight (it closes a pool others
+are using) and the safe version needs refcounting — a real feature, deferred
+until someone has the case in hand (principle 5). Tracked as #39.
+
+What `dispose` does to that memo is the other half of the sentence, and it is
+§38: the handle is single-lifecycle, so teardown ends it rather than emptying it.
+
+### 37. The example entries share one shape; the composition root is a module singleton
+
+**Decision.** Every host entry under `examples/` is laid out the same way, and
+the layout is not any host's:
+
+```
+config/env.ts        where the environment comes from — the ONE host-specific file
+config/settings.ts   configuration that is code, not environment (only where consumed)
+bootstrap/index.ts   the composition root: the pack, built once, re-exporting
+                     what the mount uses
+<the mount>          the route table (server.ts, router.ts, routes/* on React Router)
+```
+
+The mount imports from `bootstrap/` and never sees the chain, the pack, or the
+env. What remains different between two entries is then only what is genuinely
+about the host: between `examples/hono` and `examples/express`, `config/env.ts`
+is identical bar a comment and `bootstrap/index.ts` differs by one import and
+one call.
+
+`bootstrap/index.ts` is a MODULE SINGLETON: it builds the pack at module scope
+and exports it. There is no `makeApp(env?)` factory. A suite that needs a
+different environment sets it before the first request — which works because the
+build is lazy and the seed is a thunk (§36), so the composition root reads the
+environment on the first request rather than at import. An eager build would
+break those suites, which makes the laziness load-bearing rather than merely
+stated.
+
+**Alternatives.** (a) A shared `config` module across the examples. Rejected:
+they are separate apps that must each read on their own, and a shared module
+would quietly become a dependency between them (#40) — the duplication IS the
+point, an app owning where its configuration comes from. (b) Keep
+`makeApp(env?)`. Rejected: the parameter existed only so tests could build with
+a different env, an affordance no real app writes; a module-level singleton is
+tested by setting the environment, not by growing a seam for the test. It also
+put an env-parsing branch (`env ?? parse(...)`) in the composition root, so the
+shipped path and the tested path differed. (c) One `app/` root everywhere, as on
+React Router. Rejected: `app/` there is the framework's convention, and `src/`
+is the convention of the others; the skeleton is what should be uniform, not the
+name of the directory holding it. (d) Split the route table into `routes/*` on
+every host. Rejected: file-based routing is React Router's model — on Hono and
+Express a ten-line native route table reads better whole.
+
+**Where the shape bends, and why.** tRPC has no pack: `@lntt/integration/trpc`
+ships none, because tRPC already owns a context and the app travels in it. Its
+`bootstrap/index.ts` therefore calls `buildOnce` itself and exports a
+`createContext`. The consequence reaches the tests: a tRPC suite hands the
+caller whatever app it built, so it needs no environment variable at all, while
+the HTTP suites — whose routes are registered on a pack — set one. That
+divergence is the host's, and the shared skeleton is what makes it visible
+instead of burying it in four bespoke arrangements.
+
+### 38. `buildOnce`'s handle is single-lifecycle: `dispose` ends it
+
+**Decision.** A `BuildOnce` handle has ONE life. `dispose` closes it, and after
+that `ensure` THROWS rather than handing an app back, a second `dispose` returns
+the FIRST teardown's promise instead of repeating it, and a build still in
+flight when `dispose` arrives is torn down AND refused to whoever was waiting
+for it. A second app is a second
+`buildOnce` — the chain stays a value that can be built as many times as you
+like (§36), so the factory already exists and does not need the handle to become
+one.
+
+The error is THROWN, not returned: a container that no longer exists is
+infrastructure, not a domain outcome (principle 3). It is thrown SYNCHRONOUSLY
+from `ensure`, which is the shape that call already had for a seed thunk that
+throws.
+
+**What it replaces.** The memo outlived its own teardown, because `dispose`
+never cleared it. Three consequences, all measured on a chain that counts builds
+and teardowns:
+
+| sequence | before | after |
+|---|---|---|
+| `ensure` → `dispose` → `ensure` | the SAME app, already torn down | throws |
+| `ensure` → `dispose` → `dispose` | `handle.dispose()` called twice, chain absorbs it | attempted once, REPORTED to both |
+| `ensure` in flight → `dispose` | torn down, and the waiter still got the handle | torn down, waiter gets the refusal |
+
+None of them announced itself, and that is the reason this is a decision rather
+than a footnote: **after teardown the `app` object is not dead**. Its closures
+are intact, its methods answer, its types hold. What is dead is underneath — the
+pool closed, the client ended — so the failure surfaces inside a driver, far
+from the `ensure` that handed out a spent app. `examples/app` already had the
+test proving the resource really closes (`a query after dispose fails`); what
+was missing was anything stopping you from asking for the app afterwards.
+
+It was reachable in this repo, not merely in theory: `packages/integration/test/
+react-router.test.ts` disposed a module-level pack halfway through the file and
+five later tests kept mounting on it. They passed because the disposed app still
+answered and that fixture holds no real resource. The DISPOSING test now takes a
+pack of its own, so the shared one is never torn down mid-file and the five that
+follow it mount on a live app.
+
+**Why it matters more now than it used to.** Where a container builds at
+startup, "after dispose" means "after the process decided to die" and nobody
+gets there. With the build LAZY (§36) the first `ensure` is a REQUEST, so the
+handle's life is no longer bracketed by the process's.
+
+**Alternatives.** (a) Document the boundary and change nothing — one sentence
+saying the handle is single-lifecycle and using it afterwards is undefined.
+Rejected: it costs nothing and buys nothing, leaving a silent wrong answer
+reachable and a documented boundary that no test enforces; the five green tests
+above are what that option looks like in practice. (b) Re-arm the memo (`built =
+undefined` after teardown) so a later `ensure` rebuilds. Rejected: it
+contradicts the identity guarantee this module opens with — singletons would
+exist once PER LIFECYCLE, not once — and it answers a need already met by a
+second `buildOnce`. (c) Close only the sequential paths and leave the in-flight
+one. Rejected as a half-rule: "after `dispose`, `ensure` never yields an app" is
+a sentence worth being able to say without an exception, and the cost is one
+`.then` on the build rather than on each call.
+
+**Cost**, and it is larger than the rule looks. Two references to the same build
+instead of one, and they are not interchangeable: teardown must await the RAW
+build (it has to reach a handle that may not exist yet), while callers get that
+build plus the check. Getting that wrong the other way — disposing through the
+guarded promise — would make a teardown during an in-flight build skip the app
+entirely.
+
+Handing callers a DERIVED promise costs two more things, both of which the first
+version of this rule got wrong and neither of which is visible from the rule
+itself. The derived promise needs a handler of its own: `dispose` only ever
+attaches one to the raw build, so a caller who does not await `ensure` — a
+warm-up racing shutdown — turned the in-flight refusal into an unhandled
+rejection, which on Node ends the process. And teardown is now MEMOIZED rather
+than flagged: a boolean could only report "already handled", which made a second
+`dispose` resolve after a teardown that had FAILED, so two shutdown paths
+disagreed about whether the app closed. Both are guarded by tests that die when
+their guard is removed.
+
+### 39. The mount signature's type parameters stay; the one-parameter form does not infer
+
+**Decision.** The mount factories in `@lntt/integration` keep the type
+parameters the brands need. On the three HTTP packs that is four:
+
+```ts
+<Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
+  h: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body' | 'cookies' | 'headers'>,
+)
+```
+
+(`hono.ts` orders them `<S, Need, R, Cap>`; the set is the same.) On tRPC it is
+SEVEN, because that mount is generic over the host's own context as well —
+`TContext`, `TMeta`, `TContextOverrides` come from the `ProcedureBuilder` it
+takes, and the deps are reconciled against the context rather than a pack's
+`Pub`, since on tRPC the app travels in the context (§33).
+
+They are not knobs and nobody should ever write them: they exist only because a
+brand must NAME the axis it tests, and a brand has to sit in the same parameter
+position as the value it guards. Recorded as a decision rather than left as a
+smell to rediscover, because the better-looking shape has been tried and
+measured, and the result is negative.
+
+**What does not work.** One parameter with the axes extracted:
+
+```ts
+<H extends AnyHandler>(h: H & DepGuard<Pub, NeedOf<H>> & CarrierGuard<CapOf<H>, HostCaps>)
+```
+
+TypeScript cannot infer `H` from a parameter position that also references `H`
+inside a computed type. It falls back to the constraint, `Need` collapses to the
+constraint's shape, and the brand then fires on VALID handlers — the gate starts
+rejecting good mounts, which is worse than the verbosity. Isolated so the cause
+is not guessed at: the same one-parameter signature WITHOUT the intersection
+infers perfectly, so it is the self-reference and not the extraction.
+
+**Alternatives.** (a) A second parameter with a computed default (`N =
+NeedOf<H>`). Rejected: the default is still a computed type over `H` resolved at
+the inference site, so it reintroduces the same self-reference. (b) Put the
+brand on the RETURN type. It infers cleanly, and is rejected anyway: the error
+would land at the assignment of the mount's result instead of on the argument
+that is wrong, which is the failure mode principle 1 exists to prevent.
+
+**What would change the verdict.** A way to apply a predicate to an inferred
+type parameter without referencing it from the inference site. Nothing in the
+current type system offers one; if that appears, every mount moves at once —
+though tRPC would keep the three parameters it owes to its own host, since those
+are not there for the brands.
+
+The related hole — naming `Cap` by hand to declare away a capability the carrier
+lacks — is closed separately by making `__cap` invariant (§34), so what remains
+here is only the shape of the signature, not a gap in the gate.
+
+### 40. A carrier owns its vocabulary, in and out; the core coins none
+
+**Decision.** Decision 34 got HTTP out of the scope's INPUT — `request`, `body`,
+`cookies`, `headers` became tree-shakable subpaths, each coining its own
+capability, with the core naming none of them. The OUTCOME half never made that
+move: `abort.ts` sat in the core and spoke HTTP with no mediation
+(`ResponseIntent = redirect | status`, plus `httpError`/`unauthorized`/
+`forbidden`/`notFound`), so `scope()` was agnostic about what came in and not
+about what went out. Worse, `validate.ts` did not merely TYPE HTTP, it MINTED
+it: a schema rejection returned `httpError(422, …)` from inside the fold.
+
+The rule that replaces it is one turn sharper than the one 34 was written
+against: **every carrier extension owns its own vocabulary — the verbs it
+offers AND the outcomes it can express.** `notFound()` means nothing on a CLI,
+and a shared "semantic" vocabulary would be HTTP in disguise. The rule reaches
+the input side too, which is why `.input` left the core in the same change: one
+verb that silently meant "route params" on Hono and "the whole payload" on tRPC
+was the same fusion seen from the other end. `@lntt/scope/http` coins
+`.params(schema)`, `.status(n)`, `ctx.request` and its words;
+`@lntt/scope/trpc` coins `.input(schema)`, `ctx.request` and codes, and no
+`redirect` — an RPC reply has nowhere to go. A bare `scope()` has neither an
+input channel nor a way to abort, which is correct: a scope with no carrier
+runs nowhere.
+
+**Two failures, two lines, two culprits.** They are different mistakes and the
+gate reads the same accumulated set twice:
+
+1. **The SCOPE does not handle that verb** — a guard returns `redirect()` on a
+   scope that never extended the carrier coining it. Caught at the DEFINITION,
+   on the guard argument.
+2. **The HOST does not handle that scope** — the scope declared `redirect`
+   correctly and is mounted on tRPC. Caught at the MOUNT. It cannot move
+   earlier: the same scope is correct on Hono, and the definition line holds no
+   information about the host.
+
+Both compiled before: (1) because the constructors were free barrel exports
+with no link to `.extend`, (2) because `abortToTRPCError` degraded a redirect
+to `PRECONDITION_FAILED` in silence.
+
+Nothing is declared by hand. Each verb carries its own name in its type
+(`Abort<{ redirect: true }>`), `.guard`/`.handle` accumulate it, and the set is
+compared once against what the scope extended and once against what the host
+renders. The intent set is a MAP, not a union, so intersection accumulates and
+`keyof` reads the union back — the trick the capability axis already uses. The
+phantom is invariant for 34's reason.
+
+**What the core keeps.** The `ABORT`/`OK` brands, `isAbort`/`isOk`, and the
+fold. It never reads an intent. Its own failure — a schema rejection — is NOT
+an abort, because an abort is a word from a carrier's vocabulary and the core
+has none; it became a THIRD branch of `Outcome` (`{ ok: false, invalid: {
+issues } }`). No coined name, no exemption, and exhaustiveness makes a codec
+that forgets the branch fail to compile — verified by deleting it. `Prepare`
+widened to carry it too, since `.body()`/`.form()` validate inside a prepare
+step. Deciding those issues are worth 422 is the CODEC's job now (422 and not
+400, so it stays distinct from Hono's native `sValidator` 400).
+
+**Four things that were surprises, each measured rather than reasoned.**
+
+The intent CANNOT be inferred from inside a union constituent. Written the
+obvious way (`g: (ctx) => E | Abort<I>`), two abort constituents make
+TypeScript pick the first candidate and REJECT the second, so a guard that can
+return two different intents stops compiling. Variance does not help —
+invariant, covariant and contravariant phantoms behave identically — and
+inferring the whole abort union collapses to the constraint, which is 39's
+negative reproduced. Inferring the whole RETURN type and distributing
+afterwards collects every constituent.
+
+The gate belongs on the ARGUMENT, not in the return type. The return-type form
+is cheaper (616 instantiations per scope against 780) and was chosen first,
+then reversed: it only fires when the next call touches the poisoned type, so a
+BASE — extends and guards, no `.handle`, the shape a shared gated base has —
+compiles clean and defers the mistake to whichever file finally calls
+`.handle`, pointing at a guard its author never wrote. 39(b) rejects
+return-type brands for the same reason. Its other trap does not apply: this
+gate is a conditional over `R`, not an inference site, so `R` still infers.
+
+The success side needs its OWN word. `json(v, 201)` first coined the same
+`status` intent as `notFound()`, and because tRPC legitimately declares it
+renders status aborts, that shared name silently licensed a 201 it cannot
+express. `'ok-status'` closes it.
+
+A bare `Abort` must fail CLOSED (`UnknownIntent`), never collapse to `never` —
+34's fail-open shape. The consequence reaches every call site: annotating a
+guard `Promise<{ post } | Abort>` ERASES the intent the constructor declared
+before the gate sees it, so those annotations are DROPPED and the return type
+inferred. An alias to annotate with was considered and rejected: it
+reintroduces exactly the promise-to-keep-aligned this change removes.
+
+**The route pattern is CHECKED against the schema, never extracted.** They were
+two independent declarations nothing kept aligned — renaming `:postId` to
+`:wrongName` produced no error at any mount and failed at runtime with a 422.
+Matching stays the framework's job: it owns the pattern language, and the URL a
+scope reads is NORMALISED while the router matched the raw target, so an
+extractor of ours could disagree with it on `/a/../b`. And we write no parser:
+each framework already knows its own params and hands us the type — Hono's
+`ParamKeys`, Express's `RouteParameters` from `@types/express-serve-static-core`,
+React Router's per-route typegen. Both framework readers beat a hand-written one
+measured against them (Express's understands `*path` and `{/:id}`; Hono's knows
+a wildcard names nothing). tRPC has no path, so no gate. The rule that keeps it
+safe: on a pattern it cannot read it has NO OPINION — catching less is fine,
+rejecting a valid route is not, and two of the three bugs found writing the
+hand-rolled version were exactly that.
+
+One trap paid for here and worth naming: a route with no params reads as
+`never`, and `never extends Opaque` is VACUOUSLY TRUE, so the natural spelling
+of the bail-out skipped the check on every param-less route. A tuple wrap does
+not help — `never` is assignable to anything. Only the reversed test does. Same
+vacuous-truth trap 34 closed on `Exclude`, in a new place.
+
+**Cost.** Both sides measured on the same machine, the before from a separate
+worktree at the pre-change commit rather than from a figure in a file — which
+is the discipline this record needs more than the number: the previously
+recorded 134,614 was already stale, and reading it as the "before" turned a
++7.5% change into a reported +65%. Across `examples/app`: 207,153 → 222,755
+instantiations (+7.5%), 55,213 → 58,387 types, check 0.36s → 0.41s. That covers
+three things at once — the per-scope machinery, the route gate, and the example
+growing from 15 scopes to 18. On a fixed scope count the machinery measured
++4.1% with the argument-position gate; it is nearly free to HAVE (+0.8% at zero
+scopes) and paid per scope, 250 → 615 instantiations, linearly.
+
+**Alternatives.** (a) Constructors reached through `ctx` (`ctx.http.notFound()`)
+— a certain guarantee, since the ctx lacks the field until you extend. Rejected:
+it grows every guard and leaf signature and forces their unit tests to fabricate
+a dependency to satisfy a gate, which is the thing the pure-function handler
+style exists to avoid. (b) A shared semantic vocabulary (`notFound` meaning "not
+found" on any carrier) with per-host rendering. Rejected: it is HTTP in disguise
+and means nothing on a CLI. (c) Reusing the capability alphabet for intents
+instead of a second axis. Rejected: tRPC's supply set would go from `never` to
+two names and the same list would say two different things — what the carrier
+supplies on input, and what the mount renders on output. (d) `invalidInput()` as
+an ordinary abort with a neutral name: it touches no contract, but needs an
+exemption from the definition-side gate, encoding "the core may do the thing we
+just called a bug". (e) A success status collected through a runtime sink alone.
+Rejected: it erases the literal and degrades a host's response-type inference
+for EVERY route on the pack, not just the ones using it.
+
+**Why.** The capability axis made a bad mount impossible on the input side; the
+outcome side had the same shape of mistake and no gate at all. Reusing the same
+brand machinery adds no concept — one more phantom, read with `keyof`, named
+keys — and it keeps 51's future collision gate applicable to it. What it buys
+is that the core stops knowing what a 404 is, exactly as it does not know what a
+cookie is, and that a host receiving an intent it cannot render is a compile
+error naming the intent rather than a silent degradation.
+
+**Deferred.** The type-efficiency pass (780 → 615 instantiations per scope) is
+its own issue, including the finding that hoisting the gate's let-bindings onto
+a method's own type-parameter list is both slower and reopens 34's hole:
+`guard<…, never>(bad)` then satisfies the gate AND empties the accumulated set.
+On a type ALIAS the caller cannot reach them.

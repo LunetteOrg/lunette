@@ -1,0 +1,24 @@
+{
+  "name": "@lntt/example-bare-express",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example: adopting lunette one layer at a time — the chain alone, then scopes run by hand. NO @lntt/integration dependency at all.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lntt/scope": "workspace:*",
+    "@lntt/wire": "workspace:*"
+  },
+  "devDependencies": {
+    "@standard-schema/spec": "^1.0.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.0.0",
+    "express": "^5.2.1",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.0",
+    "zod": "^3.24.1"
+  }
+}
