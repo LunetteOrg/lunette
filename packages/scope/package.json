@@ -1,7 +1,7 @@
 {
   "name": "@lntt/scope",
   "version": "0.0.0",
-  "description": "The host-agnostic scope runtime for @lntt/wire: a scope (guard/leaf) model with a Standard-Schema input contract, run as a typed fold. Framework-free — the host integrations live in @lntt/integration; carrier extensions ship as tree-shakable subpaths (./request).",
+  "description": "The host-agnostic scope runtime for @lntt/wire: a scope (guard/leaf) model run as a typed fold. Framework-free — the host integrations live in @lntt/integration; carrier extensions ship as tree-shakable subpaths, each owning its own input channel and outcome vocabulary (./http, ./body, ./cookies, ./headers, ./request).",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -9,7 +9,10 @@
     "./body": "./src/extensions/body.ts",
     "./cookies": "./src/extensions/cookies.ts",
     "./headers": "./src/extensions/headers.ts",
-    "./request": "./src/extensions/request.ts"
+    "./http": "./src/extensions/http.ts",
+    "./request": "./src/extensions/request.ts",
+    "./trpc": "./src/extensions/trpc.ts",
+    "./react-router": "./src/extensions/react-router.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -18,8 +21,17 @@
   "dependencies": {
     "@standard-schema/spec": "^1.0.0"
   },
+  "peerDependencies": {
+    "react-router": ">=7"
+  },
+  "peerDependenciesMeta": {
+    "react-router": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^24.13.2",
+    "react-router": "^7.18.1",
     "typescript": "^5.9.2",
     "vitest": "^4.1.0",
     "zod": "^3.25.0"

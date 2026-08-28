@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Abort } from '../abort.ts'
+import type { Invalid } from '../carrier.ts'
 import type { OutputOf } from '../schema.ts'
 import type { Prepare, ScopeExtension, ScopeExtensionValue } from '../scope.ts'
 import { validateInput } from '../validate.ts'
@@ -29,12 +29,13 @@ export interface BodyExtension extends ScopeExtension {
 // The parse-and-validate step OWNED by this extension: read the channel off the
 // RAW carrier (`carrier.request` is a full Fetch `Request` with a readable body —
 // distinct from the headless `ctx.request` a guard sees) and validate it into the
-// named ctx key, or RETURN a 422 abort. Pushed as a core `prepare` step, so the
-// fold runs it without knowing what it is.
+// named ctx key, or RETURN the core's `Invalid` branch. Pushed as a core
+// `prepare` step, so the fold runs it without knowing what it is — and without
+// this extension minting an abort of its own to report a schema failure.
 const channel =
   (key: 'body' | 'form', parse: (bytes: ArrayBuffer, headers: Headers) => Promise<unknown>) =>
   (schema: StandardSchemaV1): Prepare =>
-  async (carrier): Promise<object | Abort> => {
+  async (carrier): Promise<object | Invalid> => {
     const req = (carrier as { request?: Request }).request
     // READING and PARSING are separated, because they fail for opposite
     // reasons and the error convention (principle 3) sends them opposite ways.
@@ -54,7 +55,7 @@ const channel =
         ? undefined
         : await parse(await req.arrayBuffer(), req.headers).catch(() => undefined)
     const v = await validateInput(schema, raw)
-    return v.ok ? { [key]: v.params } : v.abort
+    return v.ok ? { [key]: v.params } : { issues: v.issues }
   }
 
 const bodyStep = channel('body', async (bytes) =>

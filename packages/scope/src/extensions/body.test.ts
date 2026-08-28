@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { isAbort } from '../abort.ts'
 import { unit } from '../schema.ts'
 import type { Prepare, ScopeExtensionValue } from '../scope.ts'
 import { body } from './body.ts'
@@ -43,10 +42,10 @@ describe('body — the prepare step (unit, off the fold)', () => {
     })
   })
 
-  it('an invalid body is a RETURNED 422 abort, never a throw', async () => {
+  it('an invalid body is the RETURNED `invalid` branch, never a throw', async () => {
     const out = await bodyStep({ request: jsonReq({ nope: 1 }) })
-    expect(isAbort(out)).toBe(true)
-    if (isAbort(out)) expect(out.intent).toMatchObject({ kind: 'status', status: 422 })
+    expect(out).toHaveProperty('issues')
+    expect((out as { issues: unknown[] }).issues.length).toBeGreaterThan(0)
   })
 
   it('.form parses + validates the form body into { form }', async () => {
@@ -62,12 +61,12 @@ describe('body — the prepare step (unit, off the fold)', () => {
 describe('body — reading vs parsing', () => {
   const bodyStep = stepFor((m) => m.body(z.object({ title: z.string() })))
 
-  it('RETURNS a 422 for malformed JSON, which is the client mistake', async () => {
+  it('RETURNS the `invalid` branch for malformed JSON, which is the client mistake', async () => {
     const out = await bodyStep({
       request: new Request('http://x/', { method: 'POST', body: '{oops' }),
     })
-    expect(isAbort(out)).toBe(true)
-    if (isAbort(out)) expect(out.intent).toMatchObject({ kind: 'status', status: 422 })
+    expect(out).toHaveProperty('issues')
+    expect((out as { issues: unknown[] }).issues.length).toBeGreaterThan(0)
   })
 
   it('THROWS when the request stream dies, which is not', async () => {

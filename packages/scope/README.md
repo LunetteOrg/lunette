@@ -31,24 +31,32 @@ host). Carrier capabilities are injected as tree-shakable EXTENSIONS, each mappi
 to the hosts that support it — so a scope authored for a host never even sees the
 channels that host lacks:
 
-- **`@lntt/scope/request`** — `ctx.request` (read headers/session). Read-only, no
-  capability → mounts everywhere, tRPC included.
+- **`@lntt/scope/http`** — the HTTP carrier: `ctx.request`, the `.params(schema)`
+  input verb, `.status(n)`, and the vocabulary its hosts render (`notFound()`,
+  `forbidden()`, `redirect()`, `json(v, 201)`, …).
+- **`@lntt/scope/trpc`** — the RPC carrier: `ctx.request`, the `.input(schema)`
+  input verb (on RPC the input IS the payload), and its own words, which are
+  codes rather than statuses. No `redirect`: an RPC reply has nowhere to go.
 - **`@lntt/scope/body`** — the `.body`/`.form` channels + the `body` capability →
   rejected on tRPC (no readable body).
 - **`@lntt/scope/cookies`** — the `Set-Cookie` sink `ctx.cookies` + the `cookies`
   capability → rejected on tRPC (drops `Set-Cookie`).
 
-A tRPC scope is `scope().extend(request)` — it cannot call `.body` (the method is
-not there), so the mistake is impossible by construction, not caught late at the
-mount. Reach for `request` when a guard reads the request:
+A carrier owns BOTH ends: what its scopes can read, and what they can say back.
+A bare `scope()` has neither an input channel nor a way to abort — which is
+right, since a scope with no carrier runs nowhere. The mistake is then
+impossible by construction rather than caught late: a tRPC scope cannot call
+`.body` (the method is not there), and it cannot `redirect()` either — that word
+belongs to another carrier, and returning it is a compile error naming the
+intent, at the guard that returned it.
 
 ```ts
-import { scope, forbidden, notFound, unauthorized } from '@lntt/scope'
-import { request } from '@lntt/scope/request'
+import { scope } from '@lntt/scope'
+import { http, forbidden, notFound, unauthorized } from '@lntt/scope/http'
 import { z } from 'zod'
 
-export const courseHandler = scope().extend(request)
-  .input(z.object({ courseId: z.string() }))
+export const courseHandler = scope().extend(http)
+  .params(z.object({ courseId: z.string() }))
   .guard(({ sessionRepo }: { sessionRepo: SessionRepo }, ctx) => {
     const session = sessionRepo.get(ctx.request)
     return session ? { session } : unauthorized()

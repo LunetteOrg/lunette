@@ -1,20 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { forbidden } from './abort.ts'
+import { forbidden, http } from './extensions/http.ts'
 import { scope } from './scope.ts'
 import { runScope } from './run-fold.ts'
 import type { RequestCarrier } from './carrier.ts'
 
 // The scope's schema drives runtime coercion + validation through `runScope`
 // — the convenience the non-native hosts (RR7, Express, bus) use: validate →
-// (422 abort on failure) → fold.
+// (the `invalid` outcome branch on failure) → fold. `.params` is `http`'s own
+// input verb — the core has none (`§ the core coins no vocabulary`).
 const params = z.object({ courseId: z.coerce.number(), tab: z.string().optional() })
 const req = new Request('http://x/')
 
-describe('scope .input(schema) — runtime coercion + abort', () => {
+describe('http .params(schema) — runtime coercion + the invalid branch', () => {
   it('coerces "42" → 42 on success and hands the leaf the typed params', async () => {
     const h = scope()
-      .input(params)
+      .extend(http)
+      .params(params)
       .handle((_deps: {}, ctx) => ({ doubled: ctx.params.courseId * 2 }))
 
     const out = await runScope<RequestCarrier, typeof params, { doubled: number }>(
@@ -27,13 +29,14 @@ describe('scope .input(schema) — runtime coercion + abort', () => {
     if (out.ok) expect(out.value).toEqual({ doubled: 84 })
   })
 
-  it('a validation failure is a RETURNED 422 abort, never a throw', async () => {
+  it('a validation failure is the RETURNED `invalid` branch, never a throw', async () => {
     const h = scope()
-      .input(params)
+      .extend(http)
+      .params(params)
       .handle((_deps: {}, ctx) => ({ id: ctx.params.courseId }))
 
     // "abc" cannot coerce to a number → the Standard-Schema validate reports
-    // issues → a RETURNED domain abort with status 422 (a client error).
+    // issues → the outcome's `invalid` branch, not an abort.
     const out = await runScope<RequestCarrier, typeof params, { id: number }>(
       h,
       {},
@@ -41,13 +44,15 @@ describe('scope .input(schema) — runtime coercion + abort', () => {
       { courseId: 'abc' },
     )
     expect(out.ok).toBe(false)
-    if (!out.ok) expect(out.abort.intent).toMatchObject({ kind: 'status', status: 422 })
+    if (!out.ok && 'invalid' in out) expect(out.invalid.issues.length).toBeGreaterThan(0)
+    else throw new Error('expected the invalid branch')
   })
 
   it('threads coerced params through guards; a guard abort short-circuits', async () => {
     const seen: number[] = []
     const h = scope()
-      .input(params)
+      .extend(http)
+      .params(params)
       .guard((_deps: {}, ctx) => {
         seen.push(ctx.params.courseId)
         return ctx.params.courseId > 0 ? { positive: true as const } : forbidden()
@@ -60,7 +65,7 @@ describe('scope .input(schema) — runtime coercion + abort', () => {
       { request: req },
       { courseId: '7' },
     )
-    expect(ok).toEqual({ ok: true, value: { courseId: 7, positive: true }, effects: {} })
+    expect(ok).toEqual({ ok: true, value: { courseId: 7, positive: true }, intent: undefined, effects: {} })
     expect(seen).toEqual([7]) // guard saw the coerced number, not "7"
 
     const denied = await runScope<RequestCarrier, typeof params, { courseId: number; positive: true }>(
@@ -70,13 +75,15 @@ describe('scope .input(schema) — runtime coercion + abort', () => {
       { courseId: '0' },
     )
     expect(denied.ok).toBe(false)
-    if (!denied.ok) expect(denied.abort.intent).toMatchObject({ status: 403 })
+    if (!denied.ok && 'abort' in denied) expect(denied.abort.intent).toMatchObject({ status: 403 })
+    else throw new Error('expected an abort')
   })
 
   it('validation runs BEFORE any guard — a bad param never reaches the stack', async () => {
     let guardRan = false
     const h = scope()
-      .input(params)
+      .extend(http)
+      .params(params)
       .guard((_deps: {}, _ctx) => {
         guardRan = true
         return { ok: true as const }

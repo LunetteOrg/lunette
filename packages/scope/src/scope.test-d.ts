@@ -1,26 +1,26 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
 import type { Admin, Course, Repos, Session } from './domain.fixture.ts'
-import { forbidden, notFound, unauthorized } from './abort.ts'
+import { forbidden, notFound, unauthorized } from './extensions/http.ts'
 import { scope, type Handler, type ScopeExtension, type ScopeExtensionValue } from './scope.ts'
-import { request } from './extensions/request.ts'
+import { http } from './extensions/http.ts'
 import type { RequestHead } from './carrier.ts'
 
-// One schema on the scope fixes `P = OutputOf<S>` for every guard and the
-// leaf — the params axis now flows from ONE `.input`, not a per-guard
-// intersection.
+// One schema, fixed through the carrier's own input verb (`http`'s `.params`,
+// since `.input` is not part of the carrier-agnostic core — see `§ the core
+// coins no vocabulary`), fixes `P = OutputOf<S>` for every guard and the leaf.
 const schema = z.object({ courseId: z.string() })
 type S = typeof schema
 
-describe('scope().extend(request) — the type contract', () => {
+describe('scope().extend(http) — the type contract', () => {
   it('a guard reads its declared app slot, the carrier ctx, and the schema params', () => {
-    scope().extend(request)
-      .input(schema)
+    scope().extend(http)
+      .params(schema)
       .guard((app: Pick<Repos, 'sessionRepo'>, ctx) => {
         expectTypeOf(app.sessionRepo).toEqualTypeOf<Repos['sessionRepo']>()
         expectTypeOf(ctx.request).toEqualTypeOf<RequestHead>()
         expectTypeOf(ctx.params.courseId).toEqualTypeOf<string>()
-        // the carrier is the request scope only — NO repos leak into ctx
+        // the carrier is the http scope only — NO repos leak into ctx
         // @ts-expect-error — repos live in the app slot, not the ctx bag
         ctx.sessionRepo
         const s = app.sessionRepo.get(ctx.request)
@@ -29,8 +29,8 @@ describe('scope().extend(request) — the type contract', () => {
   })
 
   it('later guards see earlier enrichments in ctx, typed; ordering is enforced', () => {
-    scope().extend(request)
-      .input(schema)
+    scope().extend(http)
+      .params(schema)
       .guard((app: Pick<Repos, 'sessionRepo'>, ctx) => {
         const s = app.sessionRepo.get(ctx.request)
         return s ? { session: s } : unauthorized()
@@ -43,8 +43,8 @@ describe('scope().extend(request) — the type contract', () => {
       })
 
     // reading an enrichment before the guard that provides it does not compile
-    scope().extend(request)
-      .input(schema)
+    scope().extend(http)
+      .params(schema)
       .guard((_app: {}, ctx) => {
         // @ts-expect-error — `admin` is not enriched yet
         return { leaked: ctx.admin }
@@ -52,8 +52,8 @@ describe('scope().extend(request) — the type contract', () => {
   })
 
   it('the leaf sees enrichments + carrier but NEVER the app repos', () => {
-    const handler = scope().extend(request)
-      .input(schema)
+    const handler = scope().extend(http)
+      .params(schema)
       .guard((app: Pick<Repos, 'sessionRepo'>, ctx) => {
         const s = app.sessionRepo.get(ctx.request)
         return s ? { session: s } : unauthorized()
@@ -78,16 +78,24 @@ describe('scope().extend(request) — the type contract', () => {
       })
 
     // the scope carries its accumulated Need (all three repos), its schema,
-    // and R in the markers the adapter reads.
+    // R, and the intent every guard/leaf here can produce ('status', from
+    // unauthorized/forbidden/notFound — all `httpError` underneath) in the
+    // markers the adapter reads.
     expectTypeOf(handler).toMatchTypeOf<
-      Handler<Pick<Repos, 'sessionRepo' | 'adminRepo' | 'courseRepo'>, S, { title: string }>
+      Handler<
+        Pick<Repos, 'sessionRepo' | 'adminRepo' | 'courseRepo'>,
+        S,
+        { title: string },
+        never,
+        'status'
+      >
     >()
   })
 
   // (each extension's contract lives next to it: `src/extensions/*.test-d.ts`.)
 
-  it('a param-less request scope (no .input) still gets the carrier and requires no app', () => {
-    const handler = scope().extend(request).handle((_deps: {}, ctx) => {
+  it('a param-less http scope (no .params) still gets the carrier and requires no app', () => {
+    const handler = scope().extend(http).handle((_deps: {}, ctx) => {
       expectTypeOf(ctx.request).toEqualTypeOf<RequestHead>()
       // @ts-expect-error — repos are not in the ctx bag
       ctx.sessionRepo
@@ -98,11 +106,12 @@ describe('scope().extend(request) — the type contract', () => {
 })
 
 describe('scope() — the carrier-agnostic base', () => {
-  it('ctx exposes params + enrichments, but NO request and NO cookies', () => {
+  it('ctx exposes params ({} — no carrier ever fixed a schema) + enrichments, but NO request and NO cookies', () => {
     scope()
-      .input(schema)
       .guard((_app: {}, ctx) => {
-        expectTypeOf(ctx.params.courseId).toEqualTypeOf<string>()
+        // no carrier ever fixed a schema, so `params` carries no key
+        // @ts-expect-error — `courseId` is not a key of the unit schema's output
+        ctx.params.courseId
         // @ts-expect-error — the agnostic base commits to no carrier: no `request`
         ctx.request
         // @ts-expect-error — no `cookies` sink either (it is the `cookies` extension's)
@@ -117,12 +126,20 @@ describe('scope() — the carrier-agnostic base', () => {
       })
   })
 
-  it('an agnostic scope produces a Handler with Cap = never', () => {
-    const handler = scope()
-      .input(schema)
-      .handle((_deps: {}, ctx) => ({ id: ctx.params.courseId }))
+  it('has no `.params`/`.input` at all — the input channel is a carrier verb', () => {
+    // @ts-expect-error — `.params` arrives with `http`, `.input` never existed
+    scope().params(schema)
+  })
+
+  it('an agnostic scope produces a Handler with Cap = never and Int = never', () => {
+    // No carrier ever narrowed `__schema` off the bare `Scope` interface here,
+    // so the schema axis stays the wide `StandardSchemaV1` shape (`UnitSchema`
+    // is the runtime VALUE `.extend`ing a carrier's `.params` would fix — see
+    // `input.test-d.ts` for a scope that does). This test's point is Cap/Int.
+    const handler = scope().handle((_deps: {}, _ctx) => ({ id: 'c1' }))
     expectTypeOf(handler.__cap).toEqualTypeOf<((c: never) => never) | undefined>()
-    expectTypeOf(handler).toMatchTypeOf<Handler<Record<never, never>, S, { id: string }>>()
+    expectTypeOf(handler.__int).toEqualTypeOf<((i: never) => never) | undefined>()
+    expectTypeOf(handler.__result).toEqualTypeOf<{ id: string } | undefined>()
   })
 })
 

@@ -4,6 +4,8 @@
 // the agnostic `scope()` reads only `params` + guard enrichments. `RequestCarrier`
 // / `JobCarrier` name the RUNTIME object a host hands to `runFold`.
 
+import type { StandardSchemaV1 } from '@standard-schema/spec'
+
 // A capability NAME. The alphabet is OPEN — any extension may coin one, and the
 // core enumerates none (principle 6): an extension declares what it requires in
 // its own `__caps`, a mount declares what its carrier provides, and
@@ -75,12 +77,34 @@ export interface JobCarrier {
   readonly message: Message
 }
 
-// The host-agnostic result of running a scope: the leaf's value or the abort,
-// plus whatever the extensions' SINKS collected, keyed by extension. The core
-// does not know what is in there — `cookies` and `headers` are the `cookies` and
-// `headers` extensions' business, and each exports a typed reader for the hosts
-// that care. A THROW is not represented here: it propagates past the handler as
-// infrastructure.
+// A schema issue, from Standard Schema's own issue shape — a TYPE, not a
+// vocabulary word (the same status as `RequestHead`): every carrier can have
+// one, so it lives here rather than in a carrier extension.
+export type Issue = StandardSchemaV1.Issue
+
+// The fold failing ON ITS OWN: the input did not validate against the
+// scope's schema. This is deliberately NOT an abort — an abort is a word
+// from a carrier's vocabulary, and the core has none, so minting one here
+// (as `validate.ts` used to, returning a 422 `httpError`) would be exactly
+// the kind of vocabulary word this design keeps out of the core. Naming it
+// as its own outcome branch instead means a codec that forgets to render it
+// fails to COMPILE rather than silently mishandling it.
+export interface Invalid {
+  readonly issues: readonly Issue[]
+}
+
+// The host-agnostic result of running a scope, plus whatever the extensions'
+// SINKS collected, keyed by extension. The core does not know what is in
+// there — `cookies` and `headers` are the `cookies` and `headers` extensions'
+// business, and each exports a typed reader for the hosts that care. A THROW
+// is not represented here: it propagates past the handler as infrastructure.
+//
+// THREE branches, not two. `intent` on the `ok` branch is what a success verb
+// like `json(v, 201)` carries (opaque here, same as an abort's); `invalid` is
+// the schema-failure branch above. Being a separate branch — not an abort
+// with a neutral name — is what makes a codec that forgets it fail to
+// compile, rather than pass every other branch and quietly drop this one.
 export type Outcome<R, Eff extends object = {}> =
-  | { readonly ok: true; readonly value: R; readonly effects: Eff }
-  | { readonly ok: false; readonly abort: import('./abort.ts').Abort; readonly effects: Eff }
+  | { readonly ok: true; readonly value: R; readonly intent: unknown; readonly effects: Eff }
+  | { readonly ok: false; readonly abort: import('./abort.ts').Abort<never>; readonly effects: Eff }
+  | { readonly ok: false; readonly invalid: Invalid; readonly effects: Eff }

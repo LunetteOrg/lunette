@@ -24,3 +24,16 @@ export type DepGuard<Pub, Need> = Pub extends Need
 export type CarrierGuard<Cap, HostCaps> = [Exclude<Cap, HostCaps>] extends [never]
   ? unknown
   : { readonly __ERROR_host_missing_capability: Exclude<Cap, HostCaps> }
+
+// The intent brand — the same `Exclude` machine again, on the outcome-vocabulary
+// axis (`scope.ts`'s `MountGate`, restated here as a template-literal message on
+// the `DupKeyMsg` model, `packages/wire/src/chain.ts:98`, so it reads at the
+// mount the way `DeclGate` reads at the definition). `Int` is every intent the
+// scope's guards/leaf can PRODUCE; `HostInt` is what the target host renders.
+// When `Int ⊆ HostInt` the conditional vanishes and the handler is accepted;
+// else it names the first intent the host cannot render, at the `to*`/
+// registrar call — e.g. a scope that `redirect()`s is rejected at
+// `toProcedure(...)`, an RPC mount with nowhere to redirect to.
+export type IntentGuard<Int, HostInt> = [Exclude<Int, HostInt>] extends [never]
+  ? unknown
+  : `⛔ this host cannot render the intent: ${Exclude<Int, HostInt> & string}`

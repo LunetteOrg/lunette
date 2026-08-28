@@ -51,7 +51,12 @@ declare const httpMountCookiesOnly: <
 
 // Reads the capability parameter back off a built handler, which is the axis
 // under test — `never` here is the failure, not a detail.
-type CapOf<H> = H extends Handler<any, any, any, infer C, any> ? C : never
+// `Int` is captured with its OWN `infer`, not matched against a literal `any`:
+// when a scope's actual `Int` is `never` (no aborts here), `(i: never) =>
+// never` — the `__int` phantom's invariant shape — does not structurally
+// extend `(i: any) => any`, so a fixed `any` in that slot would make the
+// WHOLE match fail for exactly the scopes this file needs to read `Cap` off.
+type CapOf<H> = H extends Handler<any, any, any, infer C, infer _Int, any> ? C : never
 
 const socketScope = scope()
   .extend(websocket)

@@ -2,9 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { scope } from '../scope.ts'
 import { headers, readHeaders, setHeaders } from './headers.ts'
 import { runFold } from '../run-fold.ts'
+import type { Capability } from '../carrier.ts'
 
-const run = <R,>(handler: Parameters<typeof runFold>[0]) =>
-  runFold<object, R>(handler, {}, {}, {})
+// `R`/`Cap` stay UNSPECIFIED at every call site, so both are inferred fresh
+// from the `handler` argument (`Cap` via its `__cap` phantom; `R` has nothing
+// to infer from and settles on `unknown`, harmless here — every assertion
+// below is a runtime `.toEqual`, not a type-level one). Giving `run` its own
+// EXPLICIT type argument at the call site would force TypeScript to also fall
+// back to `Cap`'s default (`never`) instead of inferring it — TS infers
+// either ALL of a call's type parameters or NONE of the ones left unspecified
+// once even one is given explicitly.
+const run = <R, Cap extends Capability = never>(
+  handler: Parameters<typeof runFold<object, R, 'headers', {}, Cap>>[0],
+) => runFold<object, R, 'headers', {}, Cap>(handler, {}, {}, {})
 
 describe('the headers extension', () => {
   it('applies `.headers({...})` declaratively, before the leaf runs', async () => {
@@ -13,7 +23,7 @@ describe('the headers extension', () => {
       .headers({ 'cache-control': 'public, max-age=60' })
       .handle(() => ({ feed: [] }))
 
-    const out = await run<{ feed: never[] }>(s)
+    const out = await run(s)
     expect(readHeaders(out).get('cache-control')).toBe('public, max-age=60')
     expect(out.ok && out.value).toEqual({ feed: [] })
   })
@@ -24,7 +34,7 @@ describe('the headers extension', () => {
     const leaf = () => ({ id: 'c1' })
     const s = scope().extend(headers).headers({ 'x-served-by': 'lntt' }).handle(leaf)
 
-    const out = await run<{ id: string }>(s)
+    const out = await run(s)
     expect(readHeaders(out).get('x-served-by')).toBe('lntt')
   })
 
@@ -37,7 +47,7 @@ describe('the headers extension', () => {
       })
       .handle(() => ({ ok: true }))
 
-    const out = await run<{ ok: boolean }>(s)
+    const out = await run(s)
     expect(readHeaders(out).get('etag')).toBe('W/"v1"')
   })
 
@@ -51,7 +61,7 @@ describe('the headers extension', () => {
       })
       .handle(() => ({ ok: true }))
 
-    const out = await run<{ ok: boolean }>(s)
+    const out = await run(s)
     expect(readHeaders(out).get('vary')).toBe('accept, cookie')
   })
 
@@ -68,7 +78,7 @@ describe('the headers extension', () => {
       })
       .handle(() => ({ ok: true }))
 
-    expect(readHeaders(await run<{ ok: boolean }>(policyFirst)).get('cache-control')).toBe(
+    expect(readHeaders(await run(policyFirst)).get('cache-control')).toBe(
       'private, max-age=30',
     )
 
@@ -82,7 +92,7 @@ describe('the headers extension', () => {
       .headers({ 'cache-control': 'no-store' })
       .handle(() => ({ ok: true }))
 
-    expect(readHeaders(await run<{ ok: boolean }>(policyLast)).get('cache-control')).toBe('no-store')
+    expect(readHeaders(await run(policyLast)).get('cache-control')).toBe('no-store')
   })
 
   it('says so when the sink is missing instead of dropping the headers', async () => {
@@ -107,8 +117,8 @@ describe('the headers extension', () => {
     const a = scope().extend(headers).guard(policy).handle(() => ({ ok: true }))
     const b = scope().extend(headers).headers({ 'cache-control': 'public, max-age=60' }).handle(() => ({ ok: true }))
 
-    expect(readHeaders(await run<{ ok: boolean }>(a)).get('cache-control')).toBe(
-      readHeaders(await run<{ ok: boolean }>(b)).get('cache-control'),
+    expect(readHeaders(await run(a)).get('cache-control')).toBe(
+      readHeaders(await run(b)).get('cache-control'),
     )
   })
 })
@@ -125,10 +135,10 @@ describe('the headers sink is per invocation', () => {
     })
 
   it('starts empty on every invocation', async () => {
-    const first = await run<{ ok: boolean }>(s)
+    const first = await run(s)
     expect([...readHeaders(first)]).toEqual([['x-seen', 'yes']])
 
-    const second = await run<{ ok: boolean }>(s)
+    const second = await run(s)
     // Exactly one, not two: the second run must not inherit the first.
     expect([...readHeaders(second)]).toEqual([['x-seen', 'yes']])
   })
@@ -144,8 +154,8 @@ describe('the headers sink is per invocation', () => {
         })
 
     const [slow, fast] = await Promise.all([
-      run<{ ok: boolean }>(tagged('slow')),
-      run<{ ok: boolean }>(tagged('fast')),
+      run(tagged('slow')),
+      run(tagged('fast')),
     ])
     expect([...readHeaders(slow)]).toEqual([['x-who', 'slow']])
     expect([...readHeaders(fast)]).toEqual([['x-who', 'fast']])
