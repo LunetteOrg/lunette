@@ -1,4 +1,4 @@
-// Runtime proof for `toProcedure`: a whole scope Handler (courseHandler —
+// Runtime proof for `toProcedure`: a whole scope Handler (courseHandlerRpc —
 // authenticate/resolveAdmin/resolveCourse/shapeCourse) folded into ONE native
 // tRPC procedure in a single call. The carrier `request` rides in ctx; a domain
 // Abort surfaces as a specific 4xx TRPCError, the happy path returns the leaf
@@ -7,13 +7,13 @@
 import { initTRPC } from '@trpc/server'
 import { describe, expect, it } from 'vitest'
 import { chain, type App } from './fixture/chain.ts'
-import { courseHandler } from './fixture/handlers.ts'
+import { courseHandlerRpc } from './fixture/handlers.ts'
 import { toProcedure } from '../src/trpc.ts'
 
 type Ctx = App & { request: Request }
 const t = initTRPC.context<Ctx>().create()
 
-const appRouter = t.router({ courses: t.router({ get: toProcedure(t.procedure, courseHandler) }) })
+const appRouter = t.router({ courses: t.router({ get: toProcedure(t.procedure, courseHandlerRpc) }) })
 const createCaller = t.createCallerFactory(appRouter)
 
 // Build the app singletons ONCE, then a caller per request with the auth header.

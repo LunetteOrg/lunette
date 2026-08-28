@@ -1,12 +1,19 @@
-// Runtime proof for the tRPC host: the scope's decision functions
-// (authenticate/resolveAdmin/resolveCourse/shapeCourse — the SAME consts the
-// HTTP/bus hosts use) re-expressed as ONE tRPC procedure. A domain Abort
-// surfaces as a specific 4xx TRPCError, an infra throw stays
-// INTERNAL_SERVER_ERROR, and the happy path returns the leaf value.
+// Runtime proof for the tRPC host: the scope's RPC-flavoured decision
+// functions (authenticateRpc/resolveAdminRpc/resolveCourseRpc/shapeCourse —
+// the domain (repos) is shared with the HTTP hosts' fixture, the VOCABULARY
+// is tRPC's own) re-expressed as ONE tRPC procedure. A domain Abort surfaces
+// as a specific TRPCError code, an infra throw stays INTERNAL_SERVER_ERROR,
+// and the happy path returns the leaf value.
 
 import { initTRPC, TRPCError } from '@trpc/server'
 import { describe, expect, it } from 'vitest'
-import { authenticate, courseSchema, resolveAdmin, resolveCourse, shapeCourse } from './fixture/handlers.ts'
+import {
+  authenticateRpc,
+  courseSchema,
+  resolveAdminRpc,
+  resolveCourseRpc,
+  shapeCourse,
+} from './fixture/handlers.ts'
 import { makeRepos, type Admin, type Course, type Repos, type Session } from './fixture/domain.ts'
 import { guard, leaf, type InputOf } from '../src/trpc.ts'
 
@@ -20,15 +27,15 @@ const t = initTRPC.context<App>().create()
 // session guard reads a fixed request (the caller's sessionRepo ignores it).
 const courseProcedure = t.procedure
   .input(courseSchema)
-  .use(guard<App, In, { session: Session }>((d) => authenticate(d.sessionRepo, new Request('http://x/'))))
+  .use(guard<App, In, { session: Session }>((d) => authenticateRpc(d.sessionRepo, new Request('http://x/'))))
   .use(
     guard<App & { session: Session }, In, { admin: Admin }>((d) =>
-      resolveAdmin(d.adminRepo, d.session.userId),
+      resolveAdminRpc(d.adminRepo, d.session.userId),
     ),
   )
   .use(
     guard<App & { session: Session; admin: Admin }, In, { course: Course }>((d) =>
-      resolveCourse(d.courseRepo, d.input.courseId, d.admin.id),
+      resolveCourseRpc(d.courseRepo, d.input.courseId, d.admin.id),
     ),
   )
   .query(

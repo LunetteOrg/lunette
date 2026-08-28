@@ -5,8 +5,17 @@ import type {
   RequestHandler,
   Response as ExRes,
 } from 'express'
+import type { RouteParameters } from 'express-serve-static-core'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Capability, CarrierGuard, DepGuard, Handler, RequestCarrier } from '@lntt/scope'
+import type {
+  Capability,
+  CarrierGuard,
+  DepGuard,
+  Handler,
+  IntentGuard,
+  OutputOf,
+  RequestCarrier,
+} from '@lntt/scope'
 import { scope, runScope } from '@lntt/scope'
 import { request } from '@lntt/scope/request'
 import { renderOutcome, toWebRequest } from './node.ts'
@@ -25,6 +34,53 @@ export interface ExpressOptions {
   // two packs in one app different keys.
   readonly contextKey?: string
 }
+
+// The set of intents THIS host renders — written out by hand (§34). Express
+// is an HTTP host, so it renders `@lntt/scope/http`'s whole vocabulary.
+type HttpIntents = 'status' | 'redirect' | 'ok-status'
+// The capabilities Express's carrier actually supplies: it streams the
+// request body into the Web Request (`body`), and can decorate the response.
+type ExpressCaps = 'body' | 'cookies' | 'headers'
+
+// ── the route gate — pattern vs `.params()` schema, WE WRITE NO PARSER ──────
+// `RouteParameters` is `@types/express-serve-static-core`'s OWN reader (an
+// explicit devDependency below), reused so this cannot drift from the router
+// that actually matches paths at runtime — it understands `*path` and
+// `{/:id}` (Express 5's optional group), cases a hand-rolled parser had to
+// bail on.
+declare const OPAQUE: unique symbol
+type Opaque = typeof OPAQUE
+
+// A NON-LITERAL path (built from a variable, or containing a runtime
+// interpolation) makes `RouteParameters<P>` resolve to `ParamsDictionary`,
+// whose `keyof` is the WIDE `string` — that must mean "no opinion", never
+// "every name is missing" (checking a real schema's keys against a `string`
+// key set the naive way would reject every schema, since nothing survives
+// `Exclude<realKey, string>`). `string extends keyof RouteParameters<P>` is
+// true ONLY in that wide case — a genuine param-less literal route's real key
+// set is `never`, and `string extends never` is false, so the two are told
+// apart the same way Hono's non-literal guard is.
+type RouteParams<P extends string> = string extends keyof RouteParameters<P>
+  ? Opaque
+  : keyof RouteParameters<P>
+
+// The reversed vacuous-truth check (decision 34's trap): a param-less route's
+// REAL `RouteParams` is `never`, and `never extends Opaque` is VACUOUSLY
+// TRUE — so writing this as `RouteParams<P> extends Opaque` would silently
+// skip every param-less route. Only `Opaque extends RouteParams<P>` tells the
+// two apart.
+type Missing<P extends string, Par> = Opaque extends RouteParams<P>
+  ? never
+  : Exclude<RouteParams<P>, keyof Par>
+type Extra<P extends string, Par> = Opaque extends RouteParams<P>
+  ? never
+  : Exclude<keyof Par, RouteParams<P>>
+
+type PathGate<P extends string, Par> = [Missing<P, Par>] extends [never]
+  ? [Extra<P, Par>] extends [never]
+    ? unknown
+    : `⛔ the schema declares a param this route does not have: ${Extra<P, Par> & string}`
+  : `⛔ this route has a param the schema does not declare: ${Missing<P, Par> & string}`
 
 // Express pack. Takes the CHAIN, owns build-once, exposes the shared scope
 // surface, a per-handler `handler` factory, an OPTIONAL `mount` middleware, and
@@ -65,27 +121,45 @@ export function express<C extends Lunette<any, any, any>>(
   const originOf = (req: ExReq): string =>
     req.host ? `${req.protocol}://${req.host}` : 'http://localhost'
 
-  // The `DepGuard<Pub, Need>` intersection fires the deps-vs-Pub brand at the
-  // `w.handler(...)` call site. There is NO compile-time path check — params
-  // are validated at RUNTIME by `runScope` (a bad/missing param → a RETURNED
-  // 422 abort, which `renderExpress` renders as 4xx).
-  // Express streams the request body into the Web Request, so it PROVIDES the
-  // `body` capability (`CarrierGuard<Cap, 'body' | 'cookies' | 'headers'>` accepts body/form scopes).
+  // The `DepGuard<Pub, Need>` intersection fires the deps-vs-Pub brand.
+  // `CarrierGuard`/`IntentGuard`: same rendered set as Hono (Express streams
+  // the request body into the Web Request, so it PROVIDES `body`/`cookies`/
+  // `headers`, and renders `@lntt/scope/http`'s whole vocabulary).
+  // `PathGate<P, OutputOf<S>>`: the route pattern, taken HERE and returned to
+  // be spread — `app.get(...w.handler('/posts/:postId', scope))` — so it is
+  // written once and checked against the schema in both directions. Params
+  // are STILL validated at RUNTIME by `runScope` (a bad/missing param → a
+  // RETURNED 422 abort, which `renderOutcome` renders as 4xx) — the compile-
+  // time gate catches a MISNAMED param, not a malformed one.
   // `renderOutcome` takes the node `ServerResponse` Express's `res` extends.
-  const handler =
-    <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
-      h: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body' | 'cookies' | 'headers'>,
-    ): RequestHandler =>
-    async (req: ExReq, res: ExRes): Promise<void> =>
-      renderOutcome(
-        res,
-        await runScope<RequestCarrier, S, R>(
-          h,
-          (await ensure(() => seedFrom())).app as object,
-          { request: toWebRequest(req, originOf(req)) },
-          req.params,
+  const handler = <
+    P extends string,
+    Need extends object,
+    S extends StandardSchemaV1,
+    R,
+    Cap extends Capability,
+    Int extends PropertyKey,
+  >(
+    path: P,
+    h: Handler<Need, S, R, Cap, Int> &
+      DepGuard<Pub, Need> &
+      CarrierGuard<Cap, ExpressCaps> &
+      IntentGuard<Int, HttpIntents> &
+      PathGate<P, OutputOf<S>>,
+  ): readonly [P, RequestHandler] =>
+    [
+      path,
+      async (req: ExReq, res: ExRes): Promise<void> =>
+        renderOutcome(
+          res,
+          await runScope<RequestCarrier, S, R, ExpressCaps, {}, Cap>(
+            h,
+            (await ensure(() => seedFrom())).app as object,
+            { request: toWebRequest(req, originOf(req)) },
+            req.params,
+          ),
         ),
-      )
+    ] as const
 
   return { guard: base.guard, handle: base.handle, mount, handler, dispose }
 }

@@ -10,6 +10,7 @@ import { initTRPC } from '@trpc/server'
 import { z } from 'zod'
 import { scope } from '@lntt/scope'
 import { body } from '@lntt/scope/body'
+import { http } from '@lntt/scope/http'
 import { chain, type App } from './fixture/chain.ts'
 import { toProcedure } from '../src/trpc.ts'
 import { hono } from '../src/hono.ts'
@@ -20,15 +21,19 @@ const writeFrag = scope().extend(body)
   .body(z.object({ title: z.string() }))
   .handle((_deps: {}, ctx) => ({ echoed: ctx.body.title }))
 
-// A param-only read scope — requires no capability (Cap = never).
+// A param-only read scope — requires no capability (Cap = never). `.extend
+// (http)` is only how a bare `scope()` gets an input verb at all (the core
+// has none); it declares no intent this scope's guard/leaf ever uses, so the
+// intent axis stays irrelevant to what this file tests.
 const readFrag = scope()
-  .input(z.object({ id: z.string() }))
+  .extend(http)
+  .params(z.object({ id: z.string() }))
   .handle((_deps: {}, ctx) => ({ id: ctx.params.id }))
 
 // ── a body-capable host ACCEPTS the write scope ──────────────────────────
 const w = hono(chain, () => ({ env: { label: 'x' } }))
-w.handler(writeFrag) // compiles: Hono's carrier provides 'body'
-w.handler(readFrag)
+w.handler('/echo', writeFrag) // compiles: Hono's carrier provides 'body'
+w.handler('/read/:id', readFrag)
 
 // ── tRPC ACCEPTS reads but REJECTS the body scope at the mount site ───────
 type Ctx = App & { request: Request }

@@ -1,6 +1,7 @@
 import type { Outcome } from '@lntt/scope'
 import { readCookies, type SetCookie } from '@lntt/scope/cookies'
 import { readHeaders } from '@lntt/scope/headers'
+import type { HttpIntent } from '@lntt/scope/http'
 
 // The HTTP outcome codec — the host-agnostic half of every pack, public so a
 // host we ship no pack for composes the same pieces instead of copying them.
@@ -35,9 +36,27 @@ export function outcomeToResponse(outcome: Outcome<unknown, object>): Response {
     return new Response(JSON.stringify(outcome.value), { status: 200, headers })
   }
 
-  const { intent } = outcome.abort
+  // THREE branches, matching `Outcome`. The `invalid` case is not optional —
+  // drop it and this function stops compiling, because the union is not
+  // exhausted. 422, and not Hono's native `sValidator` 400 (`validate.ts`'s
+  // note): the codec's choice, made HERE, where the host is already known.
+  if ('invalid' in outcome) {
+    headers.set('content-type', 'application/json')
+    return new Response(JSON.stringify({ issues: outcome.invalid.issues }), { status: 422, headers })
+  }
+
+  // The abort's `intent` is opaque to the CORE (`abort.ts`), but this codec
+  // IS `@lntt/scope/http`'s host, so it reads the vocabulary it declared it
+  // renders (the mount-side `IntentGuard`, once a caller wires it) — the same
+  // cast `extensions/http.ts`'s own `toResponse` makes.
+  const intent = outcome.abort.intent as HttpIntent
   if (intent.kind === 'redirect') {
     headers.set('location', intent.location)
+    return new Response(null, { status: intent.status, headers })
+  }
+  // The `ok` kind never rides an ABORT (only `Ok`'s own success side coins
+  // it), so what remains here is `status` — `httpError`/`notFound`/….
+  if (intent.kind === 'ok') {
     return new Response(null, { status: intent.status, headers })
   }
   if (intent.body !== undefined) headers.set('content-type', 'application/json')

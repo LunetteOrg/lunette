@@ -1,6 +1,7 @@
 import { data, isRouteErrorResponse, redirect } from 'react-router'
 import { describe, expect, it } from 'vitest'
-import { httpError, scope } from '@lntt/scope'
+import { scope } from '@lntt/scope'
+import { http, httpError } from '@lntt/scope/http'
 import { cookies as cookiesExt } from '@lntt/scope/cookies'
 import { headers as headersExt } from '@lntt/scope/headers'
 import { lunette } from '@lntt/wire'
@@ -188,6 +189,7 @@ describe('a leaf that speaks React Router itself', () => {
 describe('the thrown abort carries the effects too', () => {
   it('attaches the cookie sink and the header sink to the thrown data()', async () => {
     const s = scope()
+      .extend(http)
       .extend(cookiesExt)
       .extend(headersExt)
       .handle((_deps: {}, ctx) => {

@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Outcome } from '@lntt/scope'
 import { readCookies } from '@lntt/scope/cookies'
 import { readHeaders } from '@lntt/scope/headers'
+import type { HttpIntent } from '@lntt/scope/http'
 import { serializeCookie } from './http.ts'
 
 // The two Node-side halves of a pack, public so a host we ship no pack for
@@ -108,14 +109,29 @@ export function renderOutcome(res: ServerResponse, outcome: Outcome<unknown, obj
     return
   }
 
-  const { intent } = outcome.abort
+  // THREE branches, matching `Outcome`. The `invalid` case is not optional —
+  // drop it and this function stops compiling. 422, and not a host-native
+  // 400, is the codec's choice, made HERE (same as `outcomeToResponse`).
+  if ('invalid' in outcome) {
+    const body = JSON.stringify({ issues: outcome.invalid.issues })
+    headers['content-type'] = 'application/json'
+    res.writeHead(422, headers)
+    res.end(body)
+    return
+  }
+
+  // Same cast `outcomeToResponse` makes: `intent` is opaque to the core, and
+  // this codec IS the http vocabulary's host.
+  const intent = outcome.abort.intent as HttpIntent
   if (intent.kind === 'redirect') {
     headers['location'] = intent.location
     res.writeHead(intent.status, headers)
     res.end()
     return
   }
-  if (intent.body === undefined) {
+  // The `ok` kind never rides an ABORT (only `Ok`'s own success side coins
+  // it), so what remains here is `status` — `httpError`/`notFound`/….
+  if (intent.kind === 'ok' || intent.body === undefined) {
     res.writeHead(intent.status, headers)
     res.end()
     return

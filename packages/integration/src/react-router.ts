@@ -1,14 +1,35 @@
 import { buildOnce, Lunette } from '@lntt/wire'
 import type { PubOf, SeedOf } from '@lntt/wire'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Capability, CarrierGuard, DepGuard, Handler, RequestCarrier } from '@lntt/scope'
+import type {
+  Capability,
+  CarrierGuard,
+  DepGuard,
+  Handler,
+  IntentGuard,
+  InputOf,
+  RequestCarrier,
+} from '@lntt/scope'
 import { scope, runScope } from '@lntt/scope'
 import type { Outcome } from '@lntt/scope'
 import { request } from '@lntt/scope/request'
+import type { HttpIntent } from '@lntt/scope/http'
 import { data, redirect } from 'react-router'
 import { readCookies } from '@lntt/scope/cookies'
 import { readHeaders } from '@lntt/scope/headers'
 import { serializeCookie } from './http.ts'
+
+// The set of intents THIS host renders — written out by hand (§34). RR7's
+// `render()` below reads `@lntt/scope/http`'s SAME vocabulary and translates
+// it into RR7's own idiom (a redirect intent → RR7's `redirect()`, a status
+// intent → a thrown `data()`) — there is no separate RR7 Abort/Ok vocabulary;
+// `@lntt/scope/react-router` exists only for `ctx.request` and the escape
+// hatch (a leaf that speaks `data()`/thrown `redirect()` directly, handled
+// below and unrelated to this gate).
+type HttpIntents = 'status' | 'redirect' | 'ok-status'
+// RR7 loaders/actions get the Fetch request with a readable body, so RR7's
+// carrier PROVIDES `body`/`cookies`/`headers`.
+type ReactRouterCaps = 'body' | 'cookies' | 'headers'
 
 // The load context `mount` produces, for the ONE deployment shape that has a
 // place to register it. Loaders never read it: they reach the app through this
@@ -79,12 +100,25 @@ function render<R>(outcome: Outcome<R, object>): R | ReturnType<typeof data<R>> 
     return headers ? data(value, { headers }) : value
   }
 
-  const { intent } = outcome.abort
+  // THREE branches, matching `Outcome`. The `invalid` case is not optional —
+  // drop it and this function stops compiling. RR7 renders it the same way it
+  // renders a `status` abort — a thrown `data()` — at 422, distinct from a
+  // host-native validator's own 400.
+  if ('invalid' in outcome) {
+    throw data(
+      { issues: outcome.invalid.issues },
+      headers ? { status: 422, headers } : { status: 422 },
+    )
+  }
+
+  const intent = outcome.abort.intent as HttpIntent
   if (intent.kind === 'redirect') {
     return redirect(intent.location, headers ? { status: intent.status, headers } : intent.status)
   }
+  // The `ok` kind never rides an ABORT (only `Ok`'s own success side coins
+  // it) — what remains is `status`.
   throw data(
-    intent.body ?? null,
+    intent.kind === 'status' ? (intent.body ?? null) : null,
     headers ? { status: intent.status, headers } : { status: intent.status },
   )
 }
@@ -137,13 +171,24 @@ export function reactRouter<C extends Lunette<any, any, any>>(
   // `unknown`. A redirect intent becomes RR7's `redirect`; a status intent is
   // THROWN, which is how a loader says "this request does not have a page" and
   // hands over to the nearest `ErrorBoundary`.
+  // FOUR gates now (`DepGuard`/`CarrierGuard` as before, plus `IntentGuard`).
+  // NO route gate: RR7's pattern lives in its own route config, not at this
+  // mount, so there is nothing here to check it against — `args.params` is
+  // typed from the schema's INPUT (`InputOf<S>`, the raw pre-coercion shape
+  // RR7 actually hands a loader) instead of `Record<string, string>`, so a
+  // user writes `satisfies (args: Route.LoaderArgs) => unknown` and React
+  // Router's OWN typegen does the checking — free, but the message is
+  // TypeScript's structural wall rather than one of ours.
   const toLoader =
-    <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
-      handler: Handler<Need, S, R, Cap> & DepGuard<Pub, Need> & CarrierGuard<Cap, 'body' | 'cookies' | 'headers'>,
+    <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability, Int extends PropertyKey>(
+      handler: Handler<Need, S, R, Cap, Int> &
+        DepGuard<Pub, Need> &
+        CarrierGuard<Cap, ReactRouterCaps> &
+        IntentGuard<Int, HttpIntents>,
     ) =>
     async (args: {
       request: Request
-      params: Record<string, string>
+      params: InputOf<S>
       // Whatever RR7 hands over — `{}` under `react-router-serve`, a custom
       // server's load context, a `RouterContextProvider` with `v8_middleware`.
       // It is forwarded to `seedFrom` as the host env and NOT read for the app,
@@ -151,11 +196,11 @@ export function reactRouter<C extends Lunette<any, any, any>>(
       context?: unknown
     }): Promise<R | ReturnType<typeof data<R>> | Response> =>
       render<R>(
-        await runScope<RequestCarrier, S, R>(
+        await runScope<RequestCarrier, S, R, ReactRouterCaps, {}, Cap>(
           handler,
           (await ensure(() => seedFrom(args.context))).app as object,
           { request: args.request },
-          args.params,
+          args.params as object,
         ),
       )
 

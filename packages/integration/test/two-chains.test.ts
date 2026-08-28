@@ -28,8 +28,8 @@ describe('two packs, one app', () => {
     // the handlers must not care.
     app.use(a.mount())
     app.use(b.mount())
-    app.get('/a', a.handler(whoScope))
-    app.get('/b', b.handler(whoScope))
+    app.get(...a.handler('/a', whoScope))
+    app.get(...b.handler('/b', whoScope))
 
     const server = createServer(app)
     await new Promise<void>((resolve) => server.listen(0, resolve))
@@ -50,8 +50,8 @@ describe('two packs, one app', () => {
     const app = new Hono()
       .use(a.mount())
       .use(b.mount())
-      .get('/a', ...a.handler(whoScope))
-      .get('/b', ...b.handler(whoScope))
+      .get(...a.handler('/a', whoScope))
+      .get(...b.handler('/b', whoScope))
 
     expect(await (await app.request('/a')).json()).toEqual({ who: 'A' })
     expect(await (await app.request('/b')).json()).toEqual({ who: 'B' })

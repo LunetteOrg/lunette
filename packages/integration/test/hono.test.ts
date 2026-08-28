@@ -15,8 +15,8 @@ describe('Hono pack — mount middleware + native chain + terminal handler', () 
     // so `typeof app` accumulates the route schema (this is what preserves RPC).
     const app = new Hono<WireEnv<Pub>>()
       .use(w.mount())
-      .get('/courses/:courseId', ...w.handler(courseHandler))
-      .post('/login', ...w.handler(loginHandler))
+      .get(...w.handler('/courses/:courseId', courseHandler))
+      .post(...w.handler('/login', loginHandler))
 
     const auth = { headers: { authorization: 'Bearer u-admin' } }
 
@@ -59,7 +59,7 @@ describe('the host env reaches seedFrom', () => {
       received.push(hostEnv)
       return { env: { label: 'from-host' } satisfies Env }
     })
-    const app = new Hono().get('/courses/:courseId', ...w.handler(courseHandler))
+    const app = new Hono().get(...w.handler('/courses/:courseId', courseHandler))
 
     // Hono's `Bindings` are what `c.env` carries; `app.request`'s third argument
     // is how they are supplied outside a Worker.

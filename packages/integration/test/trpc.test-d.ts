@@ -8,7 +8,7 @@ import { initTRPC } from '@trpc/server'
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server'
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { forbidden, unauthorized } from '@lntt/scope'
+import { forbidden, unauthorized } from '@lntt/scope/trpc'
 import { makeRepos, type Admin, type Session } from './fixture/domain.ts'
 import { guard, leaf, type InputOf } from '../src/trpc.ts'
 

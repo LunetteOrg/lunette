@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { scope } from '@lntt/scope'
 import { headers } from '@lntt/scope/headers'
 import { request } from '@lntt/scope/request'
-import { httpError } from '@lntt/scope'
+import { http, httpError } from '@lntt/scope/http'
 import { chain, type Env } from './fixture/chain.ts'
 import { courseHandler, loginHandler } from './fixture/handlers.ts'
 import { express as expressPack } from '../src/express.ts'
@@ -27,8 +27,8 @@ describe('Express pack — mount middleware + real HTTP round-trip', () => {
     const app = express()
     // mount is registered ONCE; it ensures the build and attaches the app.
     app.use(pack.mount())
-    app.get('/courses/:courseId', pack.handler(courseHandler))
-    app.post('/login', pack.handler(loginHandler))
+    app.get(...pack.handler('/courses/:courseId', courseHandler))
+    app.post(...pack.handler('/login', loginHandler))
     const { url, close } = await startServer(app)
 
     const auth = { headers: { authorization: 'Bearer u-admin' } }
@@ -66,7 +66,7 @@ describe('Express pack — the request origin', () => {
     const pack = expressPack(chain, () => ({ env: { label: 'express' } satisfies Env }), options)
     const app = express()
     app.use(pack.mount())
-    app.get('/where', pack.handler(urlScope))
+    app.get(...pack.handler('/where', urlScope))
     return { ...(await startServer(app)), dispose: pack.dispose }
   }
 
@@ -102,6 +102,7 @@ describe('Express pack — response headers', () => {
     .handle(() => ({ ok: true }))
 
   const rateLimited = scope()
+    .extend(http)
     .extend(headers)
     .guard((_deps: {}, ctx) => {
       ctx.headers.set('retry-after', '30')
@@ -112,7 +113,7 @@ describe('Express pack — response headers', () => {
   it('renders declared headers alongside the value', async () => {
     const pack = expressPack(chain, () => ({ env: { label: 'express' } satisfies Env }))
     const app = express()
-    app.get('/cached', pack.handler(cached))
+    app.get(...pack.handler('/cached', cached))
     const { url, close } = await startServer(app)
 
     const res = await fetch(`${url}/cached`)
@@ -126,7 +127,7 @@ describe('Express pack — response headers', () => {
   it('keeps the headers a guard wrote before it aborted', async () => {
     const pack = expressPack(chain, () => ({ env: { label: 'express' } satisfies Env }))
     const app = express()
-    app.get('/limited', pack.handler(rateLimited))
+    app.get(...pack.handler('/limited', rateLimited))
     const { url, close } = await startServer(app)
 
     const res = await fetch(`${url}/limited`)

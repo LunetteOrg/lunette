@@ -49,6 +49,7 @@
     "@hono/standard-validator": "^0.2.3",
     "@trpc/server": "^11.18.0",
     "@types/express": "^5.0.6",
+    "@types/express-serve-static-core": "^5.1.1",
     "@types/node": "^24.13.2",
     "express": "^5.2.1",
     "hono": "^4.12.25",

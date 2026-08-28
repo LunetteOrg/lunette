@@ -31,38 +31,56 @@ import type {
   CarrierGuard,
   DepGuard,
   Handler,
+  IntentGuard,
+  Issue,
+  Outcome,
   OutputOf,
   RequestCarrier,
 } from '@lntt/scope'
 import { isAbort, runFold } from '@lntt/scope'
+import type { RpcIntent } from '@lntt/scope/trpc'
 
 // The schema OUTPUT is the ctx.input type — the SAME projection guards and leaf
 // read on every other host. tRPC's `.input(schema)` consumes the identical
 // schema object natively as its validator.
 export type InputOf<S extends StandardSchemaV1> = OutputOf<S>
 
-const CODE_BY_STATUS: Record<number, TRPCError['code']> = {
-  400: 'BAD_REQUEST',
-  401: 'UNAUTHORIZED',
-  403: 'FORBIDDEN',
-  404: 'NOT_FOUND',
-  409: 'CONFLICT',
-  422: 'UNPROCESSABLE_CONTENT',
-}
+// The set of intents THIS host renders — the mount-side gate's other half,
+// written out by hand (§34: supply is closed per mount). tRPC renders ONLY
+// its own carrier's word: no `redirect`, no `ok-status` (an RPC reply has no
+// status line to put one in) — those are `@lntt/scope/http`'s words, and a
+// scope built with `.extend(http)` is REJECTED here, at the mount, naming the
+// intent it cannot render.
+type RpcIntents = 'code'
+
+// A narrow runtime check for `@lntt/scope/trpc`'s own shape — the ONE
+// vocabulary this codec knows how to render.
+const isRpcIntent = (intent: unknown): intent is RpcIntent =>
+  typeof intent === 'object' && intent !== null && (intent as { kind?: unknown }).kind === 'code'
 
 // The one convention-translation point: a RETURNED domain Abort → a THROWN
-// TRPCError. A redirect has no RPC status — over RPC it degrades to a domain
-// error carrying the location for the client to act on (redirects are an HTTP
-// concern).
-export function abortToTRPCError(abort: Abort): TRPCError {
+// TRPCError. `@lntt/scope/trpc`'s own codes ALREADY are tRPC's codes
+// (`NOT_FOUND`, `UNAUTHORIZED`, …) — rendering this carrier's own vocabulary
+// is spelling its words, not translating a lookup table, which is what makes
+// today's incidental HTTP-status→tRPC-code mapping honest: there IS no
+// mapping left to maintain.
+//
+// An intent this carrier does not recognise (e.g. a raw Abort built by hand,
+// or `@lntt/scope/http`'s vocabulary reaching here despite the mount-side
+// `IntentGuard`) is a THROW — infrastructure by the error convention
+// (principle 3) — never a silent degradation into a code that means
+// something else. The mount-side gate is what should have caught this
+// earlier; reaching this branch means it was bypassed.
+export function abortToTRPCError(abort: Abort<never>): TRPCError {
   const intent = abort.intent
-  if (intent.kind === 'redirect') {
-    return new TRPCError({ code: 'PRECONDITION_FAILED', message: intent.location })
+  if (!isRpcIntent(intent)) {
+    throw new Error(
+      `@lntt/integration/trpc: cannot render intent — this carrier only knows @lntt/scope/trpc's own vocabulary: ${JSON.stringify(intent)}`,
+    )
   }
-  const code = CODE_BY_STATUS[intent.status] ?? 'BAD_REQUEST'
-  return typeof intent.body === 'string'
-    ? new TRPCError({ code, message: intent.body })
-    : new TRPCError({ code })
+  return new TRPCError(
+    intent.message === undefined ? { code: intent.code } : { code: intent.code, message: intent.message },
+  )
 }
 
 // guard → middleware. `Ctx` is the accumulated deps so far (app singletons +
@@ -73,12 +91,26 @@ export function abortToTRPCError(abort: Abort): TRPCError {
 // limitation — see §3.4 of the round blueprint: tRPC cannot infer the
 // accumulated ctx from a pre-applied wrapper; reuse is at the guard-FUNCTION
 // level, feeding the same consts here and to `scope().input(s).guard(...)`).
+// `Abort<any>` here, not bare `Abort`: `run`'s literal caller can return ANY
+// carrier's concrete Abort (`unauthorized()`, …), and `__i` is an invariant
+// phantom — bare `Abort` (`Abort<UnknownIntent>`) would reject every one of
+// them at this parameter position, the same trap a bare-`any` `infer` slot
+// hits in the type-level gate (`intent-vocabulary.test-d.ts`'s header note).
+// This helper has no definition-side gate of its own to begin with — it is
+// native tRPC composition, not a `scope()` — so widening here loses nothing
+// the gate would have checked.
 export function guard<Ctx, In, E extends object>(
-  run: (deps: Ctx & { readonly input: In }) => Promise<E | Abort> | E | Abort,
+  run: (deps: Ctx & { readonly input: In }) => Promise<E | Abort<any>> | E | Abort<any>,
 ): MiddlewareFunction<Ctx, object, object, E, In> {
   return async (opts) => {
     const out = await run({ ...(opts.ctx as Ctx), input: opts.input as In })
-    if (isAbort(out)) throw abortToTRPCError(out)
+    // Cast, not `isAbort`'s own narrowing: `out`'s declared type carries
+    // `Abort<any>` as a union member, and `any` in the phantom's PARAMETER
+    // position does not behave like a universal escape hatch under
+    // `exactOptionalPropertyTypes` (the same invariant-phantom trap the
+    // type-level gate works around with `infer`, not a fixed `any`). The
+    // runtime check already proved `out` is an abort; the cast just states it.
+    if (isAbort(out)) throw abortToTRPCError(out as Abort<never>)
     return opts.next({ ctx: out })
   }
 }
@@ -87,13 +119,40 @@ export function guard<Ctx, In, E extends object>(
 // returns `R` (→ RPC output; `$Output = R`) or throws on Abort. The resolver
 // NEVER returns an Abort — that path always throws — so `$Output = R` cleanly.
 export function leaf<Ctx, In, R>(
-  run: (deps: Ctx & { readonly input: In }) => Promise<R | Abort> | R | Abort,
+  run: (deps: Ctx & { readonly input: In }) => Promise<R | Abort<any>> | R | Abort<any>,
 ): (opts: { ctx: Ctx; input: In }) => Promise<R> {
   return async (opts) => {
     const out = await run({ ...opts.ctx, input: opts.input })
-    if (isAbort(out)) throw abortToTRPCError(out)
-    return out
+    if (isAbort(out)) throw abortToTRPCError(out as Abort<never>)
+    // `Abort<any>` in `run`'s declared union does not narrow away by
+    // `Exclude` the way a concrete `Abort<X>` would (same root cause as the
+    // cast above) — the runtime check already ruled it out.
+    return out as R
   }
+}
+
+// A Standard Schema issue's `path` is OPTIONAL, and each segment may be a bare
+// `PropertyKey` or a `{ key }` object — join defensively rather than assume
+// the zod-flavoured shape every fixture happens to produce.
+const pathOf = (issue: Issue): string =>
+  (issue.path ?? [])
+    .map((seg) => String(typeof seg === 'object' ? seg.key : seg))
+    .join('.')
+
+// Shared by `toProcedure`/`toMutation`: THREE branches, matching `Outcome`.
+// The `invalid` case renders `UNPROCESSABLE_CONTENT` — tRPC's OWN choice for
+// the core's schema-failure branch, made HERE (the codec), same as `422` is
+// HTTP's choice in `@lntt/integration/http`. `validate.ts` never had an
+// opinion; this is where one is decided.
+function resultOf<R>(outcome: Outcome<R, object>): R {
+  if (outcome.ok) return outcome.value
+  if ('invalid' in outcome) {
+    throw new TRPCError({
+      code: 'UNPROCESSABLE_CONTENT',
+      message: outcome.invalid.issues.map((i) => `${pathOf(i)}: ${i.message}`).join('; '),
+    })
+  }
+  throw abortToTRPCError(outcome.abort)
 }
 
 // toProcedure — the whole-scope shortcut. `guard`/`leaf` above wrap ONE
@@ -124,6 +183,7 @@ export function toProcedure<
   S extends StandardSchemaV1,
   R,
   Cap extends Capability,
+  Int extends PropertyKey,
 >(
   procedure: ProcedureBuilder<
     TContext,
@@ -135,17 +195,20 @@ export function toProcedure<
     UnsetMarker,
     false
   >,
-  // Two gates, the same two every other host applies. `DepGuard` reconciles the
-  // scope's deps against the CONTEXT, because on tRPC the context is where the
-  // app travels (§33) — there is no pack holding a `Pub`, so `TContext` plays
-  // that role. And tRPC has ONE JSON `input`, no separate readable body, so its
-  // carrier provides NO capabilities (`CarrierGuard<Cap, never>`): a scope that
-  // declared `.body`/`.form` (Cap ⊇ 'body') is a COMPILE ERROR here, at the
-  // mount site, naming the missing capability — instead of silently reading an
-  // empty body.
-  handler: Handler<Need, S, R, Cap> &
+  // Three gates. `DepGuard` reconciles the scope's deps against the CONTEXT,
+  // because on tRPC the context is where the app travels (§33) — there is no
+  // pack holding a `Pub`, so `TContext` plays that role. `CarrierGuard`: tRPC
+  // has ONE JSON `input`, no separate readable body, so its carrier provides
+  // NO capabilities (`CarrierGuard<Cap, never>`) — a scope that declared
+  // `.body`/`.form` (Cap ⊇ 'body') is a COMPILE ERROR here, naming the missing
+  // capability. `IntentGuard`: tRPC renders ONLY its own carrier's vocabulary
+  // (`RpcIntents`) — a scope built with `.extend(http)` (or any carrier other
+  // than `@lntt/scope/trpc`) is rejected here too, naming the intent it
+  // cannot render — instead of silently degrading at `abortToTRPCError`.
+  handler: Handler<Need, S, R, Cap, Int> &
     DepGuard<TContext & TContextOverrides, Need> &
-    CarrierGuard<Cap, never>,
+    CarrierGuard<Cap, never> &
+    IntentGuard<Int, RpcIntents>,
 ) {
   return procedure.input(handler.schema).query(async (opts): Promise<R> => {
     // `opts` is contextually typed by tRPC's resolver signature; the constraint
@@ -153,14 +216,13 @@ export function toProcedure<
     // but a generic override could in principle re-type it, so read it through a
     // local view. `input` is the schema OUTPUT (`OutputOf<S>`).
     const ctx = opts.ctx as { request: Request }
-    const outcome = await runFold<RequestCarrier, R>(
+    const outcome = await runFold<RequestCarrier, R, never, {}, Cap>(
       handler,
       ctx,
       { request: ctx.request },
       opts.input as object,
     )
-    if (!outcome.ok) throw abortToTRPCError(outcome.abort)
-    return outcome.value
+    return resultOf(outcome)
   })
 }
 
@@ -170,8 +232,10 @@ export function toProcedure<
 // calls it via `.mutate`. A write scope authored for RPC declares its WHOLE
 // input as the payload (`.input`, never `.body`), so it carries NO `body`
 // capability and passes the same `CarrierGuard<Cap, never>` gate; a `.body`
-// scope is still rejected here. Cookie/redirect writes stay HTTP-only — they
-// have no RPC meaning (a redirect already degrades under `abortToTRPCError`).
+// scope is still rejected here. Cookie/redirect writes stay HTTP-only — a
+// scope built with `.extend(http)` is rejected at `IntentGuard` before it
+// ever reaches `abortToTRPCError` (redirect has no RPC meaning to degrade
+// into).
 export function toMutation<
   TContext extends { request: Request },
   TMeta,
@@ -180,6 +244,7 @@ export function toMutation<
   S extends StandardSchemaV1,
   R,
   Cap extends Capability,
+  Int extends PropertyKey,
 >(
   procedure: ProcedureBuilder<
     TContext,
@@ -191,19 +256,19 @@ export function toMutation<
     UnsetMarker,
     false
   >,
-  handler: Handler<Need, S, R, Cap> &
+  handler: Handler<Need, S, R, Cap, Int> &
     DepGuard<TContext & TContextOverrides, Need> &
-    CarrierGuard<Cap, never>,
+    CarrierGuard<Cap, never> &
+    IntentGuard<Int, RpcIntents>,
 ) {
   return procedure.input(handler.schema).mutation(async (opts): Promise<R> => {
     const ctx = opts.ctx as { request: Request }
-    const outcome = await runFold<RequestCarrier, R>(
+    const outcome = await runFold<RequestCarrier, R, never, {}, Cap>(
       handler,
       ctx,
       { request: ctx.request },
       opts.input as object,
     )
-    if (!outcome.ok) throw abortToTRPCError(outcome.abort)
-    return outcome.value
+    return resultOf(outcome)
   })
 }
