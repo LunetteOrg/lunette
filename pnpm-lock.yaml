@@ -388,6 +388,9 @@ importers:
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
+      '@types/express-serve-static-core':
+        specifier: ^5.1.1
+        version: 5.1.1
       '@types/node':
         specifier: ^24.13.2
         version: 24.13.2
@@ -421,6 +424,9 @@ importers:
       '@types/node':
         specifier: ^24.13.2
         version: 24.13.2
+      react-router:
+        specifier: ^7.18.1
+        version: 7.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -444,6 +450,18 @@ importers:
         version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
 
   research/order-free-layers:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.2
+        version: 24.13.2
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.0
+        version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
+
+  research/outcome-vocabulary:
     devDependencies:
       '@types/node':
         specifier: ^24.13.2
