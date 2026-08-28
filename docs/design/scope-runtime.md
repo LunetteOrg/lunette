@@ -43,7 +43,7 @@ The kinds, and how much of the mechanism each exercises:
 
 | kind | host that hands over the invocation | deps DOWN | outcome codec (error convention §3) |
 |---|---|---|---|
-| **request** (#5) | RR7 / Express middleware (`(args, next)`) | ✅ | result→`2xx` · abort→`redirect/4xx` · throw→`5xx` |
+| **request** (#5) | RR7 / Express middleware (`(args, next)`) | ✅ | result→`2xx` · abort→whatever word the carrier coined (`redirect`, a 4xx status — §40) · invalid input→`422` · throw→`5xx` |
 | **message** (#10) | a bus consumer with a handshake (Kafka `eachMessage`, a queue worker) | ✅ | result→`ack` · abort→`ack + dead-letter` · throw→`nack` |
 | **fire-and-forget** | Node `EventEmitter` (`(payload) ⇒ void`) | ✅ | none — the degenerate kind |
 
@@ -178,7 +178,8 @@ plus the tRPC wrappers — takes the **chain** (App **inferred**, no manual
 the framework middleware registered once: it seeds the memoized build from
 the host context and stashes the built app there for the per-handler
 functions to read back. The handler is an abstract **scope** — it
-declares its input with ONE `.input(schema)`, and each guard/leaf is
+declares its input with ONE input verb, taken from its carrier
+(`.params(schema)` on HTTP, `.input(schema)` on tRPC — §40), and each guard/leaf is
 `(deps, ctx)`. The pack reconciles the handler's `deps` against the chain's
 `Pub` and its params against the route, at compile time, at the adapter.
 
@@ -202,8 +203,8 @@ const courseGuard = (
 const courseLeaf = ({ courseView }: { courseView: CourseView }, ctx: { course: Course }) =>
   courseView.detail(ctx.course)
 
-export const courseHandler = scope().extend(request)
-  .input(courseSchema)
+export const courseHandler = scope().extend(http)
+  .params(courseSchema)
   .guard(authGuard)
   .guard(adminGuard)
   .guard(courseGuard)
@@ -228,7 +229,8 @@ IN the route signature, not forgettable. The `to*` internals are mechanical
 — read the built `Pub` from the host context, build the carrier + validated
 `params` + cookie sink, run the fold (guards accumulate enrichments or
 return-to-abort), call the leaf, map the outcome via the host's codec
-(`return→200` +Set-Cookie · domain abort→redirect/4xx · throw→5xx).
+(`return→200` +Set-Cookie · domain abort→the carrier's own word · a schema
+rejection→`Outcome`'s third branch, which the codec renders 422 · throw→5xx).
 
 ## Prototype: proven across four real hosts
 
@@ -252,7 +254,9 @@ client survive the model end to end, input AND output.
 Sparred out and then verified against the prototype (now `@lntt/scope` + `@lntt/integration`,
 four real hosts). These are the verdicts the real packages implement.
 
-- **`.input(schema)` — the scope's ONE input contract.** A scope
+- **ONE input contract, named by its carrier** (`.params` on HTTP, `.input` on
+  tRPC — the verb moved out of the core in §40, so one name no longer means
+  route params on one host and the whole payload on another). A scope
   declares its input with a single Standard Schema
   ([standardschema.dev](https://standardschema.dev) v1 — zod, Valibot and
   ArkType all implement it; the core types depend only on
