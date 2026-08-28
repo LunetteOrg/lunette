@@ -30,11 +30,13 @@ stresses the design the way the real bootstrap would.
 ## The scope model (how `app/handlers/` is organized)
 
 A **scope** is one route dissolved into pure pieces: an **input contract**
-(`.input` for route params, `.body` for a JSON body, `.form` for a
-multipart/urlencoded body), then a chain of **guards**, then a single **leaf**.
-It is composed once and mounted per host (`w.handler(scope)` /
-`pack.toLoader(scope)` / `toProcedure(...)`), or composed INLINE at the
-`to*` call site when the app has a single host (see below).
+(`.params` for HTTP route params, `.input` for the whole tRPC payload, `.body`
+for a JSON body, `.form` for a multipart/urlencoded body — each a verb owned by
+the carrier it comes from, `@lntt/scope/http` or `@lntt/scope/trpc`), then a
+chain of **guards**, then a single **leaf**. It is composed once and mounted
+per host (`w.handler(scope)` / `pack.toLoader(scope)` / `toProcedure(...)`), or
+composed INLINE at the `to*` call site when the app has a single host (see
+below).
 
 ### Guards vs leaves
 
@@ -43,10 +45,18 @@ return, and a **suffix convention** names the role so a scope reads as
 declarative wiring:
 
 - A **guard** (`*Guard`) enriches the ctx (returns `{ … }`, merged into the bag
-  the next step reads) or **aborts** (returns `unauthorized()` / `notFound()` /
-  an `httpError`). It never writes the final response.
+  the next step reads) or **aborts** — `unauthorized()` / `notFound()` / an
+  `httpError` on an HTTP-hosted scope, the SAME word from `@lntt/scope/trpc`
+  (its own `RpcCode`, not a status) on a tRPC-hosted one. Each carrier owns its
+  own abort vocabulary (§ the core coins no vocabulary), so a guard that aborts
+  and is mounted on both host families is authored twice (`authGuard` /
+  `authGuardRpc`, `postGuard` / `postGuardRpc`, …) — same rule, each carrier's
+  own words. It never writes the final response.
 - A **leaf** (`*Handler`) is the terminal step: it returns the final response
-  (or a `redirect` / abort).
+  (or a `redirect` / abort). The same per-carrier split applies where the leaf
+  aborts (`publishHandler` / `publishHandlerRpc`, `identityHandler` /
+  `identityHandlerRpc`, …); a leaf that never aborts (`postHandler`,
+  `preferenceHandler`, `commentsHandler`) is carrier-free and reused unchanged.
 
 | guards (`*Guard`) | leaves (`*Handler`) |
 |---|---|
@@ -77,25 +87,36 @@ post (`sessionGuard` for a nullable session, then `postGuard`).
   exception is `verify`, whose fold interaction (a real transaction window) is
   scope-specific and kept in `auth.test.ts`.
 
-### The write-seam: one step, two channels
+### The write-seam: one domain fetch, two carrier-flavoured leaves
 
-A value-returning write is authored twice around a SHARED `*Handler` step:
+A value-returning write is authored twice around the SAME domain fetch:
 
 - an HTTP scope on `.body` (`publishPostScope` → `publishHandler`), and
 - a tRPC procedure whose whole input is the `.input` payload
-  (`publishPostProcedure` → the same `publishHandler`), mounted as a mutation.
+  (`publishPostProcedure` → `publishHandlerRpc`), mounted as a mutation.
 
-The auth guards (they read only headers) and the `*Handler` are shared; only
-where the fields come from differs (`ctx.body` vs `ctx.params`). `login` /
-`verify` / `logout` stay HTTP-only — cookies and redirects have no RPC meaning,
-so they carry the `body`/`form` capability that compile-gates them off tRPC.
+`publishHandler` / `publishHandlerRpc` (and the `comment` pair) call the SAME
+`deps.threads.publishPost(...)`/`composeComment(...)` fetch; only the returned
+domain error's translation into an abort differs (`httpAbortFor` vs
+`rpcAbortFor`, `handlers/respond.ts`) — a domain error's meaning as a *response*
+is decided at the wiring, where the host is known, never shared as one
+"semantic" abort across host families. The auth guards (they read only
+headers) are shared the same way (`authGuard` / `authGuardRpc`); only where the
+fields come from differs (`ctx.body` vs `ctx.params`). `login` / `verify` /
+`logout` stay HTTP-only — cookies and redirects have no RPC meaning, so they
+carry the `body`/`form` capability that compile-gates them off tRPC.
 
 ### Compose at the `to*` (single-host) vs the shared scope (multi-host)
 
 The exported `*Scope` modules are a **multi-host portability device**: this
-example mounts the same scopes on four hosts, so they live once in
-`handlers/`. A REAL app has one host and can compose at the wiring instead — the
-**single-host idiom**, shown here by the feed, whose
+example mounts the same pure pieces on four hosts, so they live once in
+`handlers/`. A scope that never aborts and never reads `ctx.request`
+(`feedScope`) is the SAME object on every host; one that does — a read like
+`postScope`/`identityScope`/`commentsScope` no less than a write — is wired
+twice, `*Scope` for the HTTP hosts and `*Procedure` for tRPC, because the
+input verb and the abort words a carrier offers are never the same two (§ the
+core coins no vocabulary). A REAL app has one host and can compose at the
+wiring instead — the **single-host idiom**, shown here by the feed, whose
 `scope().guard(feedGuard).handle(feedHandler)` is written INLINE in each host
 entry (`examples/{hono,express,rr7,trpc}/src/*`) rather than imported. Both
 authorings are the same fold over the same pure pieces; `feedScope` still
@@ -126,18 +147,30 @@ needs no external services.
 ## Type-checker time (the checker is a feature)
 
 Full-package `tsc --noEmit --extendedDiagnostics`, real-size chain (12 keyed
-layers + 4 scopes + ~19 leaves + window + brand + double-bind +
-scope→scope Seed), Node 24 / TS 5.9:
+layers + ~19 leaves + window + brand + double-bind + scope→scope Seed), Node 24
+/ TS 5.9:
 
-| metric | value |
-|---|---|
-| Check time | **0.29s** |
-| Total time | 0.56s |
-| Instantiations | 134,614 |
-| Files / LoC | 647 / 3,848 |
+| metric | before (`e45fb2e`, core `.input`) | after (carrier vocabularies) |
+|---|---|---|
+| Check time | 0.36s | 0.41s |
+| Instantiations | 207,153 | **222,755** (+7.5%) |
+| Types | 55,213 | 58,387 (+5.7%) |
+| Files | 626 | 627 |
 
-On par with the synthetic 20-step stress (~0.3s): the real shape does **not**
-blow up the checker.
+Both sides were MEASURED, on the same machine, minutes apart — the before by
+checking out `e45fb2e` into a separate worktree, not by reading a figure out of
+this file. That matters here: the number this table used to carry (134,614) was
+already stale when the comparison was made, and reading it as the "before" turned
+a +7.5% change into a reported +65%. A number in the record describes the tree it
+was taken from, and this file is not that tree.
+
+The +7.5% covers three things at once, and the table cannot separate them: the
+per-scope intent machinery, the route gate at each mount, and the fact that this
+package now defines 18 scopes where it defined 15 — every route that ABORTS is
+authored once per carrier family (`postScope` + `postProcedure`, `identityScope`
++ `identityProcedure`, …), while a route that never aborts stays shared
+(`feedScope`). That last part is a property of a DEMO that mounts everything on
+four hosts; an app with one host writes each scope once.
 
 ## Findings fed back to the design
 

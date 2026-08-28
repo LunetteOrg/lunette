@@ -2,10 +2,10 @@ import { initTRPC } from '@trpc/server'
 import { scope } from '@lntt/scope'
 import {
   commentProcedure,
-  commentsScope,
-  identityScope,
+  commentsProcedure,
+  identityProcedure,
   feedGuard,
-  postScope,
+  postProcedure,
   publishPostProcedure,
   setPreferenceProcedure,
   feedHandler,
@@ -26,6 +26,14 @@ const t = initTRPC.context<Ctx>().create()
 // the READS. The write/auth scopes read a form or JSON body off the HTTP
 // request (`ctx.request`), an HTTP concern with no meaning over RPC, so they
 // are NOT exposed here — exactly the feed/post/comments/me split.
+//
+// `post`/`comments`/`me` take the `*Procedure` twin, not the `*Scope` a Hono/
+// Express/RR7 host mounts: each carrier owns its own input verb (`.params` vs
+// `.input`) and its own abort words (`notFound()` renders a `status` on HTTP,
+// a `code` here), so a scope that reads/aborts is authored once per carrier
+// family (`examples/app`'s `handlers.ts` and its README explain the split).
+// `feed` needs no twin — `feedGuard`/`feedHandler` never abort and never read
+// `ctx.request`, so the SAME composition mounts on every host.
 export const appRouter = t.router({
   // reads → queries
   // The feed is composed INLINE here to show the single-host idiom — a real app
@@ -33,9 +41,9 @@ export const appRouter = t.router({
   // needed. The shared `*Scope`/`*Procedure` imports below are the multi-host
   // portability device; `feedScope` still ships as their documented form.
   feed: toProcedure(t.procedure, scope().guard(feedGuard).handle(feedHandler)),
-  post: toProcedure(t.procedure, postScope),
-  comments: toProcedure(t.procedure, commentsScope),
-  me: toProcedure(t.procedure, identityScope),
+  post: toProcedure(t.procedure, postProcedure),
+  comments: toProcedure(t.procedure, commentsProcedure),
+  me: toProcedure(t.procedure, identityProcedure),
   // value-returning WRITES → mutations. Each RPC-shaped scope declares its
   // whole input as the payload (`.input`, not `.body`), so it clears the
   // capability gate and mounts here — the dedicated tRPC write path. The cookie/

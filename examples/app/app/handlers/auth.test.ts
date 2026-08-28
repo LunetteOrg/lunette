@@ -151,14 +151,14 @@ describe('verifyScope: no pending → 401, wrong code → 401, ok → redirect +
       },
       sessionCookie: { apply: (): void => {} },
     }
-    const out = await runScope<RequestCarrier, typeof verifyScope.schema, never>(
+    const out = await runScope<RequestCarrier, typeof verifyScope.schema, never, 'body' | 'cookies', {}, 'body' | 'cookies'>(
       verifyScope,
       app,
       jsonPost({ code: '123456' }),
       {},
     )
     expect(out.ok).toBe(false)
-    if (!out.ok) expect(out.abort.intent).toMatchObject({ kind: 'status', status: 401 })
+    if (!out.ok && 'abort' in out) expect(out.abort.intent).toMatchObject({ kind: 'status', status: 401 })
     expect(ran).toBe(false)
   })
 
@@ -168,14 +168,14 @@ describe('verifyScope: no pending → 401, wrong code → 401, ok → redirect +
       access: { verifyCode: async (): Promise<VerifyCodeResult | OtpInvalid> => new OtpInvalid() },
       sessionCookie: { apply: (): void => {} },
     }
-    const out = await runScope<RequestCarrier, typeof verifyScope.schema, never>(
+    const out = await runScope<RequestCarrier, typeof verifyScope.schema, never, 'body' | 'cookies', {}, 'body' | 'cookies'>(
       verifyScope,
       app,
       jsonPost({ code: 'wrong' }),
       {},
     )
     expect(out.ok).toBe(false)
-    if (!out.ok)
+    if (!out.ok && 'abort' in out)
       expect(out.abort.intent).toMatchObject({ kind: 'status', status: 401, body: { error: 'OtpInvalid' } })
     expect(readCookies(out)).toEqual([])
   })
@@ -199,14 +199,14 @@ describe('verifyScope: no pending → 401, wrong code → 401, ok → redirect +
           sink.set('session', `signed:${id}`, { path: '/', httpOnly: true, maxAge: 60 }),
       },
     }
-    const out = await runScope<RequestCarrier, typeof verifyScope.schema, never>(
+    const out = await runScope<RequestCarrier, typeof verifyScope.schema, never, 'body' | 'cookies', {}, 'body' | 'cookies'>(
       verifyScope,
       app,
       jsonPost({ code: '123456' }),
       {},
     )
     expect(out.ok).toBe(false)
-    if (!out.ok) expect(out.abort.intent).toMatchObject({ kind: 'redirect', location: '/home' })
+    if (!out.ok && 'abort' in out) expect(out.abort.intent).toMatchObject({ kind: 'redirect', location: '/home' })
     expect(readCookies(out)).toEqual([
       { name: 'session', value: 'signed:s1', options: { path: '/', httpOnly: true, maxAge: 60 } },
       { name: 'pending-auth', value: '', options: { path: '/', maxAge: 0 } },

@@ -20,11 +20,11 @@ export function makeApp(env: { catalog: CatalogEnv; admin: AdminEnv }): {
 
   const app = expressApp()
   // the catalogue's routes, served by the catalogue's chain
-  app.get('/items', shop.handler(listScope))
-  app.get('/items/:itemId', shop.handler(itemScope))
+  app.get(...shop.handler('/items', listScope))
+  app.get(...shop.handler('/items/:itemId', itemScope))
   // the admin's routes, served by the admin's chain, on the same server
-  app.get('/admin/audit', back.handler(auditScope))
-  app.post('/admin/audit', back.handler(recordScope))
+  app.get(...back.handler('/admin/audit', auditScope))
+  app.post(...back.handler('/admin/audit', recordScope))
 
   return {
     app,

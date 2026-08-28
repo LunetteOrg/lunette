@@ -8,9 +8,9 @@ import { handler } from './bootstrap/from-host-env.ts'
 // environment are the subject here, and a flag would hide exactly the line the
 // reader came to compare.
 const app = new Hono()
-  .get('/links', ...handler(listScope))
-  .get('/links/:slug', ...handler(linkScope))
-  .get('/about', ...handler(aboutScope))
-  .post('/links', ...handler(createScope))
+  .get(...handler('/links', listScope))
+  .get(...handler('/links/:slug', linkScope))
+  .get(...handler('/about', aboutScope))
+  .post(...handler('/links', createScope))
 
 export default app

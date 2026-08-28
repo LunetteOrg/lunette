@@ -15,9 +15,9 @@ Four sections, and `src/server.ts` is short enough to read in one sitting:
    inside the handler. The store layer reads KV, and a KV read outside a request
    is asynchronous I/O the runtime refuses, so an eager build here does not fail
    a request — it stops the worker from STARTING (§36).
-2. **the mount** — `DepGuard` and `CarrierGuard` named in one signature. They
-   ship from `@lntt/scope`, not from the adapters, so a host we ship nothing for
-   keeps its compile-time gates by naming two types (§34).
+2. **the mount** — `DepGuard`, `CarrierGuard` and `IntentGuard` named in one
+   signature. They ship from `@lntt/scope`, not from the adapters, so a host we
+   ship nothing for keeps its compile-time gates by naming three types (§34).
 3. **routing** — hand-rolled, because there is no framework here to own it.
 4. the `fetch` export.
 

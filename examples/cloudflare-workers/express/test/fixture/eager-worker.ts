@@ -16,7 +16,7 @@ export const built = await chain.build({ env: hostEnv() })
 
 const pack = express(chain, () => ({ env: hostEnv() }))
 const app = expressApp()
-app.get('/links', pack.handler(listScope))
+app.get(...pack.handler('/links', listScope))
 
 const port = 8788
 app.listen(port)

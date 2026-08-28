@@ -1,6 +1,6 @@
 import { layer, lunette } from '@lntt/wire'
-import { scope, unauthorized } from '@lntt/scope'
-import { request } from '@lntt/scope/request'
+import { scope } from '@lntt/scope'
+import { http, unauthorized } from '@lntt/scope/http'
 
 // PRODUCT TWO: an admin area. A DIFFERENT composition root, with a different
 // seed, different services and its own lifecycle — not a slice of the catalogue.
@@ -30,11 +30,13 @@ export const adminChain = lunette<{ env: AdminEnv }>()
   // Exposed so a guard can check the token; the env itself stays out of reach.
   .expose('auth', (ctx) => ({ accepts: (token: string | null) => token === ctx.env.TOKEN }))
 
-// The gate: an admin scope is useless without it, and it reads the request —
-// so this product's scopes need the `request` extension while the catalogue's
-// do not. Two chains, two different shapes of scope.
+// The gate: an admin scope is useless without it, and it reads the request AND
+// aborts — so this product's scopes `.extend(http)` (for `ctx.request` and for
+// `unauthorized()`'s own declared intent) while the catalogue's scopes need
+// their own carrier only where THEY abort. Two chains, two different shapes
+// of scope.
 const gated = scope()
-  .extend(request)
+  .extend(http)
   .guard((deps: { auth: { accepts(t: string | null): boolean } }, ctx) =>
     deps.auth.accepts(ctx.request.headers.get('authorization')) ? {} : unauthorized(),
   )

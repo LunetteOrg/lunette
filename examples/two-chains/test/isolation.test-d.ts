@@ -13,17 +13,17 @@ const back = pack(adminChain, () => ({ env: { TOKEN: 't' } }))
 describe('a scope belongs to the chain that satisfies it', () => {
   it('mounts on its own pack', () => {
     const app = express()
-    app.get('/items', shop.handler(listScope))
-    app.get('/admin/audit', back.handler(auditScope))
+    app.get(...shop.handler('/items', listScope))
+    app.get(...back.handler('/admin/audit', auditScope))
   })
 
   it('refuses an admin scope on the catalogue pack', () => {
     // @ts-expect-error the catalogue chain exposes no `audit`
-    shop.handler(auditScope)
+    shop.handler('/admin/audit', auditScope)
   })
 
   it('refuses a catalogue scope on the admin pack', () => {
     // @ts-expect-error the admin chain exposes no `catalog`
-    back.handler(listScope)
+    back.handler('/items', listScope)
   })
 })

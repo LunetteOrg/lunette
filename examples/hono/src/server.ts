@@ -32,18 +32,18 @@ export const app = new Hono()
   // has one host and composes at the wiring, so no shared-scope module is
   // needed. The shared `*Scope` imports above are the multi-host portability
   // device; `feedScope` still ships as their documented form.
-  .get('/feed', ...handler(scope().guard(feedGuard).handle(feedHandler)))
-  .get('/posts/:postId', ...handler(postScope))
-  .get('/posts/:postId/comments', ...handler(commentsScope))
-  .get('/me', ...handler(identityScope))
+  .get(...handler('/feed', scope().guard(feedGuard).handle(feedHandler)))
+  .get(...handler('/posts/:postId', postScope))
+  .get(...handler('/posts/:postId/comments', commentsScope))
+  .get(...handler('/me', identityScope))
   // auth
-  .post('/login', ...handler(loginScope))
-  .post('/verify', ...handler(verifyScope))
-  .post('/logout', ...handler(logoutScope))
+  .post(...handler('/login', loginScope))
+  .post(...handler('/verify', verifyScope))
+  .post(...handler('/logout', logoutScope))
   // writes (gated)
-  .post('/posts', ...handler(publishPostScope))
-  .post('/posts/:postId/comments', ...handler(commentScope))
-  .post('/me/preference', ...handler(setPreferenceScope))
+  .post(...handler('/posts', publishPostScope))
+  .post(...handler('/posts/:postId/comments', commentScope))
+  .post(...handler('/me/preference', setPreferenceScope))
 
 // The type a Hono RPC client (`hc<AppType>()`) consumes — routes, params, and
 // the JSON each returns, all inferred from the scopes.

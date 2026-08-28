@@ -107,7 +107,7 @@ describe('publishHandler: the shared write step, author from the caller', () => 
       { title: 'Hi', body: 'world' },
     )
     expect(isAbort(out)).toBe(false)
-    if (!isAbort(out)) expect(out.post.title).toBe('Hi')
+    if ('post' in out) expect(out.post.title).toBe('Hi')
     expect(seen).toMatchObject({ authorId: 'u1', title: 'Hi', body: 'world', status: 'published' })
   })
 
@@ -144,7 +144,7 @@ describe('commentHandler: the shared comment write, missing post → 404', () =>
       { body: 'nice' },
     )
     expect(isAbort(out)).toBe(false)
-    if (!isAbort(out)) expect(out.comment).toEqual(aComment)
+    if ('comment' in out) expect(out.comment).toEqual(aComment)
     expect(seen).toMatchObject({ postId: 'p1', authorId: 'u1', body: 'nice' })
   })
 

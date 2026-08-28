@@ -4,7 +4,7 @@ import { buildOnce } from '@lntt/wire'
 import { runScope } from '@lntt/scope'
 // The two node-side primitives — see the header for where the line sits.
 import { renderOutcome, toWebRequest } from '@lntt/integration/node'
-import type { Capability, CarrierGuard, DepGuard, Handler, RequestCarrier } from '@lntt/scope'
+import type { Capability, CarrierGuard, DepGuard, Handler, IntentGuard, RequestCarrier } from '@lntt/scope'
 import {
   chain,
   commentScope,
@@ -73,24 +73,48 @@ import { hostEnv } from './config/env.ts'
 // `toWebRequest`/`renderOutcome` do not implement would open the gate on nothing.
 type HostCaps = 'body' | 'cookies' | 'headers'
 
-// The per-request call, and the only place the two brands are named:
+// The set of intents THIS host renders, named for the same reason `HostCaps`
+// is: Express is an HTTP host, so it renders `@lntt/scope/http`'s whole
+// vocabulary — `renderOutcome` knows only `HttpIntent` (`status`/`redirect`/
+// `ok-status`), so a scope built on a different carrier's words (tRPC's `code`,
+// say) must be rejected HERE, at the mount, naming the intent.
+type HttpIntents = 'status' | 'redirect' | 'ok-status'
+
+// The per-request call, and the only place the THREE brands are named:
 // `DepGuard<App, Need>` fires if the chain's public surface does not cover what
 // the scope's guards/leaf declare, `CarrierGuard<Cap, HostCaps>` if the scope
-// needs a capability this carrier lacks — both compile errors at the mount line,
-// naming the gap. Both ship from @lntt/scope, NOT from the adapters, which is
-// why a hand-wired host keeps them (`server-manual.test-d.ts` proves the
-// negatives). Params are validated at RUNTIME by `runScope` (Express has no
-// native validator): a bad or missing param is a RETURNED 422.
+// needs a capability this carrier lacks, `IntentGuard<Int, HttpIntents>` if the
+// scope aborts/succeeds with an intent this carrier cannot render — three
+// compile errors at the mount line, each naming the gap. All three ship from
+// @lntt/scope, NOT from the adapters, which is why a hand-wired host keeps
+// them (`server-manual.test-d.ts` proves the negatives). Params are validated
+// at RUNTIME by `runScope` (Express has no native validator): a bad or missing
+// param is a RETURNED 422.
 export const makeHandler = () => {
   const { ensure, dispose } = buildOnce(chain)
   const handler =
-    <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
-      h: Handler<Need, S, R, Cap> & DepGuard<App, Need> & CarrierGuard<Cap, HostCaps>,
+    <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability, Int extends PropertyKey>(
+      h: Handler<Need, S, R, Cap, Int> &
+        DepGuard<App, Need> &
+        CarrierGuard<Cap, HostCaps> &
+        IntentGuard<Int, HttpIntents>,
     ): RequestHandler =>
     async (req, res): Promise<void> =>
       renderOutcome(
         res,
-        await runScope<RequestCarrier, S, R>(
+        // `HostCaps` and `Cap` are named IN FULL here — this is the pre-
+        // existing capability hole §36 (`runScope`'s own gate) closes: without
+        // the explicit type arguments `HostCaps`/`Eff`/`Cap` fall back to their
+        // defaults (`never`/`{}`/`never`) instead of being inferred from `h`,
+        // and `CarrierGuard`'s brand on `handler`'s OWN generic `Cap` would not
+        // propagate into this call — the same "a brand carries no information
+        // once re-abstracted over a fresh type parameter" shape `@lntt/
+        // integration/hono`'s `handlerFrom` documents.
+        await runScope<RequestCarrier, S, R, HostCaps, {}, Cap>(
+          // `runScope` itself has no `Int` type parameter — the intent gate
+          // lives on `Handler`/`IntentGuard` above, checked once, at the
+          // OUTER `handler<...>` call; the fold never reads what an intent
+          // MEANS (`run-fold.ts`), so nothing downstream needs to re-name it.
           h,
           (await ensure(() => ({ env: hostEnv() }))).app,
           // The origin is REQUIRED: `toWebRequest` does not guess one, so a

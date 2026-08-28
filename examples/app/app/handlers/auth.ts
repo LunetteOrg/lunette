@@ -1,18 +1,22 @@
 import { z } from 'zod'
-import { type Abort, httpError, redirect } from '@lntt/scope'
+import { httpError, redirect } from '@lntt/scope/http'
 import type { CookieSink } from '@lntt/scope/cookies'
 import type { UserRegistration } from '../domain/access.ts'
 import type { PendingAuth, PendingCookie, SessionCookie } from '../lib/cookies.ts'
 import { isError, type TaggedError } from '../lib/errors.ts'
 import type { VerifyCodeResult } from '../use-cases/access/verify-code.ts'
-import { abortFor } from './respond.ts'
+import { httpAbortFor } from './respond.ts'
 
 // The login side-effect — a guard owning the whole path (validate the form,
 // request the code, set the pending cookie); it declares only the functions it
 // calls. The invalid-email branch is a returned `httpError(422, …)` abort: the
 // scope model maps a validation failure to a 4xx rather than a 200 domain body.
 // Named + typed, so the reject and the code/cookie side-effects are proven
-// without the fold — the fake `cookies` sink captures `.apply`.
+// without the fold — the fake `cookies` sink captures `.apply`. Login has no
+// RPC meaning (it rides a browser form + a Set-Cookie response), so this stays
+// HTTP-only — no `Rpc` twin.
+//
+// NO `: … | Abort` return annotation — see `guards.ts`'s `authGuard` for why.
 export const loginGuard = async (
   deps: {
     validateEmail(email: string): boolean
@@ -21,7 +25,7 @@ export const loginGuard = async (
     pendingCookie: Pick<PendingCookie, 'apply'>
   },
   ctx: { form: { email: string }; cookies: CookieSink },
-): Promise<Record<never, never> | Abort> => {
+) => {
   const email = ctx.form.email
   if (!deps.validateEmail(email)) return httpError(422, { error: 'invalid-email' as const })
   // A fresh anti-replay nonce ties this request to the code the verify step
@@ -44,13 +48,8 @@ export const loginForm = z.object({ email: z.string() })
 // per call inside the module): a wrong code RETURNS OtpInvalid (→ 401, the
 // attempt increment COMMITS); a db failure THROWS (→ 5xx, the tx ROLLS BACK). On
 // success it sets the signed session cookie, drops the pending cookie, and
-// RETURNS a redirect — all three ride the outcome.
-// The verify transaction — a leaf: builds the registration, calls the windowed
-// `verifyCode` (a wrong code RETURNS OtpInvalid → 401, a db failure THROWS →
-// 5xx), and on success sets the session cookie, drops the pending cookie, and
-// RETURNS a redirect. Named + typed, so the registration merge and the
-// cookie/redirect side-effects are unit-testable — even though `verifyScope`
-// ALSO keeps its `runScope` tests (its fold interaction is scope-specific).
+// RETURNS a redirect — all three ride the outcome. HTTP-only (cookies +
+// redirect have no RPC meaning), so no `Rpc` twin.
 export const verifyHandler = async (
   deps: {
     access: {
@@ -69,7 +68,7 @@ export const verifyHandler = async (
     body: { code?: string | undefined; displayName?: string | undefined; termsAccepted?: boolean | undefined }
     cookies: CookieSink
   },
-): Promise<Abort> => {
+) => {
   // Registration comes from the pending cookie if login captured it, else
   // from this request's body (the new-user completion path).
   const registration: Omit<UserRegistration, 'email'> | undefined =
@@ -86,7 +85,7 @@ export const verifyHandler = async (
     ctx.pending.nonce,
     registration,
   )
-  if (isError(result)) return abortFor(result)
+  if (isError(result)) return httpAbortFor(result)
   deps.sessionCookie.apply(ctx.cookies, result.sessionId)
   deps.pendingCookie.drop(ctx.cookies)
   return redirect(ctx.pending.returnTo ?? '/')
@@ -125,10 +124,7 @@ export const verifyForm = z.object({
 // own `Max-Age`, which is the client's to ignore. A real app deletes the row
 // here and checks expiry on every read; this leaf shows the scope shape and the
 // cookie sink, not the session lifecycle.
-export const logoutHandler = (
-  deps: { sessionCookie: Pick<SessionCookie, 'drop'> },
-  ctx: { cookies: CookieSink },
-): Abort => {
+export const logoutHandler = (deps: { sessionCookie: Pick<SessionCookie, 'drop'> }, ctx: { cookies: CookieSink }) => {
   deps.sessionCookie.drop(ctx.cookies)
   return redirect('/')
 }

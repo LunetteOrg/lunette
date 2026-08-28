@@ -1,6 +1,7 @@
 import { layer, lunette } from '@lntt/wire'
 import { z } from 'zod'
-import { notFound, scope } from '@lntt/scope'
+import { scope } from '@lntt/scope'
+import { http, notFound } from '@lntt/scope/http'
 
 // PRODUCT ONE: a public catalogue. Its own composition root — everything it
 // depends on is in here, and nothing outside can reach in.
@@ -48,7 +49,8 @@ export const listScope = scope().handle((deps: { catalog: { list(): Item[] } }) 
 }))
 
 export const itemScope = scope()
-  .input(z.object({ itemId: z.string() }))
+  .extend(http)
+  .params(z.object({ itemId: z.string() }))
   .handle((deps: { catalog: { byId(id: string): Item | undefined } }, ctx) => {
     const item = deps.catalog.byId(ctx.params.itemId)
     return item ? { item } : notFound()

@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { type Abort, notFound } from '@lntt/scope'
+import { notFound } from '@lntt/scope/http'
+import * as rpc from '@lntt/scope/trpc'
 import type { Session } from '../domain/access.ts'
 import type { Surface } from '../domain/render.ts'
 import type {
@@ -12,14 +13,15 @@ import type {
 import { isError, type PostNotFound, type TaggedError } from '../lib/errors.ts'
 import type { ComposeCommentInput } from '../use-cases/threads/compose-comment.ts'
 import type { PublishPostInput } from '../use-cases/threads/publish-post.ts'
-import { abortFor } from './respond.ts'
+import { httpAbortFor, rpcAbortFor } from './respond.ts'
 
 // PROTOTYPE — the feed handler as PURE, named functions, so each is unit-tested
 // in isolation (typed, no carrier, no fold, no fake session to satisfy a gate).
 // The scope that wires them lives in ../handlers.ts.
 
 // The feed fetch — a guard: declares only the slice of the app it calls
-// (`threads.listFeed`), returns the enrichment `{ feed }`. It ignores the ctx.
+// (`threads.listFeed`), returns the enrichment `{ feed }`. It ignores the ctx,
+// never aborts, so it needs no per-carrier twin.
 export const feedGuard = (deps: {
   threads: { listFeed(scope: string): Promise<FeedPost[]> }
 }): Promise<{ feed: FeedPost[] }> => deps.threads.listFeed('feed').then((feed) => ({ feed }))
@@ -37,6 +39,8 @@ export const feedHandler = (
 // either enriches `{ post }` or ABORTS with `notFound()` — a RETURNED value, not
 // the raw `throw new Response(null, { status: 404 })`. The viewer id flows from
 // the prior guard's enrichment (`ctx.session`), typed, no re-read.
+//
+// NO `: … | Abort` return annotation — see `guards.ts`'s `authGuard` for why.
 export const postGuard = (
   deps: {
     threads: {
@@ -48,13 +52,31 @@ export const postGuard = (
     }
   },
   ctx: { params: { postId: string }; session: Session | null },
-): Promise<{ post: PostForReading } | Abort> =>
+) =>
   deps.threads
     .getPostForReading(ctx.params.postId, 'web', ctx.session?.userId)
     .then((post) => (isError(post) ? notFound() : { post }))
 
+// The tRPC-mounted twin: same prefetch, tRPC's own `notFound()`.
+export const postGuardRpc = (
+  deps: {
+    threads: {
+      getPostForReading(
+        id: string,
+        channel: 'web',
+        viewer?: string,
+      ): Promise<PostForReading | PostNotFound>
+    }
+  },
+  ctx: { params: { postId: string }; session: Session | null },
+) =>
+  deps.threads
+    .getPostForReading(ctx.params.postId, 'web', ctx.session?.userId)
+    .then((post) => (isError(post) ? rpc.notFound() : { post }))
+
 // The trivial shape leaf behind the post loader: no deps, reads only the post
-// the prefetch guard accumulated. Named so the scope stays declarative.
+// the prefetch guard accumulated. Named so the scope stays declarative. Never
+// aborts, so it needs no per-carrier twin — reused unchanged by both wirings.
 export const postHandler = (
   _deps: Record<never, never>,
   ctx: { post: PostForReading },
@@ -66,11 +88,12 @@ export const postHandler = (
 // inline images (blobs), detect format, create the post, warm the render cache
 // — but the scope sees ONE function. Body fields come off the request (the
 // hosts stream it in); the author is the gated session, never the client.
-// The shared write step: the SAME domain call + error mapping, fed by whichever
-// input channel the host uses — `.body` on the HTTP hosts, the `.input` payload
-// on tRPC. The two authorings below differ ONLY in where the fields come from
-// (`ctx.body` vs `ctx.params`); the guards and this step are shared, so the use
-// case lives once.
+// The shared write step: the SAME domain call, fed by whichever input channel
+// the host uses — `.body` on the HTTP hosts, the `.input` payload on tRPC. The
+// two wirings differ only in where the fields come from (`ctx.body` vs
+// `ctx.params`), and — since a domain error's outcome is carrier vocabulary —
+// each carrier family gets its own thin translation (`httpAbortFor` /
+// `rpcAbortFor`); the fetch itself is identical.
 // The `.body` schema is the source of truth for the optional-field type: the
 // hand-written `PublishFields` is DERIVED from it via `z.infer`, so a schema
 // tweak can never drift from the type the step consumes.
@@ -83,11 +106,7 @@ export type PublishFields = z.infer<typeof publishBody>
 export type PublishDeps = {
   threads: { publishPost(input: PublishPostInput): Promise<Post | TaggedError> }
 }
-export const publishHandler = (
-  deps: PublishDeps,
-  authorId: string,
-  fields: PublishFields,
-): Promise<{ post: Post } | Abort> =>
+export const publishHandler = (deps: PublishDeps, authorId: string, fields: PublishFields) =>
   deps.threads
     .publishPost({
       authorId,
@@ -95,7 +114,17 @@ export const publishHandler = (
       body: fields.body ?? '',
       status: fields.status ?? 'published',
     })
-    .then((result) => (isError(result) ? abortFor(result) : { post: result }))
+    .then((result) => (isError(result) ? httpAbortFor(result) : { post: result }))
+
+export const publishHandlerRpc = (deps: PublishDeps, authorId: string, fields: PublishFields) =>
+  deps.threads
+    .publishPost({
+      authorId,
+      title: fields.title ?? '',
+      body: fields.body ?? '',
+      status: fields.status ?? 'published',
+    })
+    .then((result) => (isError(result) ? rpcAbortFor(result) : { post: result }))
 
 // ── write path: POST /posts/:postId/comments ────────────────────────────────
 // The gated-with-input base fixes the ROUTE param (`postId`); the body carries
@@ -112,7 +141,7 @@ export const commentHandler = (
   postId: string,
   authorId: string,
   fields: CommentFields,
-): Promise<{ comment: Comment } | Abort> =>
+) =>
   deps.threads
     .composeComment({
       postId,
@@ -120,13 +149,29 @@ export const commentHandler = (
       body: fields.body ?? '',
       ...(fields.parentId !== undefined && { parentId: fields.parentId }),
     })
-    .then((result) => (isError(result) ? abortFor(result) : { comment: result }))
+    .then((result) => (isError(result) ? httpAbortFor(result) : { comment: result }))
+
+export const commentHandlerRpc = (
+  deps: CommentDeps,
+  postId: string,
+  authorId: string,
+  fields: CommentFields,
+) =>
+  deps.threads
+    .composeComment({
+      postId,
+      authorId,
+      body: fields.body ?? '',
+      ...(fields.parentId !== undefined && { parentId: fields.parentId }),
+    })
+    .then((result) => (isError(result) ? rpcAbortFor(result) : { comment: result }))
 
 // ── read path: GET /posts/:postId/comments (all four hosts) ──────────────────
 // The comments read — a leaf: normalises the surface through the degenerate
 // empty-deps leaf (`resolveSurface`), then lists at that surface (the composed
 // read `listCommentsForReading` fans out render + authors). Named + typed, so
-// the surface normalisation and the listing are proven without the fold.
+// the surface normalisation and the listing are proven without the fold. Never
+// aborts, so it needs no per-carrier twin.
 export const commentsHandler = async (
   deps: {
     profile: { resolveSurface(raw: string | null | undefined, fallback: Surface): Surface }

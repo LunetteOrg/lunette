@@ -1,7 +1,8 @@
 import { layer, lunette } from '@lntt/wire'
 import { z } from 'zod'
-import { httpError, notFound, scope } from '@lntt/scope'
+import { scope } from '@lntt/scope'
 import { body } from '@lntt/scope/body'
+import { http, httpError, notFound } from '@lntt/scope/http'
 import type { Env } from './config/env.ts'
 
 // A chain of its own: nothing here comes from `@lntt/example-app`, which cannot
@@ -92,7 +93,8 @@ export const listScope = scope().handle((deps: { links: { all(): Link[] } }) => 
 }))
 
 export const linkScope = scope()
-  .input(z.object({ slug: z.string() }))
+  .extend(http)
+  .params(z.object({ slug: z.string() }))
   .handle((deps: { links: { bySlug(slug: string): Link | undefined } }, ctx) => {
     const link = deps.links.bySlug(ctx.params.slug)
     return link ? { link } : notFound()
@@ -105,6 +107,7 @@ export const linkScope = scope()
 // `duplex: 'half'`) against a `node:http` server the runtime EMULATES — the
 // least-verified path of the Node pack on this runtime.
 export const createScope = scope()
+  .extend(http)
   .extend(body)
   .body(z.object({ slug: z.string().min(1), url: z.string().url() }))
   .handle(

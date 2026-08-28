@@ -9,15 +9,15 @@ import { handler } from './bootstrap/index.ts'
 // `cloudflare:node` import above.
 export const app: Express = expressApp()
 
-app.get('/links', handler(listScope))
-app.get('/links/:slug', handler(linkScope))
-app.get('/about', handler(aboutScope))
+app.get(...handler('/links', listScope))
+app.get(...handler('/links/:slug', linkScope))
+app.get(...handler('/about', aboutScope))
 // The WRITE, and on this entry it is the point rather than a routine addition:
 // no express.json() (it would drain the stream before the Web Request), so the
 // body reaches the leaf through `toWebRequest`'s streaming branch — the Node
 // request as the Web Request's body, `duplex: 'half'` — on a `node:http` server
 // the Workers runtime emulates.
-app.post('/links', handler(createScope))
+app.post(...handler('/links', createScope))
 
 // Cloudflare has supported node:http servers since August 2025: `app.listen`
 // runs against an EMULATED server, and `httpServerHandler` turns the port it

@@ -15,4 +15,4 @@ export const built = await chain.build({ env: hostEnv() })
 
 const pack = hono(chain, () => ({ env: hostEnv() }))
 
-export default new Hono().get('/links', ...pack.handler(listScope))
+export default new Hono().get(...pack.handler('/links', listScope))

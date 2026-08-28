@@ -85,7 +85,7 @@ thing; a per-call axis is a window (principle 4).
 
 [`examples/cloudflare-workers/bare`](../bare) serves this chain and these scopes
 from a hand-written `fetch` handler: `buildOnce` called directly, the carrier
-assembled by hand, `runScope`, and the two brands named in one signature. Read
+assembled by hand, `runScope`, and the three brands named in one signature. Read
 side by side with `src/server.ts`, the difference is the routing table and
 nothing else — which is what a pack is worth.
 

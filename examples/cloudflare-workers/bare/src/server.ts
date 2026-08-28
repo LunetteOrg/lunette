@@ -1,6 +1,6 @@
 import { buildOnce, type PubOf } from '@lntt/wire'
 import { runScope } from '@lntt/scope'
-import type { Capability, CarrierGuard, DepGuard, Handler, RequestCarrier } from '@lntt/scope'
+import type { Capability, CarrierGuard, DepGuard, Handler, IntentGuard, RequestCarrier } from '@lntt/scope'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 // The one primitive a pack COMPOSES for a host that RETURNS a Response, rather
 // than writing onto one: the outcome codec. Its node counterpart is
@@ -30,21 +30,28 @@ const { ensure } = buildOnce(chain)
 
 type App = PubOf<typeof chain>
 
-// ── 2. the mount: the two brands, named by hand ──────────────────────────────
-// `DepGuard` and `CarrierGuard` ship from @lntt/scope, not from the adapters, so
-// a host we ship nothing for keeps its compile-time gates by naming them in ONE
-// signature (§34). This carrier provides `cookies` and `headers` — the codec
-// renders both — but not `body`: nothing here reads the request body, so a
-// body-reading scope is refused at the line that mounts it.
+// ── 2. the mount: the three brands, named by hand ─────────────────────────────
+// `DepGuard`/`CarrierGuard`/`IntentGuard` ship from @lntt/scope, not from the
+// adapters, so a host we ship nothing for keeps its compile-time gates by
+// naming them in ONE signature (§34, § the core coins no vocabulary). This
+// carrier provides `cookies` and `headers` — the codec renders both — but not
+// `body`: nothing here reads the request body, so a body-reading scope is
+// refused at the line that mounts it. `outcomeToResponse` (`@lntt/integration/
+// http`) renders `@lntt/scope/http`'s whole vocabulary, so `HttpIntents` names
+// the same set Hono/Express's own packs do.
 type HostCaps = 'cookies' | 'headers'
+type HttpIntents = 'status' | 'redirect' | 'ok-status'
 
 export const handler =
-  <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
-    h: Handler<Need, S, R, Cap> & DepGuard<App, Need> & CarrierGuard<Cap, HostCaps>,
+  <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability, Int extends PropertyKey>(
+    h: Handler<Need, S, R, Cap, Int> &
+      DepGuard<App, Need> &
+      CarrierGuard<Cap, HostCaps> &
+      IntentGuard<Int, HttpIntents>,
   ) =>
   async (request: Request, params: Record<string, string>): Promise<Response> =>
     outcomeToResponse(
-      await runScope<RequestCarrier, S, R>(
+      await runScope<RequestCarrier, S, R, HostCaps, {}, Cap>(
         h,
         (await ensure(() => ({ env: hostEnv() }))).app,
         { request },
