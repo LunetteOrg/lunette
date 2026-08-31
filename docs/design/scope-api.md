@@ -97,37 +97,28 @@ Everything the builder offers is sugar over ONE thing. A **step** wraps the rest
 of the fold: it reads the app and the ctx as they stand, and either continues
 inward with what it populates or hands back something of its own and stops.
 
-A step says FOUR things, and **three of them ride positions the signature
-already has** — so they are not declared twice and cannot drift from the code
-beside them:
+A step says THREE things, and every one of them rides a position the signature
+already has — so a step is a plain FUNCTION, declares nothing, and nothing can
+drift from the code beside it:
 
 | what it says | where it lives |
 |---|---|
 | what it knows of the app | the first parameter's type |
 | what it knows of the ctx | the second parameter's type |
 | what it populates | `next`'s parameter type — ANNOTATED |
-| what verbs it contributes | `methods`, on the object form |
 
 ```ts
-// says three of the four, so it is a bare function
 async (deps: Repos, ctx, next: Next<{ session: Session }>) => { … }
-
-// says the fourth too, so it is an object
-{ run: passThrough, methods: { header: withHeader } }
 ```
+
+Enriching the BUILDER is a different axis and a different verb — see **Two
+verbs, two axes** below.
 
 **What it populates is NOT inferable from the body** — measured. `Add` occurs
 only in a parameter position of `next`, so `(app, ctx, next) => next({ user })`
 infers the bare constraint and declares nothing. Annotating the parameter IS the
 declaration, and it sits on the parameter it describes rather than in a phantom
 beside it.
-
-**Verbs are the one declared thing**, because contributing to the BUILDER's
-surface is a type-level claim a runtime value cannot make. The builder's side of
-a verb is then COMPUTED from the factory — a factory is `(...args) => a step`,
-so the method is `(...args) => the scope` — rather than written out beside it,
-where it was a duplicate of the same argument list that could drift with no
-error.
 
 **A step returns one of three things, and never builds an outcome.** The
 outcome `next` gave it, a WORD from the carrier's vocabulary, or a plain domain
@@ -142,6 +133,46 @@ a step had to hand back a pre-built `Outcome`, a real word was cast down to
 same refusal contributed `status` through the sugar and `never` through a raw
 step. Returning the word keeps its TYPE, and the builder distributes over the
 whole return (trap 1) to collect every word the step can say.
+
+### Two verbs, two axes
+
+```ts
+.step(fn)        // acts on the FLOW    — the step list grows
+.extend(ext)     // acts on the BUILDER — the step list does not
+```
+
+An extension contributes VERBS, and a verb is a function from its own arguments
+TO A STEP — so the fold work happens when the verb is CALLED, not when the
+extension is added. That is why `.extend` needs no step of its own, and why it
+is not a second primitive: `.step` remains the only thing that ever adds to the
+fold, and **an extension never appears in the step list**, which is checkable
+rather than assertable.
+
+The evidence for the split is that the two never co-occur. Of the ten extensions
+the previous core shipped, five did fold work and contributed no verb, two
+contributed verbs and did no fold work, two were carriers doing neither — and
+the ONE that did both was the response-header sink, which the returned-response
+decision retired. A step value carrying both was a shape nobody used.
+
+**A verb's signature is DECLARED, and that is a measurement rather than a
+preference.** Computing it from the factory removes a duplicate, which is a real
+gain — but `infer` through a GENERIC factory instantiates its type parameters to
+their constraints, and every verb that matters is generic:
+
+| form | `.pin(201)` yields | duplication |
+|---|---|---|
+| declared | `201` | the argument list, written twice |
+| computed | `number` | none |
+
+`validate` loses more than a literal: it loses the entry's name AND the schema's
+output type, which is its whole job. So the duplicate stays, and `Extension<M>`
+ties the declaration to the factories BY NAME — a verb with no factory, or a
+factory no verb declares, is a compile error at the extension, which closes the
+half of the duplication that can be closed.
+
+A verb reads the scope it was called on through `this: Scope<S>`. That works
+because it is a METHOD call; on the scope's own call signature `this` binds to
+`void`, which is the reason the accumulated state lives in a type parameter.
 
 ### There is no closing verb, and nothing to terminate
 
@@ -694,19 +725,29 @@ rediscover them.
     { r?: B }` is `A & B`, so a union-valued axis collapses — which is why
     `__intents` and `__caps` are maps of NAMES and why `R` could not be one of
     them. In a parameterised state it is simply `S['result'] | …`.
-14. **A verb's step is checked by nothing unless the builder reads what the
-    factory RETURNS.** Reading only the argument list leaves three holes at
-    once, all measured: the word its step says is dropped (the intent fail-open,
-    reopened), what it populates is dropped, and what it REQUIRES of the ctx is
-    unchecked — so a verb could demand a ctx entry no scope has and still
-    compile. Reading the return closes all three, at +5.5% instantiations on the
-    package (of which +2.8% is present even with no verb in sight).
+14. **`infer` through a GENERIC factory instantiates its type parameters to
+    their constraints.** So a verb's signature COMPUTED from its factory reports
+    `number` where the factory would have produced `201`, and a computed
+    `validate` loses both the entry's name and the schema's output type. This is
+    the trap that decided verbs are declared: removing the duplicate removes the
+    generics with it, and the verbs that matter are all generic.
 15. **A gate whose message is a template literal is SILENT on a call.** Made the
     method itself, the property resolves to a string literal and the call error
     prints its apparent type — `Type 'String' has no call signatures` — so the
     reason never reaches the reader. Naming the message as a PROPERTY, the way
     `DepGuard` does, puts it back: an object type is printed whole.
-16. **Reading and parsing an entry fail for opposite reasons.** The I/O
+16. **A phantom that is INVARIANT blocks inference, not only assignment.** An
+    invariant `__int` on the scope made `S` unresolvable from a verb's `this`,
+    so every verb saw the widest possible scope instead of the one it was called
+    on. The trap-4 family, one step further in: with the state in a type
+    parameter no phantom is needed at all, and reading it directly is both
+    cheaper and correct.
+17. **A state member constrained to the WRONG shape fails silently upward.**
+    `State['verbs']` was constrained to the runtime factory map while it held
+    declared signatures, so a concrete state failed its own constraint and `S`
+    fell back to the constraint EVERYWHERE it was inferred. No error names the
+    constraint; the symptom is every read seeing the widest type.
+18. **Reading and parsing an entry fail for opposite reasons.** The I/O
     (`req.arrayBuffer()`) rejects when the stream dies — a reset socket, an
     aborted upload — and that THROW is infrastructure, left to propagate.
     Parsing the bytes in hand is the client's mistake and collapses to the
@@ -744,6 +785,12 @@ rediscover them.
   every `.step` against a phantom intersected once. It is the intersection that
   is expensive: `Self` gains a member per verb and every later read walks all of
   them, while a parameterised read is one indexed access.
+- **A verb's signature declared against computed**, on an identical workload
+  that uses NO verb at all: 6,637 → 5,056 instantiations (**−23.8%**), types
+  −19.8%. The computed machinery — a conditional plus four extraction types,
+  resolved on every `Surface<S>` — was paid for by every scope, verbs or not.
+  Reading the factory's return had cost +5.5% when it was added; dropping the
+  whole mechanism gives back four times that.
 - **The step primitive and the callable scope are otherwise UNMEASURED.** They replace
   three runtime concepts with one and remove an entry point, but the type layer
   gained a `Seed` parameter on `Handler` and the runtime gained a closure per
@@ -786,47 +833,50 @@ rediscover them.
 
 ## Where this goes next
 
-The design converged on ONE primitive and then discovered that the primitive's
-TYPE did not describe it. That is now done: the formula says four things, three
-of them by annotation, and the intent fail-open is closed by the shape rather
-than documented (see **One primitive: a step, and what it says**).
+The formula is settled and the core is built on it. What remains is one issue
+per slice, deliberately — the branch that produced this document also produced a
+206-file pull request, and that is the shape to avoid from here.
 
 ### Built and green
 
-`@lntt/scope` — the NEW core, `primitive.ts` + `base.ts` + a fixture carrier,
-with `shapes.test.ts` (the five step shapes, composed and run), `verbs.test.ts`,
-`base.test.ts` and `base.test-d.ts`. `tsc --noEmit` clean, every negative
-mutation-tested. `research/parameterised-builder` carries the measurement that
-chose the builder's form.
-
-### The old core is still in the same package, and that is the thing to fix
-
-`packages/scope/src` currently holds TWO incompatible builders. The old one
-(`scope.ts`, `fold.ts`, `steps.ts`, ten extensions, and the tests around them)
-is what `index.ts` exports; the new one is what this document describes. They
-coexist only until the port below is done, and not a step longer.
+`@lntt/scope`: `src/{index,scope,step,abort}.ts`, plus
+`@lntt/scope/standard-schema` — the first real extension and the shape of the
+rest. `src/fixture/` holds what does not ship. Every negative is
+mutation-tested. `research/parameterised-builder` and `research/terminal-step`
+carry the two measurements the builder's form was settled on.
 
 ### In order
 
-1. ~~Close the verb hole.~~ **DONE.** The builder reads what the factory
-   returns and applies `.step`'s own computation, so a verb is literally `.step`
-   with its arguments curried: its word reaches the intent axis, what it
-   populates reaches the ctx, and what it requires of the ctx is checked. The
-   one gate that cannot ride an argument — a verb's step is not an argument of
-   anything — is the METHOD ITSELF, which has no call signatures, so it fires on
-   the call rather than downstream. Trap 4 did not bite: a step carrying an
-   invariant `never` phantom is still read.
-2. **Port the carriers and the extensions onto the new base, and DELETE the old
-   core in the same slice** — `http`, `trpc`, `react-router`, `body`, `query`,
-   `cookies`, `headers`, `standard-schema`. This is also where the sugars are
-   decided (`guard`, `validate`, `handle`, `extend`): each extension shows what
-   it actually needs, which is a better answer than deciding in the abstract.
-   Note `body` no longer declares a transport feature — it annotates the request
-   it needs, and the carrier either publishes one or does not.
-3. **`@lntt/integration` is SET ASIDE**, deliberately. Its five remaining mounts
-   and the gate tests (route, intent, capability) are on `origin/story-30/
-   scope-impl` — 27 files, verified present — and come back after the core
-   settles. Porting them against a surface still in motion is the work done
-   twice that this document exists to avoid.
-4. **The examples are LAST**, for the same reason.
+| | |
+|---|---|
+| **#60** | port the carriers — `http`, `trpc`, `react-router`. `RequestHead` comes back with them, and it is what makes the body lock work. Blocks the rest |
+| **#61** | the outbound side as a returned value: `response(v, init)`, with `json`/`html`/`text` as its sugar. Adds the envelope; the effects axis it replaces is already gone |
+| **#62** | port the read extensions: `body`, `query`, `cookies`, `headers` — none of which needs the retired transport-feature alphabet |
+| **#63** | decide which sugars come back — `guard`, `handle`, or neither. Both have already lost the reasons they were going to exist, so the failure mode is silence, not a wrong answer |
+| **#58** | bring `@lntt/integration` back, with its route/intent/capability gates |
+| **#59** | rewrite `examples/` — LAST, and the real proof: an API that cannot be written naturally in an example is not settled, whatever the type tests say |
 
+Untouched and orthogonal: **#51**, two steps populating the same ctx key are
+still silent.
+
+### The reference implementation
+
+`origin/story-30/scope-impl` is the branch to read while doing all of the above.
+It carries the previous core's carriers and extensions (35 files under
+`packages/scope/src`), `@lntt/integration` complete (27 files, the route, intent
+and capability gate tests among them), and `examples/` (191 files). Its API is
+SUPERSEDED — do not copy it — but the things it paid for are there: the workerd
+constraints, the origin in `toWebRequest`, the `Set-Cookie` that appends, and
+the framework route-pattern readers that beat a hand-written parser.
+
+The last state of the removed code on THIS branch is in the commits before the
+removal, which is the other place to look.
+
+### This document, at the end
+
+It is three things at once today: the CONTRACT, the work order, and the
+engineering record of what each decision cost. That is right while the work is
+live and wrong once it is finished — the contract wants to become the published
+API documentation, and the traps and measurements want to stay as the record
+that explains why the API is shaped the way it is. Splitting the two is a job
+for the end, tracked with #42.
