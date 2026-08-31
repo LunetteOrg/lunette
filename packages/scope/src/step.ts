@@ -24,14 +24,11 @@ export interface Invalid {
 //   what it knows of the app      the first parameter's type
 //   what it knows of the ctx      the second parameter's type
 //   what it populates             `next`'s parameter type — ANNOTATED, see below
-//   what verbs it adds            `methods`, declared
 //
-// Three of the four ride positions the signature already has, so they are not
-// declared twice and cannot drift from the code beside them. VERBS are the one
-// declared thing, because contributing to the BUILDER's surface is a type-level
-// claim that a runtime value cannot make on its own.
-//
-// TERMINATION is deliberately NOT among them — see below.
+// All three ride positions the signature already has, so a step is a plain
+// FUNCTION and declares nothing at all. Enriching the BUILDER is a different
+// axis and a different verb — see `Extension` below — and TERMINATION is
+// deliberately not among them either, for the reason further down.
 //
 // What it populates is a third case, and it cost a measurement: it is NOT
 // inferable from the `next(...)` calls in the body. `Add` occurs only in a
@@ -125,55 +122,54 @@ export type Step<Need extends object, Req extends object, Add extends object, R>
   next: Next<Add>,
 ) => R | Promise<R>
 
-// ── a step that also DECLARES is an object ───────────────────────────────────
-// The one thing a step may say beyond its signature is an ordinary VALUE, not a
-// phantom, which is what makes it readable and writable:
+// ── an EXTENSION enriches the BUILDER, and only the builder ──────────────────
+// Two verbs, two axes, and the split is the whole of it:
 //
-//   { run, methods: { header: … } }        it contributes verbs
+//   `.step(fn)`      acts on the FLOW. It is a bare function, always.
+//   `.extend(ext)`   acts on the BUILDER. It pushes no step at all.
 //
-// A step that says nothing stays a bare function, and that is the common case —
-// nothing about writing one inline changes.
+// An extension contributes VERBS, and a verb is a function from its own
+// arguments TO A STEP — so the fold work happens when the verb is CALLED, not
+// when the extension is added. That is why `.extend` needs no step of its own,
+// and it is not a second primitive: `.step` remains the only thing that ever
+// adds to the fold, and an extension never appears in the step list.
 //
-// A phantom was the first shape and it was worse in two ways. Verbs had to be
-// declared in a hand-written `__methods` that duplicated the factory's argument
-// list beside it and could drift from it; here the builder's signature is
-// COMPUTED from the factory. And attaching a property to a FUNCTION needs
-// `Object.assign` plus a cast — an object literal needs neither.
-export type Verbs = Readonly<Record<string, (...args: never[]) => unknown>>
+// The evidence for the split is that the two never co-occur. Of the ten
+// extensions the previous core shipped, five did fold work and contributed no
+// verb, two contributed verbs and did no fold work, two were carriers doing
+// neither — and the ONE that did both was the response-header sink, which the
+// returned-response decision retired. `{ run, methods }` was a shape nobody
+// used.
+//
+// **The signatures are DECLARED, not computed**, and that reverses a choice
+// made earlier the same day. Computing them from the factory removes a
+// duplicate, which is a real gain — but `infer` through a GENERIC factory
+// instantiates its type parameters to their constraints, and the verbs that
+// matter are all generic. Measured, side by side:
+//
+//   declared     `.status(201)` → `{ pinned: 201 }`      ✓
+//   computed     `.status(201)` → `{ pinned: number }`   ✗
+//
+// `validate` loses more than a literal: it loses the entry's name AND the
+// schema's output type, which is its entire job. So the duplicate stays, and
+// what it buys is that a verb can be generic at all.
+//
+// What the duplicate costs is drift, and `Extension` ties the two sides by NAME
+// so half of it cannot happen: every declared verb must have a factory, and a
+// factory that no verb declares is refused.
+export type Verbs = Readonly<Record<string, (...args: never[]) => AnyStep>>
 
-export interface StepValue<Run, M extends Verbs = Verbs> {
-  readonly run: Run
-  // Each verb is a function from its own arguments TO A STEP. It never receives
-  // the builder or a callback to rebuild it: pushing the step is the core's
-  // job, and it was the only thing any verb ever did with them.
-  readonly methods?: M
+export interface Extension<M extends object> {
+  // One factory per declared verb, keyed alike. A factory never receives the
+  // builder or a callback to rebuild it: pushing the step is the core's job,
+  // and it was the only thing any verb ever did with them.
+  readonly methods: { readonly [K in keyof M]: (...args: never[]) => AnyStep }
+  // The signatures, as the BUILDER offers them. Each is written with
+  // `this: Surface<S>` so it reads the scope's accumulated state off the
+  // receiver — which works here and not on the callable, because `this` binds
+  // on a METHOD call and not on a direct one.
+  readonly __methods?: M
 }
-
-// THERE IS NO TERMINATION DECLARATION, and that is a decision with a
-// measurement behind it. A step that does not call `next` ends the fold, and
-// the fold has always seen that at RUNTIME; a declaration was only ever needed
-// so the TYPE could turn the builder into a callable, because a call signature
-// cannot read state accumulated in an intersection (`this` binds to the
-// receiver of a METHOD call, and calling an object directly binds it to
-// `void`).
-//
-// Carrying that state in a type PARAMETER removes the need, and
-// `research/parameterised-builder` measured what it costs: LESS — about −54
-// instantiations per scope and −11 per step, types down ~16%. So the scope is
-// callable and typed from the first line, `R` accumulates as a real union, and
-// there is nothing to declare.
-//
-// What is left is the case where every step passes through and none produces a
-// value. Such a scope has `R = never`, which has no inhabitant — there is no
-// `ok` outcome to return, and a function whose return type is `never` is
-// exactly one that does not return normally. So it THROWS, which the error
-// convention agrees with (principle 3): a scope with no leaf, run, is a
-// construction bug — infrastructure — and `{ ok: true, value: undefined }`
-// would render a bug to the caller as a success.
-//
-// Note `Outcome<never>` is not empty: `abort` and `invalid` stay inhabited, so
-// a base that REFUSES has a perfectly good outcome to hand back. Only the
-// everything-passed-through path has none.
 
 // The ERASED runtime face. The fold composes steps it knows nothing about, so
 // it holds them at their widest — every type claim was already checked where
@@ -183,15 +179,6 @@ export type AnyStep = (
   ctx: object,
   next: (delta: object) => Promise<Outcome<unknown>>,
 ) => unknown
-
-// The erased face of either form, as the builder stores it.
-export type AnyStepValue = AnyStep | { readonly run: AnyStep; readonly methods?: Verbs }
-
-// Both forms reduce to the same two things. One place, so nothing downstream
-// has to know which was written.
-export function readStep(s: AnyStepValue): { run: AnyStep; methods: Verbs } {
-  return typeof s === 'function' ? { run: s, methods: {} } : { run: s.run, methods: s.methods ?? {} }
-}
 
 // The ONE place any of the three becomes an outcome. It runs on the way back
 // from every step, so an author never calls it and never sees it — which is the

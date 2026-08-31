@@ -1,9 +1,8 @@
 import type { Abort, Ok } from './abort.ts'
 import {
-  readStep,
   runSteps,
   type AnyStep,
-  type AnyStepValue,
+  type Extension,
   type Next,
   type Outcome,
   type Verbs,
@@ -74,8 +73,13 @@ export interface State {
   // sides `DeclGate` compares.
   readonly intents: PropertyKey
   readonly declares: PropertyKey
-  // The verbs its steps have contributed.
-  readonly verbs: Verbs
+  // The verbs its extensions declared, as the BUILDER offers them — full
+  // signatures, not the runtime factories. The two are different shapes and
+  // constraining this to the factory map is a mistake that reads as harmless:
+  // a concrete state then fails its own constraint, `S` falls back to `State`
+  // wherever it is inferred, and every verb sees the widest possible scope
+  // instead of the one it was called on.
+  readonly verbs: object
 }
 
 // ── reading what a step handed back ──────────────────────────────────────────
@@ -138,92 +142,43 @@ type DeclGate<
 // first, then intersect.
 export type Ctx<S extends State> = Omit<S['seed'], keyof S['acc']> & S['acc']
 
-// ── the verbs a step contributed ─────────────────────────────────────────────
-// COMPUTED from the factory rather than declared beside it — and computed from
-// what it RETURNS, not only from its arguments. Reading the arguments alone was
-// the first shape and it left three holes at once, each measured (§14): the
-// WORD its step says was dropped, which reopened the intent fail-open through
-// the back door; what it POPULATES was dropped; and what it REQUIRES of the ctx
-// was checked by nothing, so a verb could demand an entry no scope has and
-// still compile.
-//
-// Reading the return closes all three at once, and makes literal the sentence
-// the first shape only claimed: a verb IS `.step` with its arguments curried.
-// The factory is `(...args) => a step`, so the method is `(...args) => whatever
-// `.step` would have produced for that step`.
-
-// Pull a step's four axes out of whichever form the factory returned. The
-// object form is unwrapped first, so `{ run }` and a bare function read alike.
-//
-// A LEAF has two parameters and still matches the three-parameter pattern, with
-// `Add` inferred as `unknown` — measured. `unknown` is not an `object`, and
-// `X & unknown` is `X`, so it contributes nothing either way; the `extends
-// object` narrowing below makes that explicit rather than accidental.
-type StepOf<V> = V extends { readonly run: infer R } ? R : V
-
-type NeedOfStep<Step> = Step extends (app: infer N, ...rest: never[]) => unknown
-  ? N extends object
-    ? N
-    : {}
-  : {}
-type CtxOfStep<Step> = Step extends (app: never, ctx: infer C, ...rest: never[]) => unknown
-  ? C
-  : unknown
-type AddOfStep<Step> = Step extends (
-  app: never,
-  ctx: never,
-  next: (delta: infer A) => any,
-) => unknown
-  ? A extends object
-    ? A
-    : {}
-  : {}
-type RetOfStep<Step> = Step extends (...args: never[]) => infer R ? Awaited<R> : never
-
-// The one gate that does NOT ride an argument, because a verb's step is not an
-// argument of anything: the builder never receives it, it manufactures it. So
-// the METHOD ITSELF becomes the message, which still lands on the call — a
-// string has no call signatures, so `.header('x', '1')` fails on that line and
-// prints the reason. That is as early as this can land, and it is not the
-// return-type poisoning §2 rejects: nothing downstream has to touch the result
-// for it to fire.
-// A template-literal message does NOT work here, and that is worth recording:
-// the property resolves to a string literal, and the call error prints its
-// APPARENT type — `Type 'String' has no call signatures` — so the reason is
-// lost. Naming the message as a PROPERTY, the way `DepGuard` does, puts it back
-// in the diagnostic, because the object type is printed whole.
-type CtxGate<S extends State, Step> = Ctx<S> extends CtxOfStep<Step>
-  ? unknown
-  : {
-      readonly '⛔ this verb reads a ctx this scope has not got — is a step missing before it?': never
-    }
-
-type VerbsOn<S extends State> = {
-  readonly [K in keyof S['verbs']]: S['verbs'][K] extends (...args: infer A) => infer V
-    ? CtxGate<S, StepOf<V>> extends object
-      ? CtxGate<S, StepOf<V>>
-      : (
-          ...args: A
-        ) => Grown<S, NeedOfStep<StepOf<V>>, AddOfStep<StepOf<V>>, RetOfStep<StepOf<V>>, StepOf<V>>
-    : never
-}
-
-// What a scope IS to whoever holds one: the callable builder plus the verbs its
-// steps have contributed. The verbs are a plain record with no call signature
+// What a scope IS to whoever holds one: the callable builder, plus the verbs
+// its extensions declared. The verbs are a plain record with no call signature
 // of their own, so intersecting them creates no overload — which is what made
 // the always-callable shape look impossible at first.
-export type Surface<S extends State> = Scope<S> & VerbsOn<S>
+//
+// A verb's signature is the extension's to write, and it is written with
+// `this: Surface<S>`: that is how a verb reads the accumulated state without
+// knowing it, and how it can GROW or REFINE the ctx. `this` binds here because
+// this is a METHOD call — on the direct call above it binds to `void`, which is
+// the whole reason the state lives in a parameter.
+export type Surface<S extends State> = Scope<S> & S['verbs']
 
-type VerbsIn<V> = V extends { readonly methods: infer M } ? (M extends Verbs ? M : {}) : {}
+// How anything OUTSIDE the builder reads what a scope accumulated — a mount
+// asking which words it can say, a test asking what it yields. Under the
+// intersection form this needed a phantom per axis, present only so an adapter
+// could see past the intersection; with the state in a parameter there is
+// nothing to see past, and one conditional reads all of it.
+//
+// The phantoms are gone with it, and one of them was actively harmful: an
+// INVARIANT `__int` blocked the inference of `S` from a verb's `this`, so a
+// verb could not read the scope it was called on at all (the trap-4 family —
+// an invariant position misbehaves in inference, not only in assignment).
+export type StateOf<Sc> = Sc extends Scope<infer S> ? S : never
+export type IntentsOf<Sc> = StateOf<Sc>['intents']
+export type ResultOf<Sc> = StateOf<Sc>['result']
 
-type Grown<S extends State, Need2 extends object, Add extends object, Ret, V> = Surface<{
+// What `.step` grows. An extension writes its own transformation instead —
+// `Refined<S, N, T>` in the validation extension is one — which is how a verb
+// can REPLACE an entry where a step can only add to it.
+export type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Surface<{
   need: S['need'] & Need2
   seed: S['seed']
   acc: S['acc'] & Add
   result: S['result'] | ValueOf<Awaited<Ret>>
   intents: S['intents'] | IntentKeysOf<Awaited<Ret>>
   declares: S['declares']
-  verbs: S['verbs'] & VerbsIn<V>
+  verbs: S['verbs']
 }>
 
 export interface Scope<S extends State> {
@@ -236,14 +191,6 @@ export interface Scope<S extends State> {
 
   // The ordered stack the call folds.
   readonly steps: readonly AnyStep[]
-  // Phantom and INVARIANT — present in both positions on purpose. With only the
-  // parameter it is contravariant, and a caller naming the type arguments at a
-  // mount could supply `never` and satisfy a gate the scope still fails (§34,
-  // on the capability axis; the same hole, the same shape).
-  //
-  // Every word this scope can say, INCLUDING one returned from a raw step: the
-  // word rides the step's return type and is never erased into the outcome.
-  readonly __int?: (i: S['intents']) => S['intents']
 
   // THE PRIMITIVE, in the open, and the only verb. What a step says by
   // ANNOTATION — its app requirement, its ctx requirement, what it populates —
@@ -263,13 +210,24 @@ export interface Scope<S extends State> {
   // plain domain value, and those three have nothing in common but being
   // values. The fold normalises whichever arrives, so no author writes an
   // outcome by hand.
-  step<Need2 extends object, Add extends object, Ret, V extends { run: unknown }>(
-    s: (
-      | ((app: Need2, ctx: Ctx<S>, next: Next<Add>) => Ret | Promise<Ret>)
-      | (V & { run: (app: Need2, ctx: Ctx<S>, next: Next<Add>) => Ret | Promise<Ret> })
-    ) &
-      DeclGate<S, Ret>,
-  ): Grown<S, Need2, Add, Ret, V>
+  step<Need2 extends object, Add extends object, Ret>(
+    s: ((app: Need2, ctx: Ctx<S>, next: Next<Add>) => Ret | Promise<Ret>) & DeclGate<S, Ret>,
+  ): Grown<S, Need2, Add, Ret>
+
+  // Enrich the BUILDER, and only the builder: this pushes no step, and an
+  // extension never appears in the step list. Its verbs do the fold work, when
+  // they are called.
+  extend<M extends object>(
+    ext: Extension<M>,
+  ): Surface<{
+    need: S['need']
+    seed: S['seed']
+    acc: S['acc']
+    result: S['result']
+    intents: S['intents']
+    declares: S['declares']
+    verbs: S['verbs'] & M
+  }>
 }
 
 // A CARRIER is the thing you pick exactly one of: who is on the other end and
@@ -298,7 +256,8 @@ type DeclaredOf<C> = C extends { readonly __declares?: infer M }
 interface Built {
   (app: object, params: object): Promise<Outcome<unknown>>
   readonly steps: readonly AnyStep[]
-  step(s: AnyStepValue): Built
+  step(s: AnyStep): Built
+  extend(ext: { methods: Verbs }): Built
 }
 
 function make(steps: readonly AnyStep[], verbs: Verbs): Built {
@@ -307,17 +266,17 @@ function make(steps: readonly AnyStep[], verbs: Verbs): Built {
     steps,
     // One place where a step is added, and the only place a verb is registered,
     // so a step cannot contribute a verb without also running.
-    step: (s: AnyStepValue): Built => {
-      const { run, methods } = readStep(s)
-      return make([...steps, run], { ...verbs, ...methods })
-    },
+    // A step is added HERE and nowhere else, so nothing can join the fold
+    // without being written as a step.
+    step: (s: AnyStep): Built => make([...steps, s], verbs),
+    // An extension registers verbs and adds NO step. That is the whole
+    // difference, and it is visible in this line.
+    extend: (ext: { methods: Verbs }): Built => make(steps, { ...verbs, ...ext.methods }),
   })
   // Every contributed verb, wired the same way: call it, get a step, push it.
   for (const [name, factory] of Object.entries(verbs)) {
-    ;(self as unknown as Record<string, unknown>)[name] = (...args: never[]) => {
-      const { run } = readStep(factory(...args) as AnyStepValue)
-      return make([...steps, run], verbs)
-    }
+    ;(self as unknown as Record<string, unknown>)[name] = (...args: never[]) =>
+      make([...steps, factory(...args)], verbs)
   }
   return self
 }

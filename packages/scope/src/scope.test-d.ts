@@ -78,7 +78,7 @@ describe('what a scope yields', () => {
         if (!user) return 'anonymous' as const
         return next({ name: user.name })
       })
-      .step({ run: async (_app: {}, ctx: { readonly name: string }) => ctx.name.length })
+      .step(async (_app: {}, ctx: { readonly name: string }) => ctx.name.length)
 
     const out = await h({ users: { byId: () => undefined } }, { token: null, params: {} })
     // The guard's own value is here. Reading only the closing step missed it —
@@ -92,7 +92,7 @@ describe('what a scope yields', () => {
       .step(async (_app: {}, ctx, next: Next<{ name: string }>) =>
         ctx.token === null ? refused('anonymous') : next({ name: ctx.token }),
       )
-      .step({ run: async (_app: {}, ctx: { readonly name: string }) => ctx.name.length })
+      .step(async (_app: {}, ctx: { readonly name: string }) => ctx.name.length)
 
     const out = await h({}, { token: 'good', params: {} })
     if (out.ok) expectTypeOf(out.value).toEqualTypeOf<number>()
@@ -129,7 +129,7 @@ describe('what a scope yields', () => {
   // Still a builder, still callable — both at once, which is the whole point of
   // carrying the state in a parameter.
   it('is a builder and the function that runs it at the same time', async () => {
-    const s = scope(fixture).step({ run: async (_app: {}, _ctx: {}) => 'v' as const })
+    const s = scope(fixture).step(async (_app: {}, _ctx: {}) => 'v' as const)
     expectTypeOf(s).toHaveProperty('step')
     const out = await s({}, { token: null, params: {} })
     if (out.ok) expectTypeOf(out.value).toEqualTypeOf<'v'>()
@@ -140,7 +140,7 @@ describe('what a step knows of the app', () => {
   it('accumulates into what the call demands, and a chain missing it is refused', () => {
     const h = scope<{ readonly id: string }>()
       .step(async (_app: Repos, _ctx, next: Next<{}>) => next({}))
-      .step({ run: async (_app: {}, _ctx: {}) => 'done' })
+      .step(async (_app: {}, _ctx: {}) => 'done')
 
     h({ users: { byId: () => undefined } }, { id: 'u1' })
     // @ts-expect-error — the chain does not expose `users`
@@ -148,9 +148,9 @@ describe('what a step knows of the app', () => {
   })
 
   it('types the scope execution parameters, so seeding the wrong key names it', () => {
-    const h = scope<{ readonly id: string }>().step({
-      run: async (_app: {}, _ctx: { readonly id: string }) => 'done',
-    })
+    const h = scope<{ readonly id: string }>().step(
+      async (_app: {}, _ctx: { readonly id: string }) => 'done',
+    )
     // @ts-expect-error — the run brings `id`, not `courseId`
     h({}, { courseId: 'c1' })
   })
