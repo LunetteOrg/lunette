@@ -11,52 +11,37 @@ the `errore` library (errors as values) applied to DI.
 .                       THIS monorepo (npm org: lntt) — the product
   packages/wire         @lntt/wire   the core (runtime + type tests)
   packages/scope        @lntt/scope  the host-agnostic scope runtime — ONE
-                        primitive (a step wrapping the rest of the fold) with
-                        every verb as sugar over it; a scope IS the function that
-                        runs it. Framework-free: carriers and extensions ship as
-                        tree-shakable subpaths and the core names none —
-                        "./http" | "./trpc" | "./react-router" (carriers: ctx,
-                        entry, words), "./body" (body('json'|'form')), "./query",
-                        "./cookies", "./headers" (incoming reads),
-                        "./standard-schema" (validation, carrier-free).
-                        The outbound side is a RETURNED value — response(v,
-                        init), with json/html/text as its sugar — not a sink.
-                        The contract is docs/design/scope-api.md — READ IT FIRST;
-                        it also lists what is decided there and not yet built
-  packages/integration  @lntt/integration  host adapters as tree-shakable
-                        subpaths ("./hono", "./express", "./react-router",
-                        "./trpc") — wire as a guest, per-host native routing;
-                        "./node" is the shared IncomingMessage→Request lift the
-                        non-Fetch Node hosts share (the origin is GIVEN, not
-                        guessed — the host framework owns that policy, §40),
-                        "./http" the codec a hand-wired Fetch host composes.
-                        SET ASIDE while the scope core is rebuilt (#30): its
-                        five remaining mounts and the gate tests (route, intent,
-                        capability) live on `origin/story-30/scope-impl`, 27
-                        files, and come back AFTER the core settles — porting
-                        them against a moving surface is the work done twice
+                        primitive (a step wrapping the rest of the fold) and a
+                        scope IS the function that runs it, from the first line.
+                        BEING REBUILT (#30): the core is `primitive.ts` +
+                        `base.ts` and nothing else ships yet. The carriers, the
+                        extensions, the host mounts and the examples land on it
+                        in that order. The contract is docs/design/scope-api.md
+                        — READ IT FIRST; its "Where this goes next" is the work
+                        order, and its "Traps already paid for" is the list a
+                        rewrite must inherit rather than rediscover
   packages/{cli,listener,flow}       scaffolds only — no shipped design;
                         their stories live in the tracker
-  examples/             example apps USING the shipped packages (IN review
-                        scope): examples/app is the broad issue-1 app (its use
-                        cases as @lntt/scope scopes); per-host entries mount
-                        it via @lntt/integration/*, one of them ALSO wired by
-                        hand with no adapter (runScope directly, §33);
-                        examples/two-chains and examples/bare-express are
-                        standalone (no example-app import); examples/
-                        cloudflare-workers/{hono,express} are standalone too and
-                        run on workerd — the entries where the no-I/O-outside-a-
-                        request rule is enforced rather than described (§36)
   research/             live research prototypes (prior art, not products) —
-                        PoC code proving out @lntt/wire's behaviour and DX,
-                        OUT OF SCOPE for code review (correctness/security/
-                        style); only whether it demonstrates its point matters
+                        PoC code proving out behaviour and DX, OUT OF SCOPE for
+                        code review (correctness/security/style); only whether
+                        it demonstrates its point matters. `terminal-step` and
+                        `parameterised-builder` are the two the scope builder
+                        was settled on, each carrying its measurement
 ```
 
+**`@lntt/integration` and `examples/` are SET ASIDE**, deliberately, while the
+core is rebuilt (#30). Both live on `origin/story-30/scope-impl` — 27
+integration files, 191 example files, verified present — along with most of the
+extensions, and they come back in that order once the core and its sugars are
+settled. Porting them against a surface still in motion is the work done twice
+that the design document exists to avoid; their last state on THIS branch is in
+the history, one `git show` away.
+
 The old `@lntt/http` (the `pipe`-based "wire owns the server" posture) was
-superseded by the scope runtime (`@lntt/scope` + `@lntt/integration`, "wire as
-a guest") and removed; if the own-the-loop posture is ever needed it is rebuilt
-fresh on the scope core, not resurrected. Nothing is published to npm yet.
+superseded by the scope runtime and removed; if the own-the-loop posture is
+ever needed it is rebuilt fresh on the scope core, not resurrected. Nothing is
+published to npm yet.
 
 Everything outside this monorepo (design history, reference apps, the
 production proving ground) lives in its own repo and is referenced from
@@ -143,7 +128,8 @@ the tracker when relevant — never from here.
   are not actionable; the only thing worth checking is whether the
   prototype demonstrates what it set out to. Scope `/review` and
   `/code-review` to `packages/`, `docs/`, and root config.
-- **Reviewing `examples/`**: they ARE reviewed, but as DEMONSTRATIONS, not as
+- **Reviewing `examples/`** (set aside today — this stands for when they return):
+  they ARE reviewed, but as DEMONSTRATIONS, not as
   production systems. What counts: does it teach the right thing, is every
   claim in its prose true, does it compile and pass, would a reader copying
   the SHAPE be led right. What does not: production hardening — concurrency

@@ -1,1 +1,0 @@
-{ "extends": "./tsconfig.json", "include": [], "files": ["src/hono.ts", "test/hono.test.ts", "test/hono.test-d.ts"] }
