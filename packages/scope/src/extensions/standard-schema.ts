@@ -1,13 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { Ctx, State, Surface } from '../scope.ts'
-import {
-  invalid,
-  type AnyStep,
-  type Extension,
-  type Issue,
-  type Next,
-  type Outcome,
-} from '../step.ts'
+import { invalid, type AnyStep, type Extension, type Next, type Outcome } from '../step.ts'
 
 // VALIDATION, as an extension — `@lntt/scope/standard-schema`. It is the first
 // one, and the one that shows what an extension IS: it contributes a VERB and
@@ -98,7 +91,9 @@ const validateStep =
   ): Promise<Outcome<unknown>> => {
     // `~standard.validate` may be sync or async; awaiting covers both.
     const result = await schema['~standard'].validate(ctx[name])
-    if (result.issues !== undefined) return invalid(result.issues as readonly Issue[])
+    // No cast: the core writes its own `Issue`, and Standard Schema's is
+    // structurally that — which is the whole point of the core not importing it.
+    if (result.issues !== undefined) return invalid(result.issues)
     return next({ [name]: result.value })
   }
 

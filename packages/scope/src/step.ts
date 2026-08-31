@@ -1,10 +1,31 @@
-import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { isAbort, isOk, type Abort, type Ok } from './abort.ts'
 
-// A schema issue, from Standard Schema's own issue shape — a TYPE, not a
-// vocabulary word: every carrier can have one, so it belongs to the outcome
-// rather than to any carrier.
-export type Issue = StandardSchemaV1.Issue
+// What a failed parse says. A TYPE, not a vocabulary word: every carrier can
+// have one, so it belongs to the outcome rather than to any carrier.
+//
+// WRITTEN OUT, not imported from `@standard-schema/spec`, and the distinction
+// is the same one the rest of the core makes. The third branch of an `Outcome`
+// has to be renderable by a mount that knows nothing about who produced it, so
+// the core does need ONE issue shape — that much is mechanism. What it does not
+// need is a third party's: naming Standard Schema's here made the core neutral
+// about the schema ENGINE (an extension may run any) while not neutral about
+// the issue SHAPE, so an extension validating with something else had to
+// produce that library's type anyway.
+//
+// Structurally it IS that type, verified assignable both ways, so
+// `@lntt/scope/standard-schema` hands its issues over without a cast. The
+// difference is which package owns the contract a mount codes against: this one
+// changes when we change it, not when a spec revs. And the `.` subpath stops
+// pulling a dependency into the program of anyone who validates with something
+// else — the extension keeps it, because it genuinely runs `~standard.validate`.
+interface PathSegment {
+  readonly key: PropertyKey
+}
+
+export interface Issue {
+  readonly message: string
+  readonly path?: ReadonlyArray<PropertyKey | PathSegment> | undefined
+}
 
 // The fold failing ON ITS OWN: the input did not validate. Deliberately NOT an
 // abort — an abort is a word from a carrier's vocabulary and the core has none,
