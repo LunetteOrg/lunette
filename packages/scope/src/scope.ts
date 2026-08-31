@@ -101,7 +101,26 @@ type IntentKeysOf<R> = R extends Abort<infer I>
     ? keyof I
     : never
 
-// ── gate: the SCOPE does not coin that word ──────────────────────────────────
+// ── gate: what the step HANDS BACK ───────────────────────────────────────────
+// Two things are checked about one type, so they share the `Awaited` — measured
+// at 2% of the pair's cost, and the pair is 7% of a chain's total.
+//
+// FIRST, a step that returns nothing. Forgetting `return` in front of `next(…)`
+// is silent and plausible: the inner steps run, the leaf computes its value,
+// and the fold throws it away — `undefined` is not branded and not a word, so
+// the terminal branch reads it as an ordinary domain value and the run SUCCEEDS
+// with `value: undefined`. A function with no `return` at all infers `void`,
+// while `return undefined` infers `undefined`, and the two are distinct here —
+// so a leaf that really has nothing to hand back says so and passes, and `null`
+// is a domain value that never reaches the check. The gap: a step returning on
+// one path and falling off the other infers `T | undefined`, not `void`, and
+// passes. Catching that would refuse every legitimate result that can be absent.
+//
+// Without this the mistake still surfaces, but as `string | void` at whoever
+// consumes `out.value` — in another file, pointing at a step its author never
+// wrote, and not at all in a test that only reads `out.ok && out.value`.
+//
+// SECOND, a word the scope does not coin.
 // It rides the ARGUMENT, not the return type. The return-type form is cheaper
 // but only fires when the NEXT call touches the poisoned type, so a BASE — a
 // carrier and some steps with no leaf, the shape a shared `gated()` has —
@@ -111,15 +130,35 @@ type IntentKeysOf<R> = R extends Abort<infer I>
 // `A` and `U` are let-bindings computed once. They sit on the ALIAS, never on
 // the method: a defaulted parameter in a method's own list is caller-
 // overridable, and naming it `never` walks straight through the gate.
-type WordGate<
+type ReturnGate<
   S extends State,
   Ret,
   A = Awaited<Ret>,
   U = Exclude<IntentKeysOf<A>, S['vocabulary']>,
-> = [U] extends [never]
-  ? unknown
-  : `⛔ this scope does not coin the word: ${U & string} — is it the right carrier?`
+> = [A] extends [void]
+  ? [A] extends [undefined]
+    ? unknown
+    : '⛔ this step returns nothing — did you forget `return` in front of `next(…)`?'
+  : [U] extends [never]
+    ? unknown
+    : `⛔ this scope does not coin the word: ${U & string} — is it the right carrier?`
 
+// ── gate: a step that returns NOTHING ────────────────────────────────────────
+// Forgetting `return` in front of `next(…)` is silent and plausible: the inner
+// steps run, the leaf computes its value, and the fold throws it away — the
+// step handed back `undefined`, which is not branded and not a word, so the
+// terminal branch reads it as an ordinary domain value and the run SUCCEEDS
+// with `value: undefined`.
+//
+// A function with no `return` at all infers `void`; `return undefined` infers
+// `undefined`, and the two are distinct in this position. So the mistake is
+// separable from the deliberate case, and a leaf that really has nothing to
+// hand back writes `return undefined` and passes. `null` is a domain value like
+// any other and is not assignable to `void`, so it never reaches here.
+//
+// The gap this leaves: a step that returns on one path and falls off the other
+// infers `T | undefined`, not `void`, and passes. Catching that would mean
+// refusing every legitimate result that can be absent.
 // The ctx a step reads: the arguments the run was given, plus everything the
 // steps before it populated.
 //
@@ -234,7 +273,8 @@ export interface Scope<S extends State> {
   // nothing in common but being values, and the fold normalises whichever
   // arrives.
   step<Need2 extends object, Add extends object, Ret>(
-    s: ((app: Need2, ctx: Ctx<S>, next: Next<Add>) => Ret | Promise<Ret>) & WordGate<S, Ret>,
+    s: ((app: Need2, ctx: Ctx<S>, next: Next<Add>) => Ret | Promise<Ret>) &
+      ReturnGate<S, Ret>,
   ): Grown<S, Need2, Add, Ret>
 
   // Enrich the BUILDER, and only the builder: this pushes no step, and an

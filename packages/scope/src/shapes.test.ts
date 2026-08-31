@@ -128,7 +128,7 @@ describe('the five shapes, composed', () => {
     log.length = 0
     const out = await noteScope(app, { token: null, params: {} })
     expect(out.ok).toBe(false)
-    expect(!out.ok && 'abort' in out && out.abort.intent).toEqual({
+    expect(!out.ok && out.abort.intent).toEqual({
       kind: 'refused',
       why: 'no session',
     })
@@ -139,7 +139,7 @@ describe('the five shapes, composed', () => {
     const empty: Repos = { ...app, notes: { byId: () => undefined } }
     const out = await noteScope(empty, { token: 'good', params: {} })
     expect(out.ok).toBe(false)
-    expect(!out.ok && 'abort' in out && out.abort.intent).toEqual({ kind: 'gone', what: 'note' })
+    expect(!out.ok && out.abort.intent).toEqual({ kind: 'gone', what: 'note' })
   })
 
   it('is the function that runs it AND still a builder', async () => {
@@ -268,5 +268,51 @@ describe('a word whose name was never declared', () => {
       abort<{ readonly refusal: true }>({ kind: 'improvised' }),
     )
     expect(true).toBe(true)
+  })
+})
+
+// ── a step that returns nothing ──────────────────────────────────────────────
+// The silent one: forgetting `return` lets the inner steps run and throws their
+// result away, and the run SUCCEEDS with `value: undefined`. Nothing is
+// branded, nothing is a word, so the terminal branch reads it as a domain value.
+describe('a step that hands back nothing', () => {
+  it('is REFUSED where it was written', () => {
+    const refuse = () => {
+      scope(fixture).step(
+        // @ts-expect-error ⛔ this step returns nothing — did you forget `return`?
+        async (_app: {}, _ctx: {}, next: Next<{ x: number }>) => {
+          next({ x: 1 })
+        },
+      )
+    }
+    expect(typeof refuse).toBe('function')
+  })
+
+  it('and the mistake it prevents is a SUCCESS, which is why it is worth a gate', async () => {
+    // the same step, forced past the gate the way plain JS would reach it
+    const forgot = (async (_app: {}, _ctx: {}, next: Next<{ x: number }>) => {
+      next({ x: 1 })
+    }) as unknown as (app: {}, ctx: {}, next: Next<{ x: number }>) => Promise<number>
+
+    const h = scope(fixture)
+      .step(forgot)
+      .step(async (_app: {}, ctx: { readonly x: number }) => `leaf saw ${ctx.x}`)
+
+    const out = await h({}, { token: null, params: {} })
+    // the leaf really ran and really produced a value — and it is gone
+    expect(out.ok).toBe(true)
+    expect(out.ok && out.value).toBeUndefined()
+  })
+
+  it('lets a leaf with nothing to hand back say so DELIBERATELY', async () => {
+    const h = scope(fixture).step(async (_app: {}, _ctx: {}) => undefined)
+    const out = await h({}, { token: null, params: {} })
+    expect(out.ok && 'value' in out).toBe(true)
+  })
+
+  it('and `null` is an ordinary domain value, not the mistake', async () => {
+    const h = scope(fixture).step(async (_app: {}, _ctx: {}) => null)
+    const out = await h({}, { token: null, params: {} })
+    expect(out.ok && out.value).toBeNull()
   })
 })
