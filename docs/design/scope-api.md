@@ -28,7 +28,7 @@ two are named as such.
 | **transport feature** | what an extension needs (`body`, `query`, `request-headers`). One alphabet, read twice: against the carrier at `.extend`, against the host at the call. All three are READS — the outbound side needs none, it rides a carrier's word |
 | **intent** | a word a carrier coins (`redirect`, `code`, `rr7-data`) |
 | **registry** | the opaque map steps write and mounts read. The core never looks inside |
-| **outcome** | the three-branch result: `ok`, `abort`, `invalid`. BRANDED, so a step handing one back is told apart from one handing back a domain value. What the fold PRODUCES, never what an author writes |
+| **outcome** | the two-branch result: `ok`, `abort`. BRANDED, so a step handing one back is told apart from one handing back a domain value. What the fold PRODUCES, never what an author writes |
 | **response envelope** | what a carrier's outbound word carries: status, content type, headers, cookies. `json`/`html`/`text` are `response(…)` with a content type filled in |
 
 ## The shape
@@ -53,11 +53,15 @@ back, and in what shape, is decided when the carriers and extensions are ported
 onto this base, because that is where each one shows what it needs.
 
 > **Reading the rest of this document.** The sections below still write
-> `.extend(query)` and `.validate('params', schema)`. Those name SUGARS that are
-> not settled — today both are `.step(…)`, and whether either comes back is
-> decided in the port. Read them for WHAT they do, which stands: an extension
-> populates an entry, `validate` refines one. The verb is the open part, not the
-> behaviour.
+> `.extend(query)` and `.validate('params', schema)`. Neither is shipped. The
+> read extensions are #62 and today are `.step(…)`; VALIDATION left the core
+> altogether with §41 — a carrier-free `validate` had nothing to fail with, so
+> the core carried an `invalid` branch to give it somewhere to land, and both
+> are gone. It comes back per carrier, each failing in its own words (#64).
+>
+> Read them for WHAT they do, which stands: an extension populates an entry, and
+> a validation verb refines one. What changed is WHO owns the verb and the word
+> it fails with.
 
 Two arguments, split by LIFETIME. The first is the built chain — the
 DEPENDENCIES, alive as long as the process (§33 tier 1). The second is the
@@ -203,8 +207,8 @@ follow that the intersection form could not express:
   exactly one that does not return normally. The error convention agrees
   (principle 3) — a scope with no leaf, run, is a construction bug, and
   `{ ok: true, value: undefined }` would render a bug to its caller as success.
-  Note `Outcome<never>` is NOT empty: `abort` and `invalid` stay inhabited, so a
-  base that REFUSES has a perfectly good outcome and never reaches the throw.
+  Note `Outcome<never>` is NOT empty: `abort` stays inhabited, so a base that
+  REFUSES has a perfectly good outcome and never reaches the throw.
 
 `research/terminal-step` asked whether a step COULD close the builder and
 answered yes, with a number. The question that mattered was whether the builder
@@ -247,7 +251,15 @@ stream the request body into the Web `Request`?" is a claim about MACHINERY, not
 a type — Express supplies the same `Request` type whether or not `toWebRequest`
 filled it. So `Capability`/`CarrierGuard` survive for the mount, with §34's
 asymmetry intact: demand open, supply a written-out set.
-## Extensions populate the ctx; `validate` refines it
+
+## Extensions populate the ctx; a validation verb refines it
+
+> **§41 moved the verb.** This section was written when `validate` was a
+> carrier-FREE extension in the core, and the paragraph below still argues for
+> that. It is superseded: a carrier-free verb has no word to fail with, which is
+> why the core had to carry an `invalid` branch for it to land on. Both are gone
+> (#64). What still stands is everything about the ENTRIES — who populates them,
+> which are validatable, and why the registry is opaque.
 
 A carrier or an extension POPULATES ctx entries, always, by being extended.
 Extending IS reaching: `.extend(query)` means `ctx.query` is there, typed as
@@ -266,18 +278,23 @@ This keeps the capability axis exactly as §34 built it — the claim is made by
 `.extend`, because extending is what reaches the machinery. There is no
 per-call declaration to forget and no second place to look.
 
-`validate` is a CHANNEL, `@lntt/scope/standard-schema`, and a carrier-free one
-(`__needs: {}`): running a schema over a value asks nothing of the
-transport, so it composes on a bare `scope()` and on every carrier. That keeps
-the same split the rest of the design makes — the core owns the MECHANISM and
-never the ALPHABET. It owns the `ABORT`/`OK` brands and coins no intent (§40),
-the capability gate and no capability (§34), and now runs no schema and names no
-engine: a codebase validating with something else ships its own extension with its
-own `validate`.
+~~`validate` is a CHANNEL, and a carrier-free one: running a schema over a value
+asks nothing of the transport, so it composes on a bare `scope()` and on every
+carrier.~~ **Reversed by §41.** Running the schema asks nothing of the
+transport, but REFUSING does: a rejection has to be said, and every way of
+saying it is a word from some carrier's vocabulary. The carrier-free version had
+none, so the core grew a branch to hold the answer — the core owning a piece of
+the alphabet after all, which is the thing this split exists to prevent. The
+verb belongs to the carrier, and fails in its words (#64).
 
-What the core DOES keep is `Validatable` — what a scope HAS is what the carrier
-and the extensions populated, and only the core knows that set. The extension
-knows how to run a schema over one of them, and nothing more.
+What the core keeps either way is the MECHANISM and never the ALPHABET: the
+`ABORT`/`OK` brands with no intent of its own (§40), the capability gate with no
+capability (§34), and no schema engine — Standard Schema is a spec, and whoever
+passed the schema owns what runs.
+
+`Validatable` stays a core concern in shape: what a scope HAS is what the
+carrier and the extensions populated, and only the builder knows that set. The
+verb knows how to run a schema over one of them, and nothing more.
 
 **A guard's enrichment is validatable too**, and excluding it was arbitrary: a
 guard that calls an external service returns data as untrusted as a request
@@ -504,7 +521,7 @@ on `ctx.request` and a guard can parse it by hand.
 So the gate on `query` is ADVISORY, not enforcement, and that distinction is
 worth keeping straight — conflating the two is the "false safety" #38 warns
 about. It declines to offer a typed convenience for a case that does not exist,
-and points at `.validate('input', …)`, which is the declared way in.
+and points at validating `input`, which is the declared way in (#64).
 
 What is actually missing there is not a permission but an EXTENSION. tRPC
 exposes its own structured surface per request — `type`, `isBatchCall`, each
@@ -532,7 +549,7 @@ that holds one exposes it; there is no shared `request` extension.
 
 | extension | contributes | what its step ANNOTATES |
 |---|---|---|
-| `@lntt/scope/standard-schema` | `.validate(name, schema)`, and the registry entry a mount reads | the entry it refines |
+| validation — per CARRIER, not an extension (§41, #64) | a verb that refines an entry, failing in the carrier's own word | the entry it refines |
 | `@lntt/scope/body` — `body('json' \| 'form')` | `ctx.body`, parsed | a request whose body can be read |
 | `@lntt/scope/query` | `ctx.query` | `{ request: RequestHead }` — `url` is enough |
 | `@lntt/scope/cookies` | `ctx.cookies` | `{ request: RequestHead }` — `headers` is enough |
@@ -752,10 +769,10 @@ rediscover them.
 18. **Reading and parsing an entry fail for opposite reasons.** The I/O
     (`req.arrayBuffer()`) rejects when the stream dies — a reset socket, an
     aborted upload — and that THROW is infrastructure, left to propagate.
-    Parsing the bytes in hand is the client's mistake and collapses to the
-    `Invalid` branch (§40). A single `catch` over both told the client its
-    payload was malformed when the connection had broken, hiding a 5xx behind a
-    4xx.
+    Parsing the bytes in hand is the client's mistake, and is a WORD the carrier
+    coins (§41 — it was the core's `Invalid` branch when this was measured). A
+    single `catch` over both told the client its payload was malformed when the
+    connection had broken, hiding a 5xx behind a 4xx.
 
 ## Measured
 
@@ -841,9 +858,9 @@ per slice, deliberately — the branch that produced this document also produced
 
 ### Built and green
 
-`@lntt/scope`: `src/{index,scope,step,abort}.ts`, plus
-`@lntt/scope/standard-schema` — the first real extension and the shape of the
-rest. `src/fixture/` holds what does not ship. Every negative is
+`@lntt/scope`: `src/{index,scope,step,words}.ts`, and nothing else — no
+extension ships, and the package has ZERO dependencies. `src/fixture/` holds
+what does not ship. Every negative is
 mutation-tested. `research/parameterised-builder` and `research/terminal-step`
 carry the two measurements the builder's form was settled on.
 

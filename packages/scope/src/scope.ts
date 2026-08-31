@@ -194,9 +194,10 @@ type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Sur
 //   declared   `.status(201)` → `{ pinned: 201 }`      ✓
 //   computed   `.status(201)` → `{ pinned: number }`   ✗
 //
-// `validate` would lose the entry's NAME and the schema's output type, which is
-// its whole job. The duplicate that buys this is tied by NAME below, so a verb
-// with no factory — or a factory no verb declares — is an error here.
+// A verb that REFINES an entry loses more than a literal that way — the entry's
+// name AND the schema's output type, which is its whole job (#64). The duplicate
+// that buys this is tied by NAME below, so a verb with no factory — or a factory
+// no verb declares — is an error here.
 export type Verbs = Readonly<Record<string, (...args: never[]) => AnyStep>>
 
 export interface Extension<M extends object> {

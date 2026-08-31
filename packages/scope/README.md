@@ -12,7 +12,9 @@ and land as `@lntt/integration` once it settles.
 
 > **This README describes the pre-#30 surface** (`.input`, `.guard`, `.handle`,
 > `runScope`) and is being rewritten with the carriers. The shipped API today is
-> `scope()`, `.step()` and `.extend()`.
+> `scope()`, `.step()` and `.extend()` — and nothing else: no carrier and no
+> extension ship yet, so the Standard Schema validation described below is not
+> there. It comes back per carrier (§41, #64).
 
 ## The model
 

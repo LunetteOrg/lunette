@@ -101,9 +101,9 @@ the tracker when relevant — never from here.
   other step) · step (the primitive — distinct from wire's LAYER, a different
   mechanism, §33) · verb (a method a step contributes to the BUILDER — not a
   WORD, which is a value a step returns) · leaf (the innermost step, the one
-  that does not call `next`) · entry (a ctx key `validate` may name: either arrives in
-  the execution parameters or is derived by an extension) · enrichment (what a
-  guard returns) · transport feature (RETIRED at the definition site — what a
+  that does not call `next`) · entry (a ctx key a validation verb may name:
+  either arrives in the execution parameters or is derived by an extension) ·
+  enrichment (what a guard returns) · transport feature (RETIRED at the definition site — what a
   step needs of the transport is the ctx it ANNOTATES, checked by contravariance;
   the name survives only at the MOUNT) ·
   intent (a word a carrier coins) · vocabulary (`State['vocabulary']`, a
@@ -111,7 +111,8 @@ the tracker when relevant — never from here.
   `WordGate` reads a step's return against) · intents (`State['intents']`: the
   words the steps written so far actually SAY — the demand side, accumulated at
   every `.step`, and what a MOUNT asks about) · registry (opaque: steps write, mounts
-  read) · effects · outcome (`ok`/`abort`/`invalid`) · capability (an OPEN
+  read) · effects · outcome (`ok`/`abort` — validation left the core with §41,
+  and the third branch went with it) · capability (an OPEN
   alphabet — the core enumerates none; demand is open, supply is a written-out
   set, so an unclaimed one mounts nowhere, and widening a host's set is a claim
   about machinery, §34) · dialect.

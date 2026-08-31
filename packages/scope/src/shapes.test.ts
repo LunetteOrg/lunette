@@ -64,8 +64,9 @@ const authenticated = async (
 }
 
 // ── 3. REFINE ────────────────────────────────────────────────────────────────
-// Populate a key the ctx ALREADY has, narrower. This is what `validate` is, and
-// it is why `Ctx` is an override and not the intersection it looks like (§9):
+// Populate a key the ctx ALREADY has, narrower. It is what a carrier's
+// validation verb will do (#64), and why `Ctx` is an override rather than the
+// intersection it looks like (§9):
 // intersecting the old type with the new gives `never` in the ordinary case — a
 // field nobody can use, and no error anywhere.
 const refineToken = async (
