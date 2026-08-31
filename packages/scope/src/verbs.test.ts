@@ -58,8 +58,7 @@ interface PinVerb {
     need: S['need']
     args: S['args']
     acc: S['acc'] & { readonly pinned: N }
-    result: S['result']
-    intents: S['intents']
+    returns: S['returns']
     vocabulary: S['vocabulary']
     verbs: S['verbs']
   }>

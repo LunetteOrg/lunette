@@ -51,14 +51,13 @@ export interface State {
   // What the steps have populated so far.
   readonly acc: object
   // What the scope can YIELD: the union of the domain values its steps return.
-  readonly result: unknown
+  readonly returns: unknown
   // The two sides `WordGate` compares, and they are supply and demand.
   // `vocabulary` is what the carrier COINS — every word this scope may say,
   // whether or not anything says it. `intents` is what the steps written so far
   // actually SAY, accumulated at every `.step`. What you MAY say, against what
   // you HAVE said: the first gates a step as it is written, the second is what
   // a mount asks about, to know whether it can render them all.
-  readonly intents: PropertyKey
   readonly vocabulary: PropertyKey
   // The verbs its extensions declared, as the BUILDER offers them — full
   // signatures, not the runtime factories. Constraining this to the factory map
@@ -163,8 +162,8 @@ type VerbGate<M, U = Extract<keyof M, ReservedVerb>> = [U] extends [never]
 // replaced were not merely redundant, an INVARIANT one blocked the inference of
 // `S` from a verb's `this` altogether.
 export type StateOf<Sc> = Sc extends Scope<infer S> ? S : never
-export type IntentsOf<Sc> = StateOf<Sc>['intents']
-export type ResultOf<Sc> = StateOf<Sc>['result']
+export type IntentsOf<Sc> = IntentKeysOf<StateOf<Sc>['returns']>
+export type ResultOf<Sc> = ValueOf<StateOf<Sc>['returns']>
 
 // What `.step` grows. An extension writes its own transformation instead —
 // `Refined<S, N, T>` in the validation extension is one — which is how a verb
@@ -173,8 +172,7 @@ type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Sur
   need: S['need'] & Need2
   args: S['args']
   acc: S['acc'] & Add
-  result: S['result'] | ValueOf<Awaited<Ret>>
-  intents: S['intents'] | IntentKeysOf<Awaited<Ret>>
+  returns: S['returns'] | Awaited<Ret>
   vocabulary: S['vocabulary']
   verbs: S['verbs']
 }>
@@ -216,7 +214,7 @@ export interface Scope<S extends State> {
   <Pub extends object>(
     app: Pub & DepGuard<Pub, S['need']>,
     args: S['args'],
-  ): Promise<Outcome<S['result']>>
+  ): Promise<Outcome<ValueOf<S['returns']>>>
 
   // The ordered stack the call folds.
   readonly steps: readonly AnyStep[]
@@ -248,8 +246,7 @@ export interface Scope<S extends State> {
     need: S['need']
     args: S['args']
     acc: S['acc']
-    result: S['result']
-    intents: S['intents']
+    returns: S['returns']
     vocabulary: S['vocabulary']
     verbs: S['verbs'] & M
   }>
@@ -383,8 +380,7 @@ type Empty<Args extends object, Vocab extends PropertyKey> = {
   need: {}
   args: Args
   acc: {}
-  result: never
-  intents: never
+  returns: never
   vocabulary: Vocab
   verbs: {}
 }
