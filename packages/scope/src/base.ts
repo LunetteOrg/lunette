@@ -122,19 +122,72 @@ type DeclGate<
 export type Ctx<S extends State> = Omit<S['seed'], keyof S['acc']> & S['acc']
 
 // ── the verbs a step contributed ─────────────────────────────────────────────
-// COMPUTED from each factory rather than declared beside it. A factory is
-// `(...args) => a step`, so the method is `(...args) => the scope`: same
-// arguments, and pushing the step is what the builder does with the result. A
-// hand-written declaration was a duplicate of that argument list which could
-// drift from it with no error anywhere.
+// COMPUTED from the factory rather than declared beside it — and computed from
+// what it RETURNS, not only from its arguments. Reading the arguments alone was
+// the first shape and it left three holes at once, each measured (§14): the
+// WORD its step says was dropped, which reopened the intent fail-open through
+// the back door; what it POPULATES was dropped; and what it REQUIRES of the ctx
+// was checked by nothing, so a verb could demand an entry no scope has and
+// still compile.
 //
-// The verb returns the scope UNCHANGED: it pushes fold work and contributes no
-// type-level state of its own. A verb that DOES contribute — a `.status(201)`
-// pinning a literal for a host's codec — needs the factory's return type read
-// as well, and that is not built (principle 5: no API without a case in hand).
+// Reading the return closes all three at once, and makes literal the sentence
+// the first shape only claimed: a verb IS `.step` with its arguments curried.
+// The factory is `(...args) => a step`, so the method is `(...args) => whatever
+// `.step` would have produced for that step`.
+
+// Pull a step's four axes out of whichever form the factory returned. The
+// object form is unwrapped first, so `{ run }` and a bare function read alike.
+//
+// A LEAF has two parameters and still matches the three-parameter pattern, with
+// `Add` inferred as `unknown` — measured. `unknown` is not an `object`, and
+// `X & unknown` is `X`, so it contributes nothing either way; the `extends
+// object` narrowing below makes that explicit rather than accidental.
+type StepOf<V> = V extends { readonly run: infer R } ? R : V
+
+type NeedOfStep<Step> = Step extends (app: infer N, ...rest: never[]) => unknown
+  ? N extends object
+    ? N
+    : {}
+  : {}
+type CtxOfStep<Step> = Step extends (app: never, ctx: infer C, ...rest: never[]) => unknown
+  ? C
+  : unknown
+type AddOfStep<Step> = Step extends (
+  app: never,
+  ctx: never,
+  next: (delta: infer A) => any,
+) => unknown
+  ? A extends object
+    ? A
+    : {}
+  : {}
+type RetOfStep<Step> = Step extends (...args: never[]) => infer R ? Awaited<R> : never
+
+// The one gate that does NOT ride an argument, because a verb's step is not an
+// argument of anything: the builder never receives it, it manufactures it. So
+// the METHOD ITSELF becomes the message, which still lands on the call — a
+// string has no call signatures, so `.header('x', '1')` fails on that line and
+// prints the reason. That is as early as this can land, and it is not the
+// return-type poisoning §2 rejects: nothing downstream has to touch the result
+// for it to fire.
+// A template-literal message does NOT work here, and that is worth recording:
+// the property resolves to a string literal, and the call error prints its
+// APPARENT type — `Type 'String' has no call signatures` — so the reason is
+// lost. Naming the message as a PROPERTY, the way `DepGuard` does, puts it back
+// in the diagnostic, because the object type is printed whole.
+type CtxGate<S extends State, Step> = Ctx<S> extends CtxOfStep<Step>
+  ? unknown
+  : {
+      readonly '⛔ this verb reads a ctx this scope has not got — is a step missing before it?': never
+    }
+
 type VerbsOn<S extends State> = {
-  readonly [K in keyof S['verbs']]: S['verbs'][K] extends (...args: infer A) => unknown
-    ? (...args: A) => Surface<S>
+  readonly [K in keyof S['verbs']]: S['verbs'][K] extends (...args: infer A) => infer V
+    ? CtxGate<S, StepOf<V>> extends object
+      ? CtxGate<S, StepOf<V>>
+      : (
+          ...args: A
+        ) => Grown<S, NeedOfStep<StepOf<V>>, AddOfStep<StepOf<V>>, RetOfStep<StepOf<V>>, StepOf<V>>
     : never
 }
 

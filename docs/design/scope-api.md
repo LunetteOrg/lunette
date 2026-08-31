@@ -699,8 +699,14 @@ rediscover them.
     once, all measured: the word its step says is dropped (the intent fail-open,
     reopened), what it populates is dropped, and what it REQUIRES of the ctx is
     unchecked — so a verb could demand a ctx entry no scope has and still
-    compile.
-15. **Reading and parsing an entry fail for opposite reasons.** The I/O
+    compile. Reading the return closes all three, at +5.5% instantiations on the
+    package (of which +2.8% is present even with no verb in sight).
+15. **A gate whose message is a template literal is SILENT on a call.** Made the
+    method itself, the property resolves to a string literal and the call error
+    prints its apparent type — `Type 'String' has no call signatures` — so the
+    reason never reaches the reader. Naming the message as a PROPERTY, the way
+    `DepGuard` does, puts it back: an object type is printed whole.
+16. **Reading and parsing an entry fail for opposite reasons.** The I/O
     (`req.arrayBuffer()`) rejects when the stream dies — a reset socket, an
     aborted upload — and that THROW is infrastructure, left to propagate.
     Parsing the bytes in hand is the client's mistake and collapses to the
@@ -802,14 +808,14 @@ coexist only until the port below is done, and not a step longer.
 
 ### In order
 
-1. **Close the verb hole.** A verb's builder-facing signature is computed from
-   the factory's ARGUMENTS and ignores what it RETURNS, which leaves trap 14's
-   three holes open. Reading the returned step and applying `.step`'s own
-   computation closes all three and makes literal the claim that a verb is
-   `.step` with its arguments curried. Sonda first: extracting the step's
-   `Need`/`Add`/`Ret` needs `infer` in positions trap 4 warns about, and the
-   computation would run inside a mapped type per verb per chain step, so it is
-   measured on the existing bench before it is kept.
+1. ~~Close the verb hole.~~ **DONE.** The builder reads what the factory
+   returns and applies `.step`'s own computation, so a verb is literally `.step`
+   with its arguments curried: its word reaches the intent axis, what it
+   populates reaches the ctx, and what it requires of the ctx is checked. The
+   one gate that cannot ride an argument — a verb's step is not an argument of
+   anything — is the METHOD ITSELF, which has no call signatures, so it fires on
+   the call rather than downstream. Trap 4 did not bite: a step carrying an
+   invariant `never` phantom is still read.
 2. **Port the carriers and the extensions onto the new base, and DELETE the old
    core in the same slice** — `http`, `trpc`, `react-router`, `body`, `query`,
    `cookies`, `headers`, `standard-schema`. This is also where the sugars are
