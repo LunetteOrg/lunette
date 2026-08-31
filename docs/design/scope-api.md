@@ -300,7 +300,7 @@ it did not before.
 The name is CONSTRAINED, not gated: the parameter's type is the union of the
 entries this scope has, so an editor completes it and a typo is told what it
 could have written (`"wrong"` is not assignable to `"params" | "query"`). The
-gate idiom (`DeclGate`, §40) is the wrong tool here — it types the parameter
+gate idiom (`WordGate`, §40) is the wrong tool here — it types the parameter
 `string` and loses completion. The one case a union cannot express is the EMPTY
 one, where it degrades to `never` and names nothing, so the alias substitutes a
 sentence there:
@@ -438,8 +438,9 @@ be API with no caller (principle 5).
 **And `set-cookie` stops being a capability.** Cookies can only ride a
 carrier's outbound word, and those words are exported from the CARRIER's own
 subpath — `@lntt/scope/trpc` has no `response`, so on an RPC carrier the verb
-does not exist. Import http's into a tRPC scope and `DeclGate` refuses it at the
-definition (it coins `status`/`redirect`/`ok-status`; tRPC declares `code`), and
+does not exist. Import http's into a tRPC scope and `WordGate` refuses it at the
+definition (it coins `status`/`redirect`/`ok-status`; tRPC's vocabulary is
+`code`), and
 an http scope cannot mount on tRPC anyway — `IntentGuard` refuses it for the
 same intents. The capability was the net under that case; the intent axis holds
 it, on both sides, and holds it better.

@@ -49,11 +49,11 @@ export type Validatable<S extends State> = [Nameable<S>] extends [never]
 // nobody can use, and no error anywhere (§9). `Omit` first, then add back.
 type Refined<S extends State, N extends string, T> = {
   need: S['need']
-  seed: S['seed']
+  args: S['args']
   acc: Omit<S['acc'], N> & { readonly [K in N]: T }
   result: S['result']
   intents: S['intents']
-  declares: S['declares']
+  vocabulary: S['vocabulary']
   verbs: S['verbs']
 }
 

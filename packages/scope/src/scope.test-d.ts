@@ -147,7 +147,7 @@ describe('what a step knows of the app', () => {
     h({ other: true }, { id: 'u1' })
   })
 
-  it('types the scope execution parameters, so seeding the wrong key names it', () => {
+  it('types the scope execution parameters, so passing the wrong key names it', () => {
     const h = scope<{ readonly id: string }>().step(
       async (_app: {}, _ctx: { readonly id: string }) => 'done',
     )

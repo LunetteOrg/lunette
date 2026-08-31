@@ -44,13 +44,13 @@ export const gone = (what: string): Abort<{ readonly refusal: true }> =>
 export const elsewhere = (location: string): Abort<{ readonly elsewhere: true }> =>
   word({ kind: 'elsewhere', location })
 
-// ── what the carrier declares ────────────────────────────────────────────────
+// ── the carrier's VOCABULARY ─────────────────────────────────────────────────
 // The set the definition-side gate reads a returned word against. A word this
-// carrier does not coin is a compile error where the guard is WRITTEN, not
-// where the scope is mounted.
+// carrier does not coin is a compile error where the step is WRITTEN, not where
+// the scope is mounted.
 export interface FixtureCarrier {
-  readonly __seed?: Params
-  readonly __declares?: { readonly refusal: true; readonly elsewhere: true }
+  readonly __args?: Params
+  readonly __vocabulary?: { readonly refusal: true; readonly elsewhere: true }
 }
 
 // A carrier is PURE DECLARATION here — no runtime value at all, exactly like
@@ -61,8 +61,8 @@ export const fixture = {} as FixtureCarrier
 // A SECOND carrier, coining a different vocabulary, so the definition-side gate
 // has something to refuse. It admits the same runs and none of the same words.
 export interface OtherCarrier {
-  readonly __seed?: Params
-  readonly __declares?: { readonly code: true }
+  readonly __args?: Params
+  readonly __vocabulary?: { readonly code: true }
 }
 
 export const other = {} as OtherCarrier

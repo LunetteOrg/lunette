@@ -62,17 +62,23 @@ export interface State {
   // (§33 tier 1).
   readonly need: object
   // What a run brings — the scope execution parameters, the call's second
-  // argument (§33 tier 2). NOT `seed`: wire already uses that word for the
-  // build-once, which is the other lifetime.
-  readonly seed: object
+  // argument (§33 tier 2). NOT `seed`: that word is wire's build-once, the
+  // OTHER lifetime, and naming this one after it collapses the distinction the
+  // two tiers exist to make. Not `params` either — that is the name of an entry
+  // a carrier puts INSIDE this one, and `params.params` is what that reads as.
+  readonly args: object
   // What the steps have populated so far.
   readonly acc: object
   // What the scope can YIELD: the union of the domain values its steps return.
   readonly result: unknown
-  // Every word its steps can say, and every word its carrier coins. The two
-  // sides `DeclGate` compares.
+  // The two sides `WordGate` compares, and they are supply and demand.
+  // `vocabulary` is what the carrier COINS — every word this scope may say,
+  // whether or not anything says it. `intents` is what the steps written so far
+  // actually SAY, accumulated at every `.step`. What you MAY say, against what
+  // you HAVE said: the first gates a step as it is written, the second is what
+  // a mount asks about, to know whether it can render them all.
   readonly intents: PropertyKey
-  readonly declares: PropertyKey
+  readonly vocabulary: PropertyKey
   // The verbs its extensions declared, as the BUILDER offers them — full
   // signatures, not the runtime factories. The two are different shapes and
   // constraining this to the factory map is a mistake that reads as harmless:
@@ -131,25 +137,25 @@ type IntentKeysOf<R> = R extends Abort<infer I>
 // computed ONCE instead of per mention. They sit on the ALIAS, never on the
 // method: a defaulted parameter in a method's own list is caller-overridable,
 // and naming it `never` walks straight through the gate (§8).
-type DeclGate<
+type WordGate<
   S extends State,
   Ret,
   A = Awaited<Ret>,
-  U = Exclude<IntentKeysOf<A>, S['declares']>,
+  U = Exclude<IntentKeysOf<A>, S['vocabulary']>,
 > = [U] extends [never]
   ? unknown
   : `⛔ this scope does not coin the word: ${U & string} — is it the right carrier?`
 
-// The ctx a step reads: what the run was seeded with, plus everything the steps
-// before it populated.
+// The ctx a step reads: the arguments the run was given, plus everything the
+// steps before it populated.
 //
-// An OVERRIDE, not the intersection it looks like (§9). `seed & acc` does not
+// An OVERRIDE, not the intersection it looks like (§9). `args & acc` does not
 // replace: a step re-populating a key it already has — which is what a
 // refinement IS — would yield the intersection of the two types, and refining
 // `Record<string, string | string[]>` to `{ page: number }` gives `never`. No
 // error anywhere, just a field nobody can use, diagnosed two files away. `Omit`
 // first, then intersect.
-export type Ctx<S extends State> = Omit<S['seed'], keyof S['acc']> & S['acc']
+export type Ctx<S extends State> = Omit<S['args'], keyof S['acc']> & S['acc']
 
 // What a scope IS to whoever holds one: the callable builder, plus the verbs
 // its extensions declared. The verbs are a plain record with no call signature
@@ -178,7 +184,7 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 // a claim about the surface, not a matter of taste.
 //
 // `U` is a defaulted parameter used as a let-binding, computed once, and it
-// sits on the ALIAS rather than on the method — the same reason `DeclGate`'s
+// sits on the ALIAS rather than on the method — the same reason `WordGate`'s
 // does (§8).
 type ReservedVerb = 'steps' | 'step' | 'extend' | 'name' | 'length' | 'prototype' | 'caller' | 'arguments'
 
@@ -205,11 +211,11 @@ export type ResultOf<Sc> = StateOf<Sc>['result']
 // can REPLACE an entry where a step can only add to it.
 type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Surface<{
   need: S['need'] & Need2
-  seed: S['seed']
+  args: S['args']
   acc: S['acc'] & Add
   result: S['result'] | ValueOf<Awaited<Ret>>
   intents: S['intents'] | IntentKeysOf<Awaited<Ret>>
-  declares: S['declares']
+  vocabulary: S['vocabulary']
   verbs: S['verbs']
 }>
 
@@ -218,7 +224,7 @@ export interface Scope<S extends State> {
   // checked exactly as a mount is.
   <Pub extends object>(
     app: Pub & DepGuard<Pub, S['need']>,
-    params: S['seed'],
+    args: S['args'],
   ): Promise<Outcome<S['result']>>
 
   // The ordered stack the call folds.
@@ -243,7 +249,7 @@ export interface Scope<S extends State> {
   // values. The fold normalises whichever arrives, so no author writes an
   // outcome by hand.
   step<Need2 extends object, Add extends object, Ret>(
-    s: ((app: Need2, ctx: Ctx<S>, next: Next<Add>) => Ret | Promise<Ret>) & DeclGate<S, Ret>,
+    s: ((app: Need2, ctx: Ctx<S>, next: Next<Add>) => Ret | Promise<Ret>) & WordGate<S, Ret>,
   ): Grown<S, Need2, Add, Ret>
 
   // Enrich the BUILDER, and only the builder: this pushes no step, and an
@@ -253,11 +259,11 @@ export interface Scope<S extends State> {
     ext: Extension<M> & VerbGate<M>,
   ): Surface<{
     need: S['need']
-    seed: S['seed']
+    args: S['args']
     acc: S['acc']
     result: S['result']
     intents: S['intents']
-    declares: S['declares']
+    vocabulary: S['vocabulary']
     verbs: S['verbs'] & M
   }>
 }
@@ -267,15 +273,15 @@ export interface Scope<S extends State> {
 // is why there is no `.extend(carrier)`: `scope().extend(http).extend(rpc)` was
 // expressible and failed only later, at the mount, by accident.
 export interface Carrier {
-  readonly __seed?: object
-  readonly __declares?: object
+  readonly __args?: object
+  readonly __vocabulary?: object
 }
 
-type SeedOf<C> = C extends { readonly __seed?: infer T } ? (T extends object ? T : {}) : {}
+type ArgsOf<C> = C extends { readonly __args?: infer T } ? (T extends object ? T : {}) : {}
 // A non-string key is not dropped: dropping the only key leaves `never`, and a
 // scope declaring `never` coins nothing, so every word is refused. That is
 // fail-CLOSED and visible in the error, which is the direction §34 fixes.
-type DeclaredOf<C> = C extends { readonly __declares?: infer M }
+type VocabularyOf<C> = C extends { readonly __vocabulary?: infer M }
   ? [keyof M] extends [string]
     ? keyof M
     : '__NON_STRING_DECLARED_KEY'
@@ -334,21 +340,21 @@ function make(steps: readonly AnyStep[], verbs: Verbs): Built {
   return self
 }
 
-type Empty<Seed extends object, Decl extends PropertyKey> = {
+type Empty<Args extends object, Vocab extends PropertyKey> = {
   need: {}
-  seed: Seed
+  args: Args
   acc: {}
   result: never
   intents: never
-  declares: Decl
+  vocabulary: Vocab
   verbs: {}
 }
 
 // Start a scope. The base is carrier-agnostic: nothing to read, no words to say,
 // and it mounts everywhere by construction. `scope(carrier)` brings that
 // carrier's run parameters and the words it coins.
-export function scope<Seed extends object = {}>(): Surface<Empty<Seed, never>>
-export function scope<C extends Carrier>(carrier: C): Surface<Empty<SeedOf<C>, DeclaredOf<C>>>
+export function scope<Args extends object = {}>(): Surface<Empty<Args, never>>
+export function scope<C extends Carrier>(carrier: C): Surface<Empty<ArgsOf<C>, VocabularyOf<C>>>
 export function scope(_carrier?: Carrier): Surface<Empty<{}, never>> {
   // A carrier is PURE DECLARATION — it brings a vocabulary and the shape of a
   // run, and contributes no fold work at all. So there is nothing to inject

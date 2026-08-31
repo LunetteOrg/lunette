@@ -56,11 +56,11 @@ interface PinVerb {
     n: N,
   ): Surface<{
     need: S['need']
-    seed: S['seed']
+    args: S['args']
     acc: S['acc'] & { readonly pinned: N }
     result: S['result']
     intents: S['intents']
-    declares: S['declares']
+    vocabulary: S['vocabulary']
     verbs: S['verbs']
   }>
 }
@@ -128,12 +128,12 @@ describe('a verb keeps its generics, which is why its signature is written out',
   })
 
   it('grows the ctx for the steps after it, exactly as a step would', () => {
-    scope<{ readonly seed: string }>()
+    scope<{ readonly token: string }>()
       .extend(pins)
       .pin(404)
       .step(async (_app: {}, ctx, _next: Next<{}>) => {
         expectTypeOf(ctx.pinned).toEqualTypeOf<404>()
-        expectTypeOf(ctx.seed).toEqualTypeOf<string>()
+        expectTypeOf(ctx.token).toEqualTypeOf<string>()
         return ctx.pinned
       })
   })

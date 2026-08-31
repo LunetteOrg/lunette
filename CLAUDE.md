@@ -92,8 +92,10 @@ the tracker when relevant — never from here.
   and, for the scope runtime, a lexicon of its own, settled in
   `docs/design/scope-api.md`: scope (`scope()` agnostic, `scope(carrier)`
   chooses one) · scope execution (one run: `postScope(app, params)`) · scope
-  execution parameters (the second argument — what belongs to THIS run; NOT
-  `seed`, which is wire's build-once, the other lifetime) · carrier (chosen
+  execution parameters (the second argument — what belongs to THIS run; carried
+  as `State['args']` and declared by a carrier's `__args`. NOT `seed`, which is
+  wire's build-once, the other lifetime, and not `params`, which is the name of
+  an entry a carrier puts INSIDE them) · carrier (chosen
   once, pure declaration — no runtime value — never a step) · extension (a STEP
   that populates an entry, and sometimes contributes a verb; added like any
   other step) · step (the primitive — distinct from wire's LAYER, a different
@@ -104,7 +106,11 @@ the tracker when relevant — never from here.
   guard returns) · transport feature (RETIRED at the definition site — what a
   step needs of the transport is the ctx it ANNOTATES, checked by contravariance;
   the name survives only at the MOUNT) ·
-  intent (a word a carrier coins) · registry (opaque: steps write, mounts
+  intent (a word a carrier coins) · vocabulary (`State['vocabulary']`, a
+  carrier's `__vocabulary`: every word a scope MAY say — the supply side
+  `WordGate` reads a step's return against) · intents (`State['intents']`: the
+  words the steps written so far actually SAY — the demand side, accumulated at
+  every `.step`, and what a MOUNT asks about) · registry (opaque: steps write, mounts
   read) · effects · outcome (`ok`/`abort`/`invalid`) · capability (an OPEN
   alphabet — the core enumerates none; demand is open, supply is a written-out
   set, so an unclaimed one mounts nowhere, and widening a host's set is a claim
