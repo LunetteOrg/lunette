@@ -5,20 +5,15 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./standard-schema": "./src/extensions/standard-schema.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@standard-schema/spec": "^1.0.0"
-  },
   "devDependencies": {
     "@types/node": "^24.13.2",
     "typescript": "^5.9.2",
-    "vitest": "^4.1.0",
-    "zod": "^3.25.0"
+    "vitest": "^4.1.0"
   }
 }

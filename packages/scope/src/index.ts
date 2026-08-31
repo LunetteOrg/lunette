@@ -28,10 +28,8 @@ export type {
   ResultOf,
 } from './scope.ts'
 
-// What a step is written against. `invalid` is the one outcome built by hand:
-// the core's own branch, which any extension that PARSES returns.
-export { invalid } from './step.ts'
-export type { Step, AnyStep, Next, Outcome, Invalid, Issue } from './step.ts'
+// What a step is written against.
+export type { Step, AnyStep, Next, Outcome } from './step.ts'
 
 // How a carrier COINS a word — the constructors, not the brands they carry. A
 // carrier never touches the symbol; only the fold reads that.

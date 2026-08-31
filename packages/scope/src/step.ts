@@ -1,31 +1,5 @@
 import type { Abort } from './words.ts'
 
-// What a failed parse says. A TYPE, not a vocabulary word: every carrier can
-// have one, so it belongs to the outcome rather than to any carrier.
-//
-// Written out rather than imported from `@standard-schema/spec`: the third
-// branch of an `Outcome` has to be renderable by a mount that knows nothing
-// about who produced it, so the core needs ONE issue shape — but not a third
-// party's. Naming that one made the core neutral about the schema ENGINE and
-// not about the issue SHAPE. Structurally it IS that type, assignable both
-// ways, so `@lntt/scope/standard-schema` hands its issues over without a cast.
-interface PathSegment {
-  readonly key: PropertyKey
-}
-
-export interface Issue {
-  readonly message: string
-  readonly path?: ReadonlyArray<PropertyKey | PathSegment> | undefined
-}
-
-// The fold failing ON ITS OWN: the input did not validate. Deliberately not an
-// abort — an abort is a word from a carrier's vocabulary and the core has none
-// (§40). Its own branch instead, so a codec that forgets it fails to COMPILE
-// rather than silently mishandling it.
-export interface Invalid {
-  readonly issues: readonly Issue[]
-}
-
 // THE PRIMITIVE. A step wraps the rest of the fold: it reads `app` and the ctx
 // as it stands, and either continues inward with what it populates or returns
 // an outcome of its own and stops.
@@ -50,7 +24,7 @@ export interface Invalid {
 // rather than in a phantom beside it.
 
 // ── the outcome ──────────────────────────────────────────────────────────────
-// THREE branches, and what an author WRITES is not this. A step returns
+// TWO branches, and what an author WRITES is not this. A step returns
 // whichever it has to hand — the result of `next(...)`, a WORD from its carrier
 // (`unauthorized()`, `redirect('/')`), or a plain domain value — and the fold
 // normalises it. So no step builds an outcome and none casts a word down to
@@ -74,15 +48,7 @@ export type Outcome<R> = Branded &
   (
     | { readonly ok: true; readonly value: R; readonly intent?: unknown }
     | { readonly ok: false; readonly abort: Abort<never> }
-    | { readonly ok: false; readonly invalid: Invalid }
   )
-
-// The core's own branch, and the one word it does coin (§40).
-export const invalid = (issues: Invalid['issues']): Outcome<never> => ({
-  [OUTCOME]: true,
-  ok: false,
-  invalid: { issues },
-})
 
 // What a step calls to continue inward. Its parameter is what the step
 // POPULATES — annotate it, and the builder knows; leave it bare, and it is told
