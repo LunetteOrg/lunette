@@ -138,3 +138,41 @@ describe('a verb keeps its generics, which is why its signature is written out',
       })
   })
 })
+
+describe('a verb cannot take a name the surface already owns', () => {
+  // `Surface<S> = Scope<S> & S['verbs']` intersects where it ought to conflict,
+  // so neither of these is visible to the type system without `VerbGate` — and
+  // both are silent at runtime, which is why they are pinned here.
+  const shadowsStep = {
+    methods: { step: () => (async () => 'from-verb') as unknown as AnyStep },
+  } as unknown as Extension<{ step(): unknown }>
+
+  it('is REFUSED at the call site — the gate, and the only half that matters in TS', () => {
+    const refused = () => {
+      // @ts-expect-error ⛔ a verb cannot be named: step — the scope's own surface owns it
+      scope<{}>().extend(shadowsStep)
+    }
+    expect(typeof refused).toBe('function')
+  })
+
+  // The two below reach the runtime the only way anything can once the gate is
+  // in place: by lying to it. That is not a contrived setup — it is what an
+  // extension loaded by name, or assembled from data, or written in plain JS
+  // looks like from in here, and it is the whole reason the runtime half
+  // exists.
+  const unchecked = (ext: object) => scope<{}>().extend(ext as unknown as Extension<{}>)
+
+  it('refuses one shadowing `.step`, which would otherwise DISCARD the step it is given', () => {
+    expect(() => unchecked(shadowsStep)).toThrow(/cannot be named 'step'/)
+  })
+
+  it('refuses one named `name`, which would otherwise throw from inside the core', () => {
+    // A function's `name` is not writable, so this used to surface as
+    // `TypeError: Cannot assign to read only property 'name' of function` —
+    // pointing at `make`, never at the extension that caused it.
+    const shadowsName = {
+      methods: { name: () => (async () => 'x') as unknown as AnyStep },
+    }
+    expect(() => unchecked(shadowsName)).toThrow(/cannot be named 'name'/)
+  })
+})

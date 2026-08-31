@@ -86,6 +86,15 @@ export interface State {
 // Of the three things a step may return, two contribute NO domain value: the
 // outcome `next` gave it (it is passing through — the brand says so) and a WORD
 // (it contributes on the intent axis instead). What is left is the value.
+//
+// KNOWN LIMIT, and deliberately not fixed here. `R extends AnyOutcome ? never`
+// reads "it is passing through", but a WRAP step — one that awaits `next` and
+// hands back `{ ...out, value: somethingElse }` — is also outcome-shaped, and
+// its new value is dropped from `S['result']`. The scope then reports the
+// leaf's type while producing the wrapper's. Narrowing this needs the outbound
+// side to be a value a step RETURNS rather than an outcome it forwards, which
+// is the shape #61 is already moving to; doing it twice is the work the design
+// document exists to avoid.
 type AnyOutcome = Outcome<unknown>
 type AnyAbort = Abort<never> | Abort<any>
 type ValueOf<R> = R extends AnyOutcome
@@ -154,6 +163,29 @@ export type Ctx<S extends State> = Omit<S['seed'], keyof S['acc']> & S['acc']
 // the whole reason the state lives in a parameter.
 export type Surface<S extends State> = Scope<S> & S['verbs']
 
+// ── gate: a verb may not take a name the surface already owns ────────────────
+// `Surface` INTERSECTS, and that is exactly why this gate has to exist: `A & B`
+// over a shared key does not conflict, it narrows, so a verb named `step`
+// typechecks against the primitive it shadows and nothing is reported. The
+// runtime is where it shows, silently and two ways — `.step(fn)` discards `fn`
+// and pushes the verb's own step instead, and a verb named `name` or `length`
+// throws from inside `.extend`, because a function's own properties are not
+// writable. Both are configuration errors, so they belong at the call site that
+// wrote them (principle 1).
+//
+// The alphabet is CLOSED and small on purpose: it is what the builder installs
+// (`steps`, `step`, `extend`) plus what every function carries. Widening it is
+// a claim about the surface, not a matter of taste.
+//
+// `U` is a defaulted parameter used as a let-binding, computed once, and it
+// sits on the ALIAS rather than on the method — the same reason `DeclGate`'s
+// does (§8).
+type ReservedVerb = 'steps' | 'step' | 'extend' | 'name' | 'length' | 'prototype' | 'caller' | 'arguments'
+
+export type VerbGate<M, U = Extract<keyof M, ReservedVerb>> = [U] extends [never]
+  ? unknown
+  : `⛔ a verb cannot be named: ${U & string} — the scope's own surface owns it`
+
 // How anything OUTSIDE the builder reads what a scope accumulated — a mount
 // asking which words it can say, a test asking what it yields. Under the
 // intersection form this needed a phantom per axis, present only so an adapter
@@ -218,7 +250,7 @@ export interface Scope<S extends State> {
   // extension never appears in the step list. Its verbs do the fold work, when
   // they are called.
   extend<M extends object>(
-    ext: Extension<M>,
+    ext: Extension<M> & VerbGate<M>,
   ): Surface<{
     need: S['need']
     seed: S['seed']
@@ -260,6 +292,21 @@ interface Built {
   extend(ext: { methods: Verbs }): Built
 }
 
+// The runtime half of `VerbGate`, for an extension assembled where the types
+// were not checked — a plugin loaded by name, a `methods` map built from data,
+// a caller in plain JS. It is a THROW and not a skip: a verb silently absent is
+// the same silent degrade the gate exists to close, one call later.
+const RESERVED_VERBS: ReadonlySet<string> = new Set([
+  'steps',
+  'step',
+  'extend',
+  'name',
+  'length',
+  'prototype',
+  'caller',
+  'arguments',
+])
+
 function make(steps: readonly AnyStep[], verbs: Verbs): Built {
   const fold = (app: object, params: object) => runSteps(steps, app, params)
   const self = Object.assign(fold, {
@@ -275,6 +322,12 @@ function make(steps: readonly AnyStep[], verbs: Verbs): Built {
   })
   // Every contributed verb, wired the same way: call it, get a step, push it.
   for (const [name, factory] of Object.entries(verbs)) {
+    if (RESERVED_VERBS.has(name)) {
+      throw new TypeError(
+        `a verb cannot be named '${name}': the scope's own surface owns it. ` +
+          `Reserved: ${[...RESERVED_VERBS].join(', ')}.`,
+      )
+    }
     ;(self as unknown as Record<string, unknown>)[name] = (...args: never[]) =>
       make([...steps, factory(...args)], verbs)
   }
