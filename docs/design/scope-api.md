@@ -852,6 +852,7 @@ carry the two measurements the builder's form was settled on.
 | | |
 |---|---|
 | **#60** | port the carriers — `http`, `trpc`, `react-router`. `RequestHead` comes back with them, and it is what makes the body lock work. Blocks the rest |
+| **#64** | validation per carrier: one factory, each carrier's own word. The core's `invalid` branch is gone with the carrier-free `.validate` (§41), so this is what gives a scope a way to refuse an input again |
 | **#61** | the outbound side as a returned value: `response(v, init)`, with `json`/`html`/`text` as its sugar. Adds the envelope; the effects axis it replaces is already gone |
 | **#62** | port the read extensions: `body`, `query`, `cookies`, `headers` — none of which needs the retired transport-feature alphabet |
 | **#63** | decide which sugars come back — `guard`, `handle`, or neither. Both have already lost the reasons they were going to exist, so the failure mode is silence, not a wrong answer |
