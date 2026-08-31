@@ -39,6 +39,36 @@ export interface Ok<V, I extends object> {
   readonly __i?: (i: I) => I
 }
 
+// ── the constructors ─────────────────────────────────────────────────────────
+// What a carrier actually writes. The brand is the core's — it owns the
+// MECHANISM — while the intent inside is the carrier's and is never read here.
+// Before these existed every carrier re-declared the same line over the raw
+// symbol: a cast in each of them, and one more place to get the brand wrong.
+//
+// `I` is DECLARED by the caller, not inferred. The payload
+// (`{ kind: 'status', status: 404 }`) and the NAME the gate reads (`status`)
+// are two different statements, and only the second is the vocabulary.
+//
+// So the DEFAULT is load-bearing: it is what an author gets by forgetting the
+// type argument. `UnknownIntent` makes that fail CLOSED — its key is one no
+// carrier coins, so the word is refused at every `WordGate`. Leaving it to the
+// constraint would give `keyof object`, which is `never`: a word declaring
+// nothing, and admitted everywhere. That is the fail-open §34 closed on the
+// capability axis, reopened by an omission nobody would see.
+export const abort = <I extends object = UnknownIntent>(intent: object): Abort<I> => ({
+  [ABORT]: true,
+  intent,
+})
+
+// The success side. `value` stays the DOMAIN value and the intent travels
+// BESIDE it, which is why a scope whose leaf returns `json(post, 201)` still
+// reports that it yields a `Post` and not a wrapper around one.
+export const ok = <V, I extends object = UnknownIntent>(value: V, intent: object): Ok<V, I> => ({
+  [OK]: true,
+  value,
+  intent,
+})
+
 export const isAbort = (x: unknown): x is Abort<never> =>
   typeof x === 'object' && x !== null && ABORT in x
 export const isOk = (x: unknown): x is Ok<unknown, never> =>

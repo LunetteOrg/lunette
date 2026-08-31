@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { scope } from './scope.ts'
-import { code, fixture, gone, other, refused } from './fixture/carrier.ts'
+import { code, fixture, gone, other, refused, served } from './fixture/carrier.ts'
+import { abort } from './abort.ts'
 import type { Next } from './step.ts'
 
 // THE SHAPES A STEP TAKES — one per thing a step is for. There is no category
@@ -205,5 +206,65 @@ describe('what a scope may say, read off the steps', () => {
 
     expect((await h({}, { token: null, params: {} })).ok).toBe(false)
     expect((await h({}, { token: 'good', params: {} })).ok).toBe(true)
+  })
+})
+
+
+// ── the SUCCESS side of a word ───────────────────────────────────────────────
+// A leaf that succeeds AND has something to say about how the result should be
+// rendered. It is the other half of the same mechanism the aborts use, and the
+// half `response`/`json` will be built on — so the fold's `ok` normalisation is
+// exercised here rather than waiting for its first real producer.
+describe('a word on the success side', () => {
+  const served3 = scope(fixture).step(async (_app: {}, _ctx: {}) => served(3, 'cache'))
+
+  it('carries the intent while the VALUE stays the domain`s', async () => {
+    const out = await served3({}, { token: null, params: {} })
+    expect(out.ok).toBe(true)
+    expect(out.ok && out.value).toBe(3)
+    expect(out.ok && out.intent).toEqual({ kind: 'served', at: 'cache' })
+  })
+
+  it('does not wrap what the scope YIELDS — that is the whole reason it is not a value', () => {
+    // `number`, not `Ok<number, …>`: the intent rides beside the value, so a
+    // caller reads the result without unwrapping anything and `ResultOf` keeps
+    // saying what the use case returns.
+    const check = async () => {
+      const out = await served3({}, { token: null, params: {} })
+      if (out.ok) expectTypeOf(out.value).toEqualTypeOf<number>()
+    }
+    expect(typeof check).toBe('function')
+  })
+
+  it('a plain value says nothing at all, which is the other case', async () => {
+    const plain = scope(fixture).step(async (_app: {}, _ctx: {}) => 3)
+    const out = await plain({}, { token: null, params: {} })
+    expect(out.ok && out.value).toBe(3)
+    // The key is ABSENT, not present-and-undefined: `outcomeOf` omits it for a
+    // plain value, so a codec asking `'intent' in out` gets a straight no and
+    // the host's default applies.
+    expect(out.ok && 'intent' in out).toBe(false)
+  })
+})
+
+// ── forgetting the type argument fails CLOSED ────────────────────────────────
+// `abort(...)` names the payload but not the WORD. Left to its constraint the
+// name would be `keyof object`, which is `never` — a word declaring nothing and
+// therefore admitted by every gate. The default is `UnknownIntent` instead, and
+// its key is one no carrier coins.
+describe('a word whose name was never declared', () => {
+  it('is REFUSED by the carrier that does not coin it', () => {
+    const refuse = () => {
+      // @ts-expect-error ⛔ this scope does not coin the word: __unknown_intent
+      scope(fixture).step(async (_app: {}, _ctx: {}) => abort({ kind: 'improvised' }))
+    }
+    expect(typeof refuse).toBe('function')
+  })
+
+  it('and the same word DECLARED passes, so the gate is reading the name', () => {
+    scope(fixture).step(async (_app: {}, _ctx: {}) =>
+      abort<{ readonly refusal: true }>({ kind: 'improvised' }),
+    )
+    expect(true).toBe(true)
   })
 })

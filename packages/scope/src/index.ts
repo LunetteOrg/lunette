@@ -46,9 +46,11 @@ export type {
 export { invalid } from './step.ts'
 export type { Step, AnyStep, Extension, Next, Outcome, Invalid, Issue } from './step.ts'
 
-// The two brands a carrier's words carry. What a word MEANS is the carrier's
-// business; the core only ever checks the brand. The READERS are not here: the
-// fold normalises on the way out, so a mount receives an outcome and never a
-// raw word.
-export { ABORT, OK } from './abort.ts'
+// How a carrier COINS a word: the constructors, not the brands they carry. A
+// carrier writes `abort({ kind: 'status', status: 404 })` and never touches the
+// symbol — only the fold reads that, when it checks what came back. What a word
+// MEANS stays the carrier's business. The READERS are not here either: the fold
+// normalises on the way out, so a mount receives an outcome and never a raw
+// word.
+export { abort, ok } from './abort.ts'
 export type { Abort, Ok } from './abort.ts'
