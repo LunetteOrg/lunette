@@ -65,8 +65,8 @@ const authenticated = async (
 
 // ── 3. REFINE ────────────────────────────────────────────────────────────────
 // Populate a key the ctx ALREADY has, narrower. It is what a carrier's
-// validation verb will do (#64), and why `Ctx` is an override rather than the
-// intersection it looks like (§9):
+// validation verb will do, and why `Ctx` is an override rather than the
+// intersection it looks like:
 // intersecting the old type with the new gives `never` in the ordinary case — a
 // field nobody can use, and no error anywhere.
 const refineToken = async (
@@ -79,7 +79,7 @@ const refineToken = async (
 // Let the rest run and act on what came BACK. A step wraps `next`, so it has an
 // after — where a span is closed, a metric flushed, a rolling session cookie
 // attached to whatever the leaf decided. A pre-hook plus a collector could not
-// express this (#55), and it is the shape that replaced sinks: with the
+// express this, and it is the shape that replaced sinks: with the
 // outbound side a RETURNED value, decorating it is ordinary code.
 const timed = (log: string[]) => async (_app: {}, _ctx: {}, next: Next<{}>) => {
   log.push('in')
@@ -93,7 +93,8 @@ const timed = (log: string[]) => async (_app: {}, _ctx: {}, next: Next<{}>) => {
 // makes it the leaf — no phase, no special casing.
 //
 // The leaf itself is ONLY a leaf: a value, or a word. That is the entire
-// convention (principle 4), the same one wire's leaves follow.
+// convention, the same one wire's leaves follow: a RETURNED error is domain, a
+// THROWN one is infrastructure.
 const readNote = async (deps: Pick<Repos, 'notes'>, ctx: { readonly session: Session }) => {
   const note = deps.notes.byId('n1')
   return note === undefined ? gone('note') : `${ctx.session.userId}:${note.text}`
@@ -194,7 +195,7 @@ describe('what a scope may say, read off the steps', () => {
   })
 
   it('accepts two DIFFERENT words from one step — the union does not collapse', async () => {
-    // §1: inferring from inside a union constituent makes TypeScript pick the
+    // Inferring from inside a union constituent makes TypeScript pick the
     // first candidate and reject the rest, so this is the case that shape exists
     // for. Both words are the carrier's, so both are legal.
     const h = scope(fixture)

@@ -32,7 +32,7 @@ import type { Abort } from './words.ts'
 //
 // Telling the three apart needs no guessing: the fold's outcome is BRANDED, so
 // "did this come back from `next`?" is a symbol check and not a heuristic over
-// a shape a domain value could happen to have (principle 7).
+// a shape a domain value could happen to have.
 //
 // `intent` is a word from a carrier's vocabulary and the core never reads what
 // one MEANS, only whether it is there. It is OPTIONAL because omitting it and
@@ -61,7 +61,8 @@ export type Next<Add extends object> = (delta: Add) => Promise<Outcome<unknown>>
 //
 // `R` is also where the words live. A step returning `unauthorized()` has that
 // word in its return TYPE, so the builder reads it by distributing over the
-// whole return (§1: never infer from inside a union constituent).
+// whole return — never from inside a union constituent, where TypeScript picks
+// the first candidate and rejects the rest.
 //
 // Nothing in the core is annotated with this — `.step` infers all four from the
 // function it is given, which is the point. It is here to be READ, and to be

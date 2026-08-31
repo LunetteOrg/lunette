@@ -4,7 +4,7 @@ import { abort, ok, type Abort, type Ok } from '../words.ts'
 // but the same shape, so the tests read like real code instead of minting a
 // word inline where it would be mistaken for something the core provides.
 //
-// What a carrier IS, in three parts, none of them the core's (§40):
+// What a carrier IS, in three parts, none of them the core's:
 //
 //   what a run BRINGS      — `Params`, the call's second argument
 //   the WORDS it coins     — values a step returns
@@ -39,8 +39,7 @@ export const elsewhere = (location: string): Abort<{ readonly elsewhere: true }>
 
 // A word on the SUCCESS side. Its name is its own and does not share the abort
 // side's: a host may render a refusal and have nowhere to put a success
-// annotation, and a shared name would let it accept one silently (§40's trap 6,
-// the reason `ok-status` is not `status`).
+// annotation, and a shared name would let it accept one silently.
 export const served = <V>(value: V, at: string): Ok<V, { readonly 'ok-served': true }> =>
   ok(value, { kind: 'served', at })
 

@@ -12,13 +12,14 @@ export const OK: unique symbol = Symbol('scope.ok')
 
 // Written without its parameter, `Abort` means "an intent nobody declared" and
 // fails CLOSED — refused wherever a gate checks it — rather than collapsing to
-// `never` and mounting anywhere, the fail-open §34 closed on capabilities.
+// `never` and mounting anywhere — a word that declares nothing is admitted by
+// every gate, which is fail-OPEN.
 export interface UnknownIntent {
   readonly __unknown_intent: true
 }
 
 // `__i` is phantom and INVARIANT: a contravariant one would let a caller name
-// the gate away by supplying `never`, the same hole §34 closed on `Cap`.
+// the gate away by supplying `never`.
 export interface Abort<I extends object = UnknownIntent> {
   readonly [ABORT]: true
   readonly intent: unknown

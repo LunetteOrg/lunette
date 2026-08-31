@@ -36,7 +36,7 @@ describe('the step primitive, folded', () => {
     const out = await h(app, {})
     expect(out.ok && out.value).toEqual({ sum: 3 })
     // The AFTER exists because a step wraps `next` — which a pre-hook plus a
-    // collector could not express (#55).
+    // collector could not express.
     expect(seen).toEqual(['a', 'b', 'leaf', 'a-out'])
   })
 

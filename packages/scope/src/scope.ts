@@ -40,10 +40,10 @@ type DepGuard<Pub, Need> = Pub extends Need
 // nothing is read out of an intersection.
 export interface State {
   // What the scope demands of the app — the chain, alive as long as the process
-  // (§33 tier 1).
+  // process.
   readonly need: object
   // What a run brings — the scope execution parameters, the call's second
-  // argument (§33 tier 2). NOT `seed`: that word is wire's build-once, the
+  // argument. NOT `seed`: that word is wire's build-once, the
   // OTHER lifetime, and naming this one after it collapses the distinction the
   // two tiers exist to make. Not `params` either — that is the name of an entry
   // a carrier puts INSIDE this one, and `params.params` is what that reads as.
@@ -77,7 +77,7 @@ export interface State {
 // `{ ...out, value: somethingElse }` is outcome-shaped too, so its new value is
 // dropped and the scope reports the leaf's type while producing the wrapper's.
 // Fixing it needs the outbound side to be a value a step RETURNS — the shape
-// #61 moves to.
+// the outbound side to be a value a step RETURNS.
 type AnyOutcome = Outcome<unknown>
 type AnyAbort = Abort<never> | Abort<any>
 type ValueOf<R> = R extends AnyOutcome
@@ -92,7 +92,7 @@ type ValueOf<R> = R extends AnyOutcome
 // rather than a pre-built outcome. Inferring from INSIDE a union constituent
 // (`(ctx) => E | Abort<I>`) makes TypeScript pick the first candidate and
 // reject the rest, so a step that can return two different words stops
-// compiling (§1). Infer the WHOLE return type and distribute afterwards.
+// compiling. Infer the WHOLE return type and distribute afterwards.
 //
 // One conditional per case, not two: an outer `extends AnyAbort` guard around
 // the `infer` would be redundant and paid for on every step.
@@ -107,11 +107,11 @@ type IntentKeysOf<R> = R extends Abort<infer I>
 // but only fires when the NEXT call touches the poisoned type, so a BASE — a
 // carrier and some steps with no leaf, the shape a shared `gated()` has —
 // swallows the mistake and surfaces it in whichever file finally uses the
-// scope, pointing at a step its author never wrote (§2).
+// scope, pointing at a step its author never wrote.
 //
 // `A` and `U` are let-bindings computed once. They sit on the ALIAS, never on
 // the method: a defaulted parameter in a method's own list is caller-
-// overridable, and naming it `never` walks straight through the gate (§8).
+// overridable, and naming it `never` walks straight through the gate.
 type WordGate<
   S extends State,
   Ret,
@@ -124,7 +124,7 @@ type WordGate<
 // The ctx a step reads: the arguments the run was given, plus everything the
 // steps before it populated.
 //
-// An OVERRIDE, not the intersection it looks like (§9). `args & acc` does not
+// An OVERRIDE, not the intersection it looks like. `args & acc` does not
 // replace, and re-populating a key is what a REFINEMENT is: narrowing
 // `Record<string, string | string[]>` to `{ page: number }` would intersect to
 // `never` — a field nobody can use, with no error anywhere. `Omit` first.
@@ -150,7 +150,7 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 //
 // The alphabet is CLOSED: what the builder installs plus what every function
 // carries. `U` sits on the ALIAS, not the method, for the reason `WordGate`'s
-// does (§8).
+// does — a defaulted parameter in a method's own list is caller-overridable.
 type ReservedVerb = 'steps' | 'step' | 'extend' | 'name' | 'length' | 'prototype' | 'caller' | 'arguments'
 
 type VerbGate<M, U = Extract<keyof M, ReservedVerb>> = [U] extends [never]
@@ -195,7 +195,7 @@ type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Sur
 //   computed   `.status(201)` → `{ pinned: number }`   ✗
 //
 // A verb that REFINES an entry loses more than a literal that way — the entry's
-// name AND the schema's output type, which is its whole job (#64). The duplicate
+// name AND the schema's output type, which is its whole job. The duplicate
 // that buys this is tied by NAME below, so a verb with no factory — or a factory
 // no verb declares — is an error here.
 export type Verbs = Readonly<Record<string, (...args: never[]) => AnyStep>>
@@ -267,7 +267,7 @@ export interface Carrier {
 type ArgsOf<C> = C extends { readonly __args?: infer T } ? (T extends object ? T : {}) : {}
 // A non-string key is not dropped: dropping the only key leaves `never`, and a
 // scope declaring `never` coins nothing, so every word is refused. That is
-// fail-CLOSED and visible in the error, which is the direction §34 fixes.
+// fail-CLOSED and visible in the error.
 type VocabularyOf<C> = C extends { readonly __vocabulary?: infer M }
   ? [keyof M] extends [string]
     ? keyof M
@@ -339,7 +339,8 @@ async function runSteps(
       // Every step passed through, so there is no value to hand back: `R` is
       // `never` for such a scope, and `never` has no inhabitant. Throwing is
       // not a fallback beside that type, it IS it. And by the error convention
-      // (principle 3) it is the right branch — a scope with no leaf is a
+      // — a THROW is infrastructure — it is the right branch: a scope with no
+      // leaf is a
       // CONSTRUCTION bug, and `{ ok: true, value: undefined }` would render a
       // bug as a success.
       throw new Error(
