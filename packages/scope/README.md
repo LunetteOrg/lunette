@@ -8,7 +8,8 @@ AsyncLocalStorage, or a framework.
 
 Framework-free by construction: its only runtime dependency is
 [`@standard-schema/spec`](https://standardschema.dev) (types only). The host
-adapters live in [`@lntt/integration`](../integration).
+adapters are set aside while the core is rebuilt, and land as `@lntt/integration`
+once it settles.
 
 ## The model
 
@@ -107,9 +108,9 @@ const out = await runScope(courseHandler,
 A scope binds to a concrete app only at the host adapter. A **missing
 dependency** is a compile error at the adapter (`DepGuard` brand: what the host
 carries must satisfy the scope's accumulated `Need` — the chain's public surface
-where a pack holds it, the tRPC context where the app travels in it). See
-`@lntt/integration` for the per-host adapters (Hono, Express, React Router,
-tRPC), each preserving its host's native routing and typed client.
+where a pack holds it, the tRPC context where the app travels in it). The
+per-host adapters (Hono, Express, React Router, tRPC) — each preserving its
+host's native routing and typed client — come back with `@lntt/integration`.
 
 ## Status
 

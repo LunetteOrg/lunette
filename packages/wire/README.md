@@ -306,4 +306,4 @@ refactor breaks it, the refactor is wrong even if the runtime tests pass.
 - parallel boot of independent layers
 - `any` → `unknown` pass in the engine internals
 - teardown error aggregation
-- companion dialects: `@lntt/http` (available), `cli` / `listener` / `flow` (planned)
+- companion dialects: `@lntt/scope` (the per-request runtime, in progress), `cli` / `listener` / `flow` (planned)
