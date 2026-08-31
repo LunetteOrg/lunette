@@ -1,10 +1,11 @@
 # The scope API
 
 The target surface, settled by spike and measurement rather than argument.
-Decision 40 in `docs/decisions.md` records WHY a carrier owns its vocabulary;
-decision 41 records why the input side became one verb over an open set of
-declared ctx entries. This records the WHAT, plus the traps that cost a
-measurement each.
+Decision 40 in `docs/decisions.md` records WHY a carrier owns its vocabulary,
+and decision 41 why validation belongs to the carrier too — which retires the
+core's `invalid` branch and, with it, the sections below that still describe a
+generic `.validate` over an open set of ctx entries. This records the WHAT, plus
+the traps that cost a measurement each.
 
 ## The lexicon
 

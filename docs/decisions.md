@@ -1774,3 +1774,43 @@ its own issue, including the finding that hoisting the gate's let-bindings onto
 a method's own type-parameter list is both slower and reopens 34's hole:
 `guard<…, never>(bad)` then satisfies the gate AND empties the accumulated set.
 On a type ALIAS the caller cannot reach them.
+
+### 41. Validation belongs to the carrier, and the outcome has two branches
+
+**Decision.** `@lntt/scope/standard-schema` shipped a CARRIER-FREE `.validate`,
+and to give it somewhere to fail the core grew a third outcome branch it owned:
+`invalid`, with `Invalid` and `Issue` beside it. Both are removed. `Outcome` is
+`ok | abort`, and validation comes back per carrier, each failing in its own
+words.
+
+The argument is 40's own, applied to a case 40 did not live to see. Validating
+means being able to say "this is not acceptable"; saying anything means having a
+word; a word belongs to a carrier's vocabulary. 40 already wrote the conclusion
+— *"a bare `scope()` has neither an input channel nor a way to abort, which is
+correct: a scope with no carrier runs nowhere"* — and put the input verb in the
+carrier (`.params(schema)` on http, `.input(schema)` on trpc). The carrier-free
+`validate` contradicted it, and the `invalid` branch is what made the
+contradiction inhabitable. So this is not a reversal of 40. It restores it, and
+removes the plumbing that was hiding the breach.
+
+What the branch bought was exhaustiveness: a codec could not forget `invalid`,
+because the union made it a compile error. That does not disappear, it moves to
+the intent axis — a mount is checked against the words a scope can say, which is
+the right home for "can this host render this?". One mechanism instead of two,
+and the one that was already there.
+
+What it cost was worse than the plumbing. A 422 on HTTP is not
+`UNPROCESSABLE_CONTENT` on tRPC, and a core-owned branch made that difference
+something a mount had to reconstruct rather than something a carrier could
+state. Per-carrier words let each say it directly.
+
+The step itself does not vary — read the entry, run the schema, replace it or
+stop — so this is one factory taking the word, not one implementation per
+carrier. The engine never was ours: Standard Schema is a spec, `~standard.
+validate` is called on whatever the caller passed, and with the extension gone
+`@lntt/scope` has ZERO dependencies, not even types-only.
+
+**Deferred.** Which entries a carrier exposes as validatable, and whether the
+verb is named per carrier (`.params` / `.input`) or uniformly, is decided with
+the carriers in hand and tracked on its own issue — deliberately not part of the
+carrier port, so the port does not smuggle in a surface nobody has used yet.
