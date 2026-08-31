@@ -10,20 +10,31 @@ the `errore` library (errors as values) applied to DI.
 ```
 .                       THIS monorepo (npm org: lntt) — the product
   packages/wire         @lntt/wire   the core (runtime + type tests)
-  packages/scope        @lntt/scope  the host-agnostic scope runtime (scope/
-                        guard/leaf, .input, the fold) — framework-free; carrier
-                        capabilities ship as tree-shakable subpaths, each mapping
-                        to the hosts that support it ("./request" ctx.request, no
-                        cap → tRPC too; "./body" .body/.form, cap 'body'; "./cookies"
-                        the Set-Cookie sink, cap 'cookies'; "./headers" the response
-                        headers, cap 'headers') — the core names none
+  packages/scope        @lntt/scope  the host-agnostic scope runtime — ONE
+                        primitive (a step wrapping the rest of the fold) with
+                        every verb as sugar over it; a scope IS the function that
+                        runs it. Framework-free: carriers and extensions ship as
+                        tree-shakable subpaths and the core names none —
+                        "./http" | "./trpc" | "./react-router" (carriers: ctx,
+                        entry, words), "./body" (body('json'|'form')), "./query",
+                        "./cookies", "./headers" (incoming reads),
+                        "./standard-schema" (validation, carrier-free).
+                        The outbound side is a RETURNED value — response(v,
+                        init), with json/html/text as its sugar — not a sink.
+                        The contract is docs/design/scope-api.md — READ IT FIRST;
+                        it also lists what is decided there and not yet built
   packages/integration  @lntt/integration  host adapters as tree-shakable
                         subpaths ("./hono", "./express", "./react-router",
                         "./trpc") — wire as a guest, per-host native routing;
                         "./node" is the shared IncomingMessage→Request lift the
                         non-Fetch Node hosts share (the origin is GIVEN, not
                         guessed — the host framework owns that policy, §40),
-                        "./http" the codec a hand-wired Fetch host composes
+                        "./http" the codec a hand-wired Fetch host composes.
+                        SET ASIDE while the scope core is rebuilt (#30): its
+                        five remaining mounts and the gate tests (route, intent,
+                        capability) live on `origin/story-30/scope-impl`, 27
+                        files, and come back AFTER the core settles — porting
+                        them against a moving surface is the work done twice
   packages/{cli,listener,flow}       scaffolds only — no shipped design;
                         their stories live in the tracker
   examples/             example apps USING the shipped packages (IN review
@@ -92,16 +103,27 @@ the tracker when relevant — never from here.
   discussions.
 - **Vocabulary**: chain · layer · bare/bound leaf · binder (`bind(record)`,
   apply = fixed deps, `.with` = per call, `.by` = per call keyed) · window
-  · opener (window arg 1) · bridge (window arg 2) · bag · guard · seed ·
-  scope (`scope()` agnostic, `.extend(ext)` injects carriers) · carrier
-  (`RequestCarrier`/`JobCarrier`) · scope extension (a composable unit in a
-  tree-shakable subpath — `request` read-only, `body`, `cookies`, `headers` — each
-  declaring ctx/methods/deps/capability; the core names none; `.extend` gates
-  collisions, §4) · capability (an OPEN alphabet — an extension coins its own
-  name, the core enumerates none; shipped: `'body'`/`'cookies'`/`'headers'`.
-  Demand is open, supply is a written-out set per mount, so an unclaimed
-  capability mounts nowhere; widening a host's set is a claim about machinery,
-  §34) · dialect.
+  · opener (window arg 1) · bridge (window arg 2) · bag · guard · seed —
+  and, for the scope runtime, a lexicon of its own, settled in
+  `docs/design/scope-api.md`: scope (`scope()` agnostic, `scope(carrier)`
+  chooses one) · scope execution (one run: `postScope(app, params)`) · scope
+  execution parameters (the second argument — what belongs to THIS run; NOT
+  `seed`, which is wire's build-once, the other lifetime) · carrier (chosen
+  once, pure declaration — no runtime value — never a step) · extension (a STEP
+  that populates an entry, and sometimes contributes a verb; added like any
+  other step) · step (the primitive — distinct from wire's LAYER, a different
+  mechanism, §33) · verb (a method a step contributes to the BUILDER — not a
+  WORD, which is a value a step returns) · leaf (the innermost step, the one
+  that does not call `next`) · entry (a ctx key `validate` may name: either arrives in
+  the execution parameters or is derived by an extension) · enrichment (what a
+  guard returns) · transport feature (RETIRED at the definition site — what a
+  step needs of the transport is the ctx it ANNOTATES, checked by contravariance;
+  the name survives only at the MOUNT) ·
+  intent (a word a carrier coins) · registry (opaque: steps write, mounts
+  read) · effects · outcome (`ok`/`abort`/`invalid`) · capability (an OPEN
+  alphabet — the core enumerates none; demand is open, supply is a written-out
+  set, so an unclaimed one mounts nowhere, and widening a host's set is a claim
+  about machinery, §34) · dialect.
 - **Tests**: vitest with typecheck (`*.test-d.ts` included via the
   `typecheck` block in each `vitest.config.ts`; `pnpm typecheck` runs
   `tsc --noEmit` and is the separate gate). Always verify by running:

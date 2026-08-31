@@ -1,0 +1,9 @@
+{
+  "name": "@lntt/research-parameterised-builder",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Research prototype, NOT a product: what does it COST to carry the scope builder's state in a type PARAMETER instead of in phantoms read through `Self`? The parameterised form is always callable and needs no termination declaration; the intersection form needs one. Prior art for #30.",
+  "type": "module",
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "devDependencies": { "@types/node": "^24.13.2", "typescript": "^5.9.2" }
+}
