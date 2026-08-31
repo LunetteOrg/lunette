@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { scope } from './scope.ts'
-import { outcomeOf, type Next } from './step.ts'
+import type { Next } from './step.ts'
 
 // The base builder has ONE verb, so every one of these is written with nothing
 // but `.step()`. What the sugar will buy later is not power — it is not having
@@ -83,9 +83,5 @@ describe('the step primitive, folded', () => {
     expect((await h(app, { id: 'u1' })).ok).toBe(true)
     expect(await h(app, { id: 'u1' }).then((o) => o.ok && o.value)).toBe('Ada')
     expect(await h(app, { id: 'nope' }).then((o) => o.ok && o.value)).toBe('anonymous')
-  })
-
-  it('normalises whatever a step handed back, in one place', () => {
-    expect(outcomeOf('plain')).toMatchObject({ ok: true, value: 'plain' })
   })
 })

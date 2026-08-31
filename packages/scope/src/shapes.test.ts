@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { scope } from './scope.ts'
 import { code, fixture, gone, other, refused, served } from './fixture/carrier.ts'
-import { abort } from './abort.ts'
+import { abort } from './words.ts'
 import type { Next } from './step.ts'
 
 // THE SHAPES A STEP TAKES — one per thing a step is for. There is no category

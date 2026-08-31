@@ -1,55 +1,36 @@
-import type { Abort, Ok } from './abort.ts'
-import {
-  runSteps,
-  type AnyStep,
-  type Extension,
-  type Next,
-  type Outcome,
-  type Verbs,
-} from './step.ts'
+import { isAbort, isOk, type Abort, type Ok } from './words.ts'
+import { OUTCOME, type AnyStep, type Next, type Outcome } from './step.ts'
 
-// THE BASE BUILDER. One verb, `.step()`, and everything else is sugar to be
-// written on top of it — `guard`, `validate`, `handle`, `extend` each earn
-// their place against this or do not come back.
+// THE BASE BUILDER. One verb, `.step()`, and everything else is sugar written
+// on top of it.
 //
 // The accumulated state lives in a type PARAMETER, not in phantoms read back
-// through `Self`, and that choice was measured rather than argued
-// (`research/parameterised-builder`): −54 instantiations per scope and −11 per
-// step against the intersection form, with types down ~16%. The prediction was
-// that rebuilding a state object at every `.step` would cost MORE; it is the
-// intersection that is expensive, because `Self` gains a member per verb and
-// every later read walks all of them, while a parameterised read is one indexed
-// access.
+// through `Self`, and the choice is measured (`research/parameterised-builder`):
+// −54 instantiations per scope and −11 per step against the intersection form,
+// types down ~16%. The intersection is the expensive one — `Self` gains a member
+// per verb and every later read walks all of them, while a parameterised read is
+// one indexed access.
 //
-// Two things follow, and both are why the form matters beyond the number:
+// Two things follow, and they matter more than the number:
 //
-//   A SCOPE IS THE FUNCTION THAT RUNS IT, from the first line, with no
-//   transition and nothing to declare. A call signature can read `S`; it cannot
-//   read `Self`, because `this` binds to the receiver of a METHOD call and
-//   calling an object directly binds it to `void`. Under the old form the
-//   builder had to become a concrete type before its call could be typed at
-//   all, and a `closes` declaration was what triggered that — the fold has
-//   always seen termination by itself at runtime.
+//   A SCOPE IS THE FUNCTION THAT RUNS IT, from the first line. A call signature
+//   can read `S`; it cannot read `Self`, because `this` binds to the receiver of
+//   a METHOD call and calling an object directly binds it to `void`.
 //
 //   `result` accumulates as a UNION. Under intersection it cannot: `A & B` over
-//   a type that is not a key collapses, which is why the other union-valued
-//   axes are maps of NAMES. So a guard that can hand back a domain value of its
-//   own now appears in what the scope produces, where before it vanished.
+//   a type that is not a key collapses, which is why the other union-valued axes
+//   are maps of NAMES.
 
 // ── gate: the CHAIN does not expose what the scope demands ───────────────────
-// `Need` (what the scope requires of the app) and `Pub` (what the chain
-// exposes) are two independent inferred generics with no shared annotated slot,
-// so contravariance cannot relate them and a brand is required. The conditional
-// vanishes on success (`X & unknown` is `X`, and the argument is accepted
-// unchanged) and becomes an unsatisfiable branded object on failure, so the
-// error lands on the call naming the gap.
+// `Need` and `Pub` are two independently inferred generics with no shared
+// annotated slot, so contravariance cannot relate them and a brand is required.
+// The conditional vanishes on success (`X & unknown` is `X`) and becomes an
+// unsatisfiable branded object on failure, so the error lands on the call.
 //
-// `Pub extends Need` accepts a SUPERSET: a chain that exposes more than a scope
-// requires is fine, and the extra singletons are ignored.
+// A SUPERSET is fine: a chain exposing more than the scope requires passes.
 //
-// The MOUNT-side gates — a host that cannot render an intent, a host that does
-// not implement a capability — are not here. They cannot move earlier (the same
-// scope is correct on another host) and they come back with the host mounts.
+// The MOUNT-side gates are not here — the same scope is correct on another
+// host, so they cannot move earlier. They come with the host mounts.
 type DepGuard<Pub, Need> = Pub extends Need
   ? unknown
   : { readonly __ERROR_chain_Pub_missing_deps: Need }
@@ -80,11 +61,10 @@ export interface State {
   readonly intents: PropertyKey
   readonly vocabulary: PropertyKey
   // The verbs its extensions declared, as the BUILDER offers them — full
-  // signatures, not the runtime factories. The two are different shapes and
-  // constraining this to the factory map is a mistake that reads as harmless:
-  // a concrete state then fails its own constraint, `S` falls back to `State`
-  // wherever it is inferred, and every verb sees the widest possible scope
-  // instead of the one it was called on.
+  // signatures, not the runtime factories. Constraining this to the factory map
+  // reads as harmless and is not: a concrete state then fails its own
+  // constraint, `S` falls back to `State` wherever it is inferred, and every
+  // verb sees the widest possible scope instead of the one it was called on.
   readonly verbs: object
 }
 
@@ -93,14 +73,11 @@ export interface State {
 // outcome `next` gave it (it is passing through — the brand says so) and a WORD
 // (it contributes on the intent axis instead). What is left is the value.
 //
-// KNOWN LIMIT, and deliberately not fixed here. `R extends AnyOutcome ? never`
-// reads "it is passing through", but a WRAP step — one that awaits `next` and
-// hands back `{ ...out, value: somethingElse }` — is also outcome-shaped, and
-// its new value is dropped from `S['result']`. The scope then reports the
-// leaf's type while producing the wrapper's. Narrowing this needs the outbound
-// side to be a value a step RETURNS rather than an outcome it forwards, which
-// is the shape #61 is already moving to; doing it twice is the work the design
-// document exists to avoid.
+// KNOWN LIMIT: a WRAP step that awaits `next` and hands back
+// `{ ...out, value: somethingElse }` is outcome-shaped too, so its new value is
+// dropped and the scope reports the leaf's type while producing the wrapper's.
+// Fixing it needs the outbound side to be a value a step RETURNS — the shape
+// #61 moves to.
 type AnyOutcome = Outcome<unknown>
 type AnyAbort = Abort<never> | Abort<any>
 type ValueOf<R> = R extends AnyOutcome
@@ -127,16 +104,14 @@ type IntentKeysOf<R> = R extends Abort<infer I>
 
 // ── gate: the SCOPE does not coin that word ──────────────────────────────────
 // It rides the ARGUMENT, not the return type. The return-type form is cheaper
-// and was tried first, but it only fires when the NEXT call in the chain
-// touches the poisoned type — so a BASE (a carrier plus a few steps, no leaf,
-// which is exactly the shape a shared `gated()` has in a real app) swallows the
-// mistake and surfaces it in whichever file finally uses the scope, pointing at
-// a step its author never wrote (§2).
+// but only fires when the NEXT call touches the poisoned type, so a BASE — a
+// carrier and some steps with no leaf, the shape a shared `gated()` has —
+// swallows the mistake and surfaces it in whichever file finally uses the
+// scope, pointing at a step its author never wrote (§2).
 //
-// `A` and `U` are defaulted parameters used as let-bindings, so each is
-// computed ONCE instead of per mention. They sit on the ALIAS, never on the
-// method: a defaulted parameter in a method's own list is caller-overridable,
-// and naming it `never` walks straight through the gate (§8).
+// `A` and `U` are let-bindings computed once. They sit on the ALIAS, never on
+// the method: a defaulted parameter in a method's own list is caller-
+// overridable, and naming it `never` walks straight through the gate (§8).
 type WordGate<
   S extends State,
   Ret,
@@ -150,41 +125,31 @@ type WordGate<
 // steps before it populated.
 //
 // An OVERRIDE, not the intersection it looks like (§9). `args & acc` does not
-// replace: a step re-populating a key it already has — which is what a
-// refinement IS — would yield the intersection of the two types, and refining
-// `Record<string, string | string[]>` to `{ page: number }` gives `never`. No
-// error anywhere, just a field nobody can use, diagnosed two files away. `Omit`
-// first, then intersect.
+// replace, and re-populating a key is what a REFINEMENT is: narrowing
+// `Record<string, string | string[]>` to `{ page: number }` would intersect to
+// `never` — a field nobody can use, with no error anywhere. `Omit` first.
 export type Ctx<S extends State> = Omit<S['args'], keyof S['acc']> & S['acc']
 
-// What a scope IS to whoever holds one: the callable builder, plus the verbs
-// its extensions declared. The verbs are a plain record with no call signature
-// of their own, so intersecting them creates no overload — which is what made
-// the always-callable shape look impossible at first.
+// What a scope IS to whoever holds one: the callable builder, plus the verbs its
+// extensions declared. The verbs are a plain record with no call signature of
+// their own, so intersecting them creates no overload.
 //
-// A verb's signature is the extension's to write, and it is written with
-// `this: Surface<S>`: that is how a verb reads the accumulated state without
-// knowing it, and how it can GROW or REFINE the ctx. `this` binds here because
-// this is a METHOD call — on the direct call above it binds to `void`, which is
-// the whole reason the state lives in a parameter.
+// A verb's signature is the extension's to write, with `this: Surface<S>` — how
+// it reads the accumulated state without knowing it, and how it can GROW or
+// REFINE the ctx. `this` binds on a METHOD call; on the callable above it binds
+// to `void`, which is why the state lives in a parameter.
 export type Surface<S extends State> = Scope<S> & S['verbs']
 
 // ── gate: a verb may not take a name the surface already owns ────────────────
-// `Surface` INTERSECTS, and that is exactly why this gate has to exist: `A & B`
-// over a shared key does not conflict, it narrows, so a verb named `step`
-// typechecks against the primitive it shadows and nothing is reported. The
-// runtime is where it shows, silently and two ways — `.step(fn)` discards `fn`
-// and pushes the verb's own step instead, and a verb named `name` or `length`
-// throws from inside `.extend`, because a function's own properties are not
-// writable. Both are configuration errors, so they belong at the call site that
-// wrote them (principle 1).
+// `Surface` INTERSECTS, which is why this gate has to exist: `A & B` over a
+// shared key does not conflict, it narrows, so a verb named `step` typechecks
+// against the primitive it shadows and nothing is reported. It shows only at
+// runtime, two ways — `.step(fn)` discards `fn` and pushes the verb's step
+// instead, and a verb named `name` or `length` throws from inside `.extend`,
+// because a function's own properties are not writable.
 //
-// The alphabet is CLOSED and small on purpose: it is what the builder installs
-// (`steps`, `step`, `extend`) plus what every function carries. Widening it is
-// a claim about the surface, not a matter of taste.
-//
-// `U` is a defaulted parameter used as a let-binding, computed once, and it
-// sits on the ALIAS rather than on the method — the same reason `WordGate`'s
+// The alphabet is CLOSED: what the builder installs plus what every function
+// carries. `U` sits on the ALIAS, not the method, for the reason `WordGate`'s
 // does (§8).
 type ReservedVerb = 'steps' | 'step' | 'extend' | 'name' | 'length' | 'prototype' | 'caller' | 'arguments'
 
@@ -193,15 +158,10 @@ type VerbGate<M, U = Extract<keyof M, ReservedVerb>> = [U] extends [never]
   : `⛔ a verb cannot be named: ${U & string} — the scope's own surface owns it`
 
 // How anything OUTSIDE the builder reads what a scope accumulated — a mount
-// asking which words it can say, a test asking what it yields. Under the
-// intersection form this needed a phantom per axis, present only so an adapter
-// could see past the intersection; with the state in a parameter there is
-// nothing to see past, and one conditional reads all of it.
-//
-// The phantoms are gone with it, and one of them was actively harmful: an
-// INVARIANT `__int` blocked the inference of `S` from a verb's `this`, so a
-// verb could not read the scope it was called on at all (the trap-4 family —
-// an invariant position misbehaves in inference, not only in assignment).
+// asking which words it can say, a test asking what it yields. With the state in
+// a parameter, one conditional reads all of it; the per-axis phantoms this
+// replaced were not merely redundant, an INVARIANT one blocked the inference of
+// `S` from a verb's `this` altogether.
 export type StateOf<Sc> = Sc extends Scope<infer S> ? S : never
 export type IntentsOf<Sc> = StateOf<Sc>['intents']
 export type ResultOf<Sc> = StateOf<Sc>['result']
@@ -219,6 +179,36 @@ type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Sur
   verbs: S['verbs']
 }>
 
+// ── an EXTENSION enriches the BUILDER, and only the builder ──────────────────
+//   `.step(fn)`      acts on the FLOW    — the step list grows
+//   `.extend(ext)`   acts on the BUILDER — it does not
+//
+// A verb is a function from its own arguments TO A STEP, so the fold work
+// happens when the verb is CALLED. `.step` stays the only thing that adds to
+// the fold, which is why this is not a second primitive.
+//
+// The signatures are DECLARED, not computed from the factory: `infer` through a
+// GENERIC factory instantiates its type parameters to their constraints, and
+// the verbs that matter are all generic.
+//
+//   declared   `.status(201)` → `{ pinned: 201 }`      ✓
+//   computed   `.status(201)` → `{ pinned: number }`   ✗
+//
+// `validate` would lose the entry's NAME and the schema's output type, which is
+// its whole job. The duplicate that buys this is tied by NAME below, so a verb
+// with no factory — or a factory no verb declares — is an error here.
+export type Verbs = Readonly<Record<string, (...args: never[]) => AnyStep>>
+
+export interface Extension<M extends object> {
+  // One factory per declared verb, keyed alike. A factory never receives the
+  // builder or a callback to rebuild it: pushing the step is the core's job.
+  readonly methods: { readonly [K in keyof M]: (...args: never[]) => AnyStep }
+  // The signatures as the BUILDER offers them, each written with
+  // `this: Surface<S>`. That works on a METHOD call and not on the callable,
+  // where `this` binds to `void`.
+  readonly __methods?: M
+}
+
 export interface Scope<S extends State> {
   // Two arguments, split by LIFETIME. The gates ride them, so a direct call is
   // checked exactly as a mount is.
@@ -230,24 +220,20 @@ export interface Scope<S extends State> {
   // The ordered stack the call folds.
   readonly steps: readonly AnyStep[]
 
-  // THE PRIMITIVE, in the open, and the only verb. What a step says by
-  // ANNOTATION — its app requirement, its ctx requirement, what it populates —
-  // is read off the three parameters. What it says by VALUE — the verbs it
-  // contributes — is read off the object form, and a step that says neither
-  // stays a bare function.
+  // THE PRIMITIVE, and the only verb. Everything a step says rides the three
+  // parameters — what it needs of the app, what it reads of the ctx, what it
+  // populates — so a step is a bare function and declares nothing.
   //
   // `ctx` is typed `Ctx<S>`, and that one position does the work an alphabet of
   // transport features was going to do. Under `strictFunctionTypes` a
   // function-typed parameter is contravariant, so a step ANNOTATING a wider ctx
-  // than the scope holds is refused right here, at the argument, naming the
-  // member that is missing. A step reading what the scope does not hold is not
-  // a rule the core enforces — it is not expressible.
+  // than the scope holds is refused right here, naming the missing member. A
+  // step reading what the scope has not got is not a rule the core enforces — it
+  // is not expressible.
   //
-  // `Ret` — what the step hands BACK — is unconstrained on purpose. A step may
-  // return the outcome `next` gave it, a WORD from a carrier's vocabulary, or a
-  // plain domain value, and those three have nothing in common but being
-  // values. The fold normalises whichever arrives, so no author writes an
-  // outcome by hand.
+  // `Ret` is unconstrained on purpose: the three things a step may return have
+  // nothing in common but being values, and the fold normalises whichever
+  // arrives.
   step<Need2 extends object, Add extends object, Ret>(
     s: ((app: Need2, ctx: Ctx<S>, next: Next<Add>) => Ret | Promise<Ret>) & WordGate<S, Ret>,
   ): Grown<S, Need2, Add, Ret>
@@ -313,17 +299,68 @@ const RESERVED_VERBS: ReadonlySet<string> = new Set([
   'arguments',
 ])
 
+// ── the fold ─────────────────────────────────────────────────────────────────
+// ONE ordered list, folded from the outside in. There are no categories, so
+// nothing decides which runs first: every step runs where it was written.
+//
+// PRIVATE, and that is the claim rather than a tidy-up — a scope IS the function
+// that runs it, so a host calls the scope and never the fold. Not exporting it
+// is what makes that structural instead of stated.
+
+// The ONE place any of the three things a step may return becomes an outcome. It
+// runs on the way back from every step, so an author never calls it: erasing a
+// word's intent down to `Abort<never>` happens here, once, on a value already
+// typed `unknown`, instead of at each call site where the type still said what
+// it was.
+function outcomeOf(result: unknown): Outcome<unknown> {
+  if (isOutcome(result)) return result
+  if (isAbort(result)) return { [OUTCOME]: true, ok: false, abort: result as Abort<never> }
+  if (isOk(result)) {
+    const value = result as Ok<unknown, never>
+    return { [OUTCOME]: true, ok: true, value: value.value, intent: value.intent }
+  }
+  return { [OUTCOME]: true, ok: true, value: result }
+}
+
+const isOutcome = (x: unknown): x is Outcome<unknown> =>
+  typeof x === 'object' && x !== null && OUTCOME in x
+
+// `async` is a contract and not a style: a step may throw SYNCHRONOUSLY, and a
+// plain function would let that escape past the promise the callable returns.
+async function runSteps(
+  steps: readonly AnyStep[],
+  app: object,
+  args: object,
+): Promise<Outcome<unknown>> {
+  const at = async (i: number, seen: object): Promise<Outcome<unknown>> => {
+    const step = steps[i]
+    if (step === undefined) {
+      // Every step passed through, so there is no value to hand back: `R` is
+      // `never` for such a scope, and `never` has no inhabitant. Throwing is
+      // not a fallback beside that type, it IS it. And by the error convention
+      // (principle 3) it is the right branch — a scope with no leaf is a
+      // CONSTRUCTION bug, and `{ ok: true, value: undefined }` would render a
+      // bug as a success.
+      throw new Error(
+        '@lntt/scope: every step passed through and none produced a value — this scope has no leaf',
+      )
+    }
+    // Normalised on the way out, so every step may hand back whichever of the
+    // three it has.
+    return outcomeOf(await step(app, seen, (delta) => at(i + 1, { ...seen, ...delta })))
+  }
+  return at(0, args)
+}
+
 function make(steps: readonly AnyStep[], verbs: Verbs): Built {
   const fold = (app: object, params: object) => runSteps(steps, app, params)
   const self = Object.assign(fold, {
     steps,
-    // One place where a step is added, and the only place a verb is registered,
-    // so a step cannot contribute a verb without also running.
-    // A step is added HERE and nowhere else, so nothing can join the fold
-    // without being written as a step.
+    // A step is added HERE and nowhere else, so nothing joins the fold without
+    // being written as a step.
     step: (s: AnyStep): Built => make([...steps, s], verbs),
-    // An extension registers verbs and adds NO step. That is the whole
-    // difference, and it is visible in this line.
+    // An extension registers verbs and adds no step. The whole difference
+    // between the two verbs is visible in these two lines.
     extend: (ext: { methods: Verbs }): Built => make(steps, { ...verbs, ...ext.methods }),
   })
   // Every contributed verb, wired the same way: call it, get a step, push it.

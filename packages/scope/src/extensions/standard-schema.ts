@@ -1,33 +1,27 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { Ctx, State, Surface } from '../scope.ts'
-import { invalid, type AnyStep, type Extension, type Next, type Outcome } from '../step.ts'
+import type { Extension } from '../scope.ts'
+import { invalid, type AnyStep, type Next, type Outcome } from '../step.ts'
 
-// VALIDATION, as an extension — `@lntt/scope/standard-schema`. It is the first
-// one, and the one that shows what an extension IS: it contributes a VERB and
-// does no fold work of its own. Adding it pushes nothing; calling `.validate`
-// pushes the step.
+// VALIDATION, as an extension — `@lntt/scope/standard-schema`. The first one,
+// and the one that shows what an extension IS: it contributes a VERB and does
+// no fold work. Adding it pushes nothing; calling `.validate` pushes the step.
 //
-// It is CARRIER-FREE, and deliberately: running a schema over a value asks
-// nothing of the transport, so it composes on a bare `scope()` and on every
-// carrier alike. That keeps the split the rest of the design makes — the core
-// owns the MECHANISM and never the ALPHABET. It coins no word (§40), it names
-// no capability (§34), and now it runs no schema engine either: a codebase that
-// validates with something else ships its own extension with its own verb.
-//
-// What the CORE keeps is which entries exist. What a scope HAS is what the
-// carrier and the steps before put there, and only the builder knows that set;
-// this extension knows how to run a schema over one of them, and nothing more.
+// CARRIER-FREE, deliberately: running a schema over a value asks nothing of the
+// transport, so it composes on a bare `scope()` and on every carrier alike. It
+// coins no word (§40) and names no capability (§34). What a scope HAS is what
+// the carrier and the earlier steps put there; this knows how to run a schema
+// over one of those entries, and nothing more.
 
 // ── what a scope may validate ────────────────────────────────────────────────
-// The parameter's type is the UNION of the entries this scope holds, so an
-// editor completes it and a typo is told what it could have written. A brand on
-// the argument would type the parameter `string` and lose completion, which is
-// why the gate idiom is the wrong tool here.
+// The UNION of the entries this scope holds, so an editor completes it and a
+// typo is told what it could have written. The gate idiom is the wrong tool
+// here: a brand would type the parameter `string` and lose completion.
 //
-// The one case a union cannot express is the EMPTY one, where it degrades to
-// `never` and names nothing — so a sentence stands in there. The tuple wrap is
-// not decoration: `keyof … extends never` distributes over a non-empty union
-// and is vacuously true for it (§3).
+// A union cannot express the EMPTY case, where it degrades to `never` and names
+// nothing, so a sentence stands in. The tuple wrap is not decoration:
+// `keyof … extends never` distributes over a non-empty union and is vacuously
+// true for it (§3).
 type Nameable<S extends State> = keyof Ctx<S> & string
 
 export type Validatable<S extends State> = [Nameable<S>] extends [never]
@@ -35,11 +29,10 @@ export type Validatable<S extends State> = [Nameable<S>] extends [never]
   : Nameable<S>
 
 // ── what validating does to the ctx ──────────────────────────────────────────
-// It REPLACES the entry, and replacing is why an extension writes its own state
-// transformation rather than handing the builder a delta to intersect: `Add`
-// would intersect, and the ordinary refinement — a query string's
-// `string | string[]` narrowed to `number` — intersects to `never`. A field
-// nobody can use, and no error anywhere (§9). `Omit` first, then add back.
+// It REPLACES the entry, which is why an extension writes its own state
+// transformation rather than handing the builder a delta: `Add` would
+// intersect, and narrowing a query string's `string | string[]` to `number`
+// intersects to `never` — a field nobody can use, with no error (§9).
 type Refined<S extends State, N extends string, T> = {
   need: S['need']
   args: S['args']
@@ -51,24 +44,18 @@ type Refined<S extends State, N extends string, T> = {
 }
 
 // ── the verb ─────────────────────────────────────────────────────────────────
-// DECLARED, not computed from the factory, and the reason is measured: `infer`
-// through a generic factory instantiates its type parameters to their
-// constraints, so a computed `validate` would lose BOTH the entry's name and
-// the schema's output type — which is the whole of what it does.
+// `this: Surface<S>` is how it reads the scope it was called on: `this` binds
+// on a METHOD call, and on the scope's own call signature it binds to `void`.
 //
-// `this: Surface<S>` is how it reads the scope it was called on. That works
-// because this is a METHOD call; on the scope's own call signature `this` binds
-// to `void`, which is why the state lives in a type parameter at all.
-//
-// The schema is NOT constrained against the entry's raw type, and cannot be:
-// measured against real zod, `Raw extends InferInput<S>` rejects every schema
+// The schema is NOT constrained against the entry's raw type, and cannot be.
+// Measured against real zod, `Raw extends InferInput<S>` rejects every schema
 // including the valid ones, and the reverse rejects
-// `z.object({ page: z.coerce.number() })` — the most ordinary query schema
-// there is, because `z.coerce.number()` reports its input as `number`, exactly
-// as a schema that genuinely mishandles a query string does. The two are
+// `z.object({ page: z.coerce.number() })` — the most ordinary query schema there
+// is — because `z.coerce.number()` reports its input as `number`, exactly as a
+// schema that genuinely mishandles a query string does. The two are
 // indistinguishable on the input face, and rejecting a valid declaration is
-// worse than catching nothing. A wrong schema is a runtime `invalid` branch,
-// which is not silent.
+// worse than catching nothing. A wrong schema is a runtime `invalid`, which is
+// not silent.
 export interface Validate {
   validate<S extends State, N extends Validatable<S> & string, Sch extends StandardSchemaV1>(
     this: Surface<S>,
@@ -78,10 +65,9 @@ export interface Validate {
 }
 
 // ── the step the verb pushes ─────────────────────────────────────────────────
-// Read the entry as it stands — put there by the carrier or by an earlier
-// step — and REPLACE it with the schema's output, or stop on the core's own
-// `invalid` branch. This is the whole of "steps populate, validate refines",
-// and it is why nothing else needs to know a schema exists.
+// Read the entry as it stands and REPLACE it with the schema's output, or stop
+// on the core's own `invalid` branch. The whole of "steps populate, validate
+// refines", and why nothing else needs to know a schema exists.
 const validateStep =
   (name: string, schema: StandardSchemaV1) =>
   async (
@@ -97,10 +83,8 @@ const validateStep =
     return next({ [name]: result.value })
   }
 
-// The value. `methods` is tied to `Validate` BY NAME, so a verb declared with
-// no factory, or a factory no verb declares, is a compile error here rather
-// than a surprise at the call site — which is the half of the duplication that
-// can be closed.
+// `methods` is tied to `Validate` BY NAME, so a verb with no factory — or a
+// factory no verb declares — is an error here rather than at the call site.
 export const standardSchema: Extension<Validate> = {
   methods: { validate: validateStep as unknown as (...args: never[]) => AnyStep },
 }

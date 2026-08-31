@@ -1,56 +1,39 @@
 // The host-agnostic scope runtime. ONE primitive — a STEP wrapping the rest of
 // the fold — and a scope IS the function that runs it, from the first line.
 //
-// Read `step.ts` first: it carries the formula, and four things is the whole of
-// what a step says. `scope.ts` is the builder over it, with `.step()` as the
-// only verb. Everything a carrier or an extension adds lives in its own
-// subpath and is named nowhere here — the core owns the MECHANISM and never the
-// alphabet.
+// Read `step.ts` first: what a step says, and what the fold produces. `scope.ts`
+// is the builder over it, and holds the fold itself. A carrier or an extension
+// lives in its own subpath and is named nowhere here — the core owns the
+// MECHANISM and never the alphabet.
 //
-// Being rebuilt (#30): the carriers, the extensions and the host mounts land on
-// this next, in that order. `docs/design/scope-api.md` is the contract.
+// Three things are written against this package — a CARRIER, an EXTENSION and a
+// host MOUNT — and the barrel carries what those three need and nothing else.
+// What is missing is missing on purpose: the fold is private to `scope.ts`,
+// because a host calls the scope and never the fold, and a type reachable
+// inside another's signature needs no name of its own.
 
-// WHAT IS EXPORTED, AND WHAT IS NOT. There are exactly three things written
-// against this package — a CARRIER, an EXTENSION, and a host MOUNT — and the
-// barrel carries what those three need and nothing else. A type that appears
-// only inside another type's signature is reachable through it and needs no
-// name here; exporting it anyway is terminology the reader has to carry with no
-// call site to attach it to.
-//
-// So `runSteps` is absent (a scope IS the function that runs it, and the fold
-// would be a second entry point to the same thing), and so are the gates and
-// the shapes the builder uses on itself: `Grown`, `DepGuard`, `VerbGate`,
-// `Verbs`, `isAbort`/`isOk`, `outcomeOf`. Each is used at exactly one place
-// inside the core, and none of the three authors above ever writes one.
-
-// The builder, and what a scope IS once it holds steps.
+// The builder. `Carrier` is what a carrier declares itself against;
+// `State`/`Surface`/`Ctx`/`Extension` are what an extension writes a verb with;
+// `StateOf` and its readers are how a mount asks what a scope accumulated.
 export { scope } from './scope.ts'
-// `Carrier` is what a carrier declares itself against; `State`/`Surface`/`Ctx`
-// are what an extension writes a verb's signature with; `StateOf` and its two
-// readers are how a MOUNT asks what a scope accumulated without going through
-// the builder.
 export type {
   Scope,
   Surface,
   State,
   Carrier,
   Ctx,
+  Extension,
   StateOf,
   IntentsOf,
   ResultOf,
 } from './scope.ts'
 
-// The primitive a carrier or an extension is written against. `invalid` is the
-// one outcome an extension builds by hand — the core's own branch, which a
-// schema extension returns.
+// What a step is written against. `invalid` is the one outcome built by hand:
+// the core's own branch, which any extension that PARSES returns.
 export { invalid } from './step.ts'
-export type { Step, AnyStep, Extension, Next, Outcome, Invalid, Issue } from './step.ts'
+export type { Step, AnyStep, Next, Outcome, Invalid, Issue } from './step.ts'
 
-// How a carrier COINS a word: the constructors, not the brands they carry. A
-// carrier writes `abort({ kind: 'status', status: 404 })` and never touches the
-// symbol — only the fold reads that, when it checks what came back. What a word
-// MEANS stays the carrier's business. The READERS are not here either: the fold
-// normalises on the way out, so a mount receives an outcome and never a raw
-// word.
-export { abort, ok } from './abort.ts'
-export type { Abort, Ok } from './abort.ts'
+// How a carrier COINS a word — the constructors, not the brands they carry. A
+// carrier never touches the symbol; only the fold reads that.
+export { abort, ok } from './words.ts'
+export type { Abort, Ok } from './words.ts'

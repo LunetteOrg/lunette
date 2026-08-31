@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import { scope, type Scope, type State, type Surface } from './scope.ts'
-import type { AnyStep, Extension, Next } from './step.ts'
+import { scope, type Extension, type Scope, type State, type Surface } from './scope.ts'
+import type { AnyStep, Next } from './step.ts'
 
 // AN EXTENSION enriches the BUILDER, and only the builder. That is the whole
 // split, and it is visible in the runtime: `.step` appends to the fold,
