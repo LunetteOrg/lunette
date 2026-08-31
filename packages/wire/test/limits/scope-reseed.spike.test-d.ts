@@ -8,6 +8,11 @@
 import { describe, it } from 'vitest'
 import { Lunette, lunette } from '../../src/index.ts'
 
+// Deliberately LOCAL, and not the `PubOf` @lntt/wire exports: this file measures
+// type-checking cost, and the shipped one reaches the same type by a different
+// inference route (the return type of `build`, not the `Lunette` parameter).
+// Swapping it would change the graph being measured, so the recorded numbers
+// would no longer describe this file. Not a duplicate to tidy away.
 type PubOf<C> = C extends Lunette<any, infer P, any> ? P : never
 
 interface Env {

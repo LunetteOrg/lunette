@@ -1,0 +1,24 @@
+{
+  "name": "@lntt/scope",
+  "version": "0.0.0",
+  "description": "The host-agnostic scope runtime for @lntt/wire. ONE primitive \u2014 a step wrapping the rest of the fold \u2014 and a scope IS the function that runs it. Framework-free: carriers and extensions ship as tree-shakable subpaths and the core names none. Being rebuilt on the settled step formula (#30); the carriers, the extensions and the host mounts land on it next.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./standard-schema": "./src/extensions/standard-schema.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@standard-schema/spec": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.0",
+    "zod": "^3.25.0"
+  }
+}

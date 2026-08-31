@@ -10,14 +10,38 @@ the `errore` library (errors as values) applied to DI.
 ```
 .                       THIS monorepo (npm org: lntt) — the product
   packages/wire         @lntt/wire   the core (runtime + type tests)
-  packages/http         @lntt/http   http dialects ("." agnostic, "./hono", "./express")
+  packages/scope        @lntt/scope  the host-agnostic scope runtime — ONE
+                        primitive (a step wrapping the rest of the fold) and a
+                        scope IS the function that runs it, from the first line.
+                        BEING REBUILT (#30): the core is `primitive.ts` +
+                        `base.ts` and nothing else ships yet. The carriers, the
+                        extensions, the host mounts and the examples land on it
+                        in that order. The contract is docs/design/scope-api.md
+                        — READ IT FIRST; its "Where this goes next" is the work
+                        order, and its "Traps already paid for" is the list a
+                        rewrite must inherit rather than rediscover
   packages/{cli,listener,flow}       scaffolds only — no shipped design;
                         their stories live in the tracker
   research/             live research prototypes (prior art, not products) —
-                        PoC code proving out @lntt/wire's behaviour and DX,
-                        OUT OF SCOPE for code review (correctness/security/
-                        style); only whether it demonstrates its point matters
+                        PoC code proving out behaviour and DX, OUT OF SCOPE for
+                        code review (correctness/security/style); only whether
+                        it demonstrates its point matters. `terminal-step` and
+                        `parameterised-builder` are the two the scope builder
+                        was settled on, each carrying its measurement
 ```
+
+**`@lntt/integration` and `examples/` are SET ASIDE**, deliberately, while the
+core is rebuilt (#30). Both live on `origin/story-30/scope-impl` — 27
+integration files, 191 example files, verified present — along with most of the
+extensions, and they come back in that order once the core and its sugars are
+settled. Porting them against a surface still in motion is the work done twice
+that the design document exists to avoid; their last state on THIS branch is in
+the history, one `git show` away.
+
+The old `@lntt/http` (the `pipe`-based "wire owns the server" posture) was
+superseded by the scope runtime and removed; if the own-the-loop posture is
+ever needed it is rebuilt fresh on the scope core, not resurrected. Nothing is
+published to npm yet.
 
 Everything outside this monorepo (design history, reference apps, the
 production proving ground) lives in its own repo and is referenced from
@@ -64,8 +88,27 @@ the tracker when relevant — never from here.
   discussions.
 - **Vocabulary**: chain · layer · bare/bound leaf · binder (`bind(record)`,
   apply = fixed deps, `.with` = per call, `.by` = per call keyed) · window
-  · opener (window arg 1) · bridge (window arg 2) · bag · guard · seed ·
-  fragment · dialect.
+  · opener (window arg 1) · bridge (window arg 2) · bag · guard · seed —
+  and, for the scope runtime, a lexicon of its own, settled in
+  `docs/design/scope-api.md`: scope (`scope()` agnostic, `scope(carrier)`
+  chooses one) · scope execution (one run: `postScope(app, params)`) · scope
+  execution parameters (the second argument — what belongs to THIS run; NOT
+  `seed`, which is wire's build-once, the other lifetime) · carrier (chosen
+  once, pure declaration — no runtime value — never a step) · extension (a STEP
+  that populates an entry, and sometimes contributes a verb; added like any
+  other step) · step (the primitive — distinct from wire's LAYER, a different
+  mechanism, §33) · verb (a method a step contributes to the BUILDER — not a
+  WORD, which is a value a step returns) · leaf (the innermost step, the one
+  that does not call `next`) · entry (a ctx key `validate` may name: either arrives in
+  the execution parameters or is derived by an extension) · enrichment (what a
+  guard returns) · transport feature (RETIRED at the definition site — what a
+  step needs of the transport is the ctx it ANNOTATES, checked by contravariance;
+  the name survives only at the MOUNT) ·
+  intent (a word a carrier coins) · registry (opaque: steps write, mounts
+  read) · effects · outcome (`ok`/`abort`/`invalid`) · capability (an OPEN
+  alphabet — the core enumerates none; demand is open, supply is a written-out
+  set, so an unclaimed one mounts nowhere, and widening a host's set is a claim
+  about machinery, §34) · dialect.
 - **Tests**: vitest with typecheck (`*.test-d.ts` included via the
   `typecheck` block in each `vitest.config.ts`; `pnpm typecheck` runs
   `tsc --noEmit` and is the separate gate). Always verify by running:
@@ -85,6 +128,19 @@ the tracker when relevant — never from here.
   are not actionable; the only thing worth checking is whether the
   prototype demonstrates what it set out to. Scope `/review` and
   `/code-review` to `packages/`, `docs/`, and root config.
+- **Reviewing `examples/`** (set aside today — this stands for when they return):
+  they ARE reviewed, but as DEMONSTRATIONS, not as
+  production systems. What counts: does it teach the right thing, is every
+  claim in its prose true, does it compile and pass, would a reader copying
+  the SHAPE be led right. What does not: production hardening — concurrency
+  and races, pagination and unbounded reads, retry and backoff, N+1 access
+  patterns, exhaustion limits. An example is allowed to be the simplest thing
+  that shows its point, and simplifying is often what makes the point legible
+  (the fat eager KV read in `examples/cloudflare-workers/*` is what makes
+  build-once observable at all; a realistic lazy handle would demonstrate
+  less). Where a shortcut could mislead someone copying it, the answer is a
+  COMMENT stating the limit, not hardening the example. Findings of the
+  production-hardening kind are noted and closed, not fixed.
 
 ## Status and next steps
 

@@ -68,7 +68,7 @@ non-negotiables.
 | package | what it is |
 |---|---|
 | [`@lntt/wire`](./packages/wire) | the core: the chain (`use`/`provide`/`expose`/`override`/`as`/`pipe`), two-sided composition (Seed), mounting with lexical scoping, leaves (`bind`), windows (`With`/`within`/`bindBy`), helpers (`layer`, `lazy`, `circular`). Test utilities at `@lntt/wire/testing` |
-| [`@lntt/http`](./packages/http) | HTTP dialects: routes-as-data with swappable engines (`.`), plus the full native frameworks at `@lntt/http/hono` and `@lntt/http/express` |
+| [`@lntt/scope`](./packages/scope) | the host-agnostic scope runtime: one primitive (`.step`, a step wrapping the rest of the fold), `.extend` for the verbs a dialect contributes, and a scope that IS the function that runs it |
 | [`@lntt/cli`](./packages/cli) | command-line dialect — *planned* |
 | [`@lntt/listener`](./packages/listener) | event consumers over external buses (Redis, SQS, ...) — *planned* |
 | [`@lntt/flow`](./packages/flow) | flow orchestration on top of events — *planned* |
