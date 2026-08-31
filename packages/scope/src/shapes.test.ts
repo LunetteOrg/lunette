@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { scope } from './scope.ts'
 import { code, fixture, gone, other, refused } from './fixture/carrier.ts'
-import type { Next, Outcome } from './step.ts'
+import type { Next } from './step.ts'
 
 // THE SHAPES A STEP TAKES — one per thing a step is for. There is no category
 // here and no phase: every one is the same primitive, and each runs where it

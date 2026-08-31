@@ -6,6 +6,12 @@
     "lib": ["ES2023"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    // Dead code fails the build rather than accumulating. `noUnusedParameters`
+    // still allows a leading underscore, which is how a step names the
+    // positions it does not read (`_app`, `_ctx`) — the signature is the
+    // declaration, so those parameters have to stay written.
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "exactOptionalPropertyTypes": true,
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,

@@ -127,7 +127,7 @@ describe('buildOnce when the build fails', () => {
           torn.push(ctx.env.DATABASE_URL)
         }
       })
-      .use(async (ctx, next) => {
+      .use(async (_ctx, next) => {
         if (left-- > 0) throw new Error('transient: could not connect')
         return next({ ready: true as const })
       })

@@ -24,7 +24,7 @@ interface Env {
 const appChain = lunette<{ env: Env }>()
   .expose((c) => ({ config: { db: c.env.url } }))
   .expose((c) => ({ pool: { q: c.config.db } }))
-  .expose((c) => ({ logger: { info: (m: string) => m } }))
+  .expose((_c) => ({ logger: { info: (m: string) => m } }))
   .expose((c) => ({ clock: { now: () => c.pool.q.length } }))
   .expose((c) => ({ userRepo: { find: (id: string) => `${c.config.db}:${id}` } }))
   .expose((c) => ({ sessionRepo: { get: (id: string) => c.userRepo.find(id) } }))

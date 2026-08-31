@@ -50,7 +50,7 @@ import {
 // The MOUNT-side gates — a host that cannot render an intent, a host that does
 // not implement a capability — are not here. They cannot move earlier (the same
 // scope is correct on another host) and they come back with the host mounts.
-export type DepGuard<Pub, Need> = Pub extends Need
+type DepGuard<Pub, Need> = Pub extends Need
   ? unknown
   : { readonly __ERROR_chain_Pub_missing_deps: Need }
 
@@ -182,7 +182,7 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 // does (§8).
 type ReservedVerb = 'steps' | 'step' | 'extend' | 'name' | 'length' | 'prototype' | 'caller' | 'arguments'
 
-export type VerbGate<M, U = Extract<keyof M, ReservedVerb>> = [U] extends [never]
+type VerbGate<M, U = Extract<keyof M, ReservedVerb>> = [U] extends [never]
   ? unknown
   : `⛔ a verb cannot be named: ${U & string} — the scope's own surface owns it`
 
@@ -203,7 +203,7 @@ export type ResultOf<Sc> = StateOf<Sc>['result']
 // What `.step` grows. An extension writes its own transformation instead —
 // `Refined<S, N, T>` in the validation extension is one — which is how a verb
 // can REPLACE an entry where a step can only add to it.
-export type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Surface<{
+type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Surface<{
   need: S['need'] & Need2
   seed: S['seed']
   acc: S['acc'] & Add
