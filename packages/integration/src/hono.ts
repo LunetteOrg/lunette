@@ -11,11 +11,9 @@ import type {
   DepGuard,
   Handler,
   IntentGuard,
-  InputOf,
-  OutputOf,
-  RequestCarrier,
+  RequestHead,
 } from '@lntt/scope'
-import { runFold } from '@lntt/scope'
+import type { InputOf, OutputOf } from '@lntt/scope/standard-schema'
 import { readCookies } from '@lntt/scope/cookies'
 import { readHeaders } from '@lntt/scope/headers'
 import type { HttpIntent } from '@lntt/scope/http'
@@ -37,8 +35,22 @@ export interface HonoOptions {
 // whole vocabulary.
 type HttpIntents = 'status' | 'redirect' | 'ok-status'
 // The capabilities Hono's carrier actually supplies: it streams a readable
-// request (`body`), and can decorate the response (`cookies`/`headers`).
-type HonoCaps = 'body' | 'cookies' | 'headers'
+// request (`body`), and can decorate the response — the two write capabilities
+// are named for the MACHINERY they need, not the subject they concern.
+type HonoCaps = 'body' | 'set-cookie' | 'response-headers'
+
+// What this host seeds per invocation: the request it holds, and the params its
+// router matched — RAW, see `handlerFrom` for why they are not the validated
+// ones Hono itself produced.
+type HonoSeed = { request: RequestHead; params: Readonly<Record<string, string>> }
+
+// The scope's REGISTRY, as this mount reads it. The core keeps that map opaque
+// — whoever wrote into it knows what is there — and a host narrows it to the
+// entry it needs: `params`, which is what Hono's native validator is handed and
+// what the route gate compares the pattern against.
+type WithParams<S extends StandardSchemaV1> = Readonly<Record<string, unknown>> & {
+  params: S
+}
 
 // ── the route gate — pattern vs `.params()` schema, WE WRITE NO PARSER ──────
 // Hono already knows its own path syntax; `ParamKeys` is Hono's OWN exported
@@ -117,13 +129,28 @@ export function hono<C extends Lunette<any, any, any>>(
   // (§34), so an internal step that accepts any scope has to say so rather
   // than lean on a default of `never`.
   const handlerFrom =
-    <S extends StandardSchemaV1, Need extends object, R, Cap extends Capability, Int extends PropertyKey>(
-      handler: Handler<Need, S, R, Cap, Int>,
+    <
+      S extends StandardSchemaV1,
+      Need extends object,
+      R,
+      Cap extends Capability,
+      Int extends PropertyKey,
+    >(
+      handler: Handler<Need, WithParams<S>, R, HonoSeed, Cap, Int>,
     ) =>
     async <I extends { in: { param: InputOf<S> }; out: { param: OutputOf<S> } }>(
       c: Context<WireEnv<Pub>, string, I>,
     ) => {
-      const params = c.req.valid('param') // OutputOf<S>, coerced by sValidator
+      // The RAW params, NOT `c.req.valid('param')`, and this is a correctness
+      // choice rather than a preference. `sValidator` has already run the
+      // schema; the scope's own `validate('params', …)` step will run it again,
+      // and a schema that TRANSFORMS (`z.string().transform(s => s.length)`)
+      // rejects its own output — so re-validating an already-validated value is
+      // wrong, not merely wasteful. Each pass therefore starts from the raw
+      // value. The schema runs twice per request, which for route params is
+      // cheap, and `sValidator` earns its place by contributing the route's
+      // input type: it is what keeps `hc<AppType>()` typed.
+      const params = c.req.param() as Readonly<Record<string, string>>
       // The seed comes from THIS request's `c.env` (Cloudflare hands bindings
       // to the handler, never at startup) and is read only on the build that
       // happens; the app comes from this pack's own memo, never from a context
@@ -134,11 +161,21 @@ export function hono<C extends Lunette<any, any, any>>(
       // usual shape: a brand carries no information once re-abstracted over a
       // fresh type parameter), so the cast states what is already known
       // rather than re-deriving it.
-      const outcome = await runFold<RequestCarrier, R, HonoCaps, {}, Cap>(
-        handler as Handler<Need, S, R, Cap, Int> & CarrierGuard<Cap, HonoCaps>,
-        (await ensure(() => seedFrom(c.env))).app as object,
-        { request: c.req.raw },
-        params as object,
+      // A scope IS the function that runs it. Two arguments, split by lifetime:
+      // the built app (process) and this invocation's seed (request).
+      const outcome = await (
+        handler as Handler<Need, WithParams<S>, R, HonoSeed, Cap, Int>
+      )<object, HonoCaps>(
+        // The gates ride the CALL's first argument now, so the cast that states
+        // what is already known moved here with them: the public `handler`
+        // below proved `Cap ⊆ HonoCaps` at ITS call site, and that proof does
+        // not propagate through this second, independently-generic `Cap` (§34's
+        // usual shape — a brand carries no information once re-abstracted over
+        // a fresh type parameter).
+        (await ensure(() => seedFrom(c.env))).app as object &
+          DepGuard<object, Need> &
+          CarrierGuard<Cap, HonoCaps>,
+        { request: c.req.raw, params },
       )
       for (const [name, value] of readHeaders(outcome)) c.header(name, value)
       for (const ck of readCookies(outcome)) {
@@ -197,12 +234,12 @@ export function hono<C extends Lunette<any, any, any>>(
     Int extends PropertyKey,
   >(
     path: P,
-    handler: Handler<Need, S, R, Cap, Int> &
+    handler: Handler<Need, WithParams<S>, R, HonoSeed, Cap, Int> &
       DepGuard<Pub, Need> &
       CarrierGuard<Cap, HonoCaps> &
       IntentGuard<Int, HttpIntents> &
       PathGate<P, OutputOf<S>>,
-  ) => [path, sValidator('param', handler.schema), handlerFrom(handler)] as const
+  ) => [path, sValidator('param', handler.registry.params), handlerFrom(handler)] as const
 
   return { mount, handler, dispose }
 }

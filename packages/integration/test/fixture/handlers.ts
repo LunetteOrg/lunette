@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { standardSchema } from '@lntt/scope/standard-schema'
 import type {
   Admin,
   AdminRepo,
@@ -106,9 +107,9 @@ export const courseLeaf = (
 // `.extend(http)` is what DECLARES the `status` intent `unauthorized`/
 // `forbidden`/`notFound` return — the definition-side gate (`DeclGate`) is
 // what forces this, not a convention.
-export const courseHandler = scope()
-  .extend(http)
-  .params(courseSchema)
+export const courseHandler = scope(http)
+  .extend(standardSchema)
+  .validate('params', courseSchema)
   .guard(authGuard)
   .guard(adminGuard)
   .guard(courseGuard)
@@ -118,15 +119,15 @@ export const courseHandler = scope()
 // return annotation, for the same reason as `authenticate` above: an
 // annotated bare `Abort` would erase `redirect()`'s own declared intent
 // before `.handle`'s gate ever sees it.
-export const loginLeaf = (_deps: {}, ctx: { cookies: CookieSink }) => {
-  ctx.cookies.set('sid', 'u-admin', { httpOnly: true, path: '/' })
+export const loginLeaf = (_deps: {}, ctx: { response: { cookies: CookieSink } }) => {
+  ctx.response.cookies.set('sid', 'u-admin', { httpOnly: true, path: '/' })
   return redirect('/dashboard')
 }
 
-export const loginHandler = scope()
-  .extend(http)
+export const loginHandler = scope(http)
   .extend(cookies)
-  .params(loginSchema)
+  .extend(standardSchema)
+  .validate('params', loginSchema)
   .handle(loginLeaf)
 
 // ── tRPC-flavoured decisions ─────────────────────────────────────────────
@@ -159,10 +160,14 @@ export const adminGuardRpc = (
   ctx: { session: Session },
 ) => resolveAdminRpc(adminRepo, ctx.session.userId)
 
+// It reads `ctx.input`, not `ctx.params`, and the difference is the point: on
+// this carrier the host-supplied input IS the payload, and it is named for what
+// it is. The HTTP twin reads `ctx.params` because there it is the route params.
+// One name meaning two things is the fusion §40 removed.
 export const courseGuardRpc = (
   { courseRepo }: { courseRepo: CourseRepo },
-  ctx: { admin: Admin; params: { courseId: string } },
-) => resolveCourseRpc(courseRepo, ctx.params.courseId, ctx.admin.id)
+  ctx: { admin: Admin; input: { courseId: string } },
+) => resolveCourseRpc(courseRepo, ctx.input.courseId, ctx.admin.id)
 
 // The tRPC-mounted twin of `courseHandler` — same shape, same repos, same
 // `courseLeaf`, but `.extend(rpc.rpc)` declares tRPC's OWN `code` intent
@@ -170,9 +175,9 @@ export const courseGuardRpc = (
 // `toMutation` and REJECTS on Hono/Express/RR7 (they render http's set, not
 // tRPC's) — the mount-side half of the same gate `courseHandler` proves on
 // the definition side.
-export const courseHandlerRpc = scope()
-  .extend(rpc.rpc)
-  .input(courseSchema)
+export const courseHandlerRpc = scope(rpc.rpc)
+  .extend(standardSchema)
+  .validate('input', courseSchema)
   .guard(authGuardRpc)
   .guard(adminGuardRpc)
   .guard(courseGuardRpc)

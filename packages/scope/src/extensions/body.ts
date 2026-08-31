@@ -1,84 +1,94 @@
-import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Invalid } from '../carrier.ts'
-import type { OutputOf } from '../schema.ts'
-import type { Prepare, ScopeExtension, ScopeExtensionValue } from '../scope.ts'
-import { validateInput } from '../validate.ts'
+import type { Channel, ScopeExtensionValue, Step } from '../scope.ts'
 
-// The `body` extension — a tree-shakable subpath (`@lntt/scope/body`). Injecting
-// it (`scope().extend(body)`) adds the declared body channels `.body` / `.form`.
-// Each fixes a Standard Schema for the request body, exposes the validated value
-// on `ctx.body` / `ctx.form` (via `__acc`), and flows the `body` capability
-// (`__caps`) — which the adapter's `CarrierGuard` gates at the mount site: a body
-// scope is REJECTED on tRPC (no readable body). But the primary protection is
-// earlier — a scope authored without `.extend(body)` (e.g. a tRPC read) does not
-// have `.body`/`.form` on its builder at all, so the mistake cannot be written.
-// Explicit by content shape: `.body` = JSON, `.form` = multipart/urlencoded.
-export interface BodyExtension extends ScopeExtension {
-  readonly __methods?: { readonly body: true; readonly form: true }
+// The `body` channel — a tree-shakable subpath (`@lntt/scope/body`). It is a
+// FACTORY, not a value, because a populated `ctx.body` has already been parsed:
+// the channel cannot put the body on the ctx without knowing how to decode it,
+// so the encoding is chosen where the channel is added.
+//
+//   .extend(body('json'))   // ctx.body from application/json
+//   .extend(body('form'))   // ctx.body from multipart/urlencoded
+//
+// ONE ctx key either way. A leaf shared between an API route and a browser-form
+// route reads `ctx.body` in both and needs no adaptation; the shape difference
+// lives in the schema, where a form coerces its strings. Two keys forced a
+// hand-written remapping at every shared leaf.
+//
+// We ship no `json`/`form` aliases. A codebase that wants them writes
+// `const json = body('json')` once — sugar a caller can build is not API we owe
+// (principle 5).
+//
+// Extending it flows the `body` capability, which the adapter's `CarrierGuard`
+// gates at the mount: a body scope is REJECTED on tRPC, which has no readable
+// body. The earlier protection is the carrier's `__admits`, refusing the
+// `.extend` itself on a protocol that cannot carry the encoding at all.
+//
+// The cost of populating rather than fetching on demand: the parse runs on
+// every request, even when a guard aborts before anything reads `ctx.body`.
+// That is deliberate — `ctx.body` is there, so it was read. A lazy accessor
+// would be an async getter inside a synchronous ctx, which is worse than the
+// read and is ambient magic (principle 7).
+export type BodyFormat = 'json' | 'form'
 
-  body<B extends StandardSchemaV1, Self = this>(
-    this: Self,
-    schema: B,
-  ): Self & { readonly __acc?: { readonly body: OutputOf<B> }; readonly __caps?: { readonly body: true } }
-  form<F extends StandardSchemaV1, Self = this>(
-    this: Self,
-    schema: F,
-  ): Self & { readonly __acc?: { readonly form: OutputOf<F> }; readonly __caps?: { readonly body: true } }
+export interface BodyChannel<Raw, F extends BodyFormat> extends Channel {
+  // The feature it needs is a READABLE BODY — the same one for either
+  // encoding, because what a transport either has or has not is the body, not
+  // the parser. A carrier that could read JSON but not multipart would need two
+  // names; none does, and inventing the split now would put a second name in
+  // every carrier for a distinction no mount makes.
+  readonly __admission: { readonly body: true }
+  readonly __caps?: { readonly body: true }
+  readonly __validatable?: { readonly body: Raw }
 }
 
-// The parse-and-validate step OWNED by this extension: read the channel off the
-// RAW carrier (`carrier.request` is a full Fetch `Request` with a readable body —
-// distinct from the headless `ctx.request` a guard sees) and validate it into the
-// named ctx key, or RETURN the core's `Invalid` branch. Pushed as a core
-// `prepare` step, so the fold runs it without knowing what it is — and without
-// this extension minting an abort of its own to report a schema failure.
-const channel =
-  (key: 'body' | 'form', parse: (bytes: ArrayBuffer, headers: Headers) => Promise<unknown>) =>
-  (schema: StandardSchemaV1): Prepare =>
-  async (carrier): Promise<object | Invalid> => {
-    const req = (carrier as { request?: Request }).request
+// The raw type each encoding leaves on `ctx.body` before anyone validates it.
+// A JSON body is `unknown` — bytes that parsed, with no shape until a schema
+// gives it one; a form is always a record of fields.
+export type RawFor<F extends BodyFormat> = F extends 'form'
+  ? Readonly<Record<string, string | File>>
+  : unknown
+
+export type JsonBody = BodyChannel<unknown, 'json'>
+export type FormBody = BodyChannel<Readonly<Record<string, string | File>>, 'form'>
+
+const parsers: Readonly<Record<BodyFormat, (bytes: ArrayBuffer, headers: Headers) => Promise<unknown>>> =
+  {
+    json: async (bytes) => JSON.parse(new TextDecoder().decode(bytes)),
+    // Parsing bytes already in hand: `Response` is the standard form parser, and
+    // handing it a buffer keeps the parse free of any I/O of its own.
+    form: async (bytes, headers) =>
+      Object.fromEntries(await new Response(bytes, { headers }).formData()),
+  }
+
+const step =
+  (format: BodyFormat): Step =>
+  async (_app, ctx, next) => {
+    const request = (ctx as { request?: Request }).request
     // READING and PARSING are separated, because they fail for opposite
     // reasons and the error convention (principle 3) sends them opposite ways.
     //
     // `arrayBuffer()` is the I/O: it rejects when the stream dies — a reset
     // socket, an aborted upload — and that THROW is left to propagate as
-    // infrastructure. Catching it here (which is what a single
-    // `read(req).catch(() => undefined)` did) told the client its payload was
-    // malformed when the truth was that the connection broke, and hid a 5xx
+    // infrastructure. Catching it here told the client its payload was
+    // malformed when the truth was that the connection broke, hiding a 5xx
     // behind a 4xx.
     //
     // Parsing the bytes is the domain half: malformed JSON, a body that is not
     // a form. That IS the client's mistake, so it collapses to `undefined` and
-    // the schema turns it into the RETURNED 422 this convention wants.
+    // whatever schema `validate('body', …)` registered turns it into the
+    // RETURNED 422 this convention wants.
     const raw =
-      req === undefined
+      request === undefined
         ? undefined
-        : await parse(await req.arrayBuffer(), req.headers).catch(() => undefined)
-    const v = await validateInput(schema, raw)
-    return v.ok ? { [key]: v.params } : { issues: v.issues }
+        : await parsers[format](await request.arrayBuffer(), request.headers).catch(
+            () => undefined,
+          )
+    return next({ body: raw })
   }
 
-const bodyStep = channel('body', async (bytes) =>
-  JSON.parse(new TextDecoder().decode(bytes)),
-)
-// Parsing bytes already in hand: `Response` is the standard form parser, and
-// handing it a buffer keeps the parse free of any I/O of its own.
-const formStep = channel('form', async (bytes, headers) =>
-  Object.fromEntries(await new Response(bytes, { headers }).formData()),
-)
-
-// `.body`/`.form` push their prepare step onto the builder state.
-const bodyRuntime: ScopeExtensionValue = {
-  methods(state, rebuild) {
-    return {
-      body(schema: StandardSchemaV1) {
-        return rebuild({ ...state, prepare: [...state.prepare, bodyStep(schema)] })
-      },
-      form(schema: StandardSchemaV1) {
-        return rebuild({ ...state, prepare: [...state.prepare, formStep(schema)] })
-      },
-    }
-  },
+// ONE generic signature rather than two overloads: overloads refuse a union
+// argument, so a caller holding `'json' | 'form'` (a test harness, a wiring that
+// picks the encoding from config) could not call this at all.
+export function body<F extends BodyFormat>(format: F): BodyChannel<RawFor<F>, F> {
+  const runtime: ScopeExtensionValue = { step: step(format) }
+  return runtime as unknown as BodyChannel<RawFor<F>, F>
 }
-
-export const body = bodyRuntime as unknown as BodyExtension

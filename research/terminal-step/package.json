@@ -1,0 +1,16 @@
+{
+  "name": "@lntt/research-terminal-step",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Research prototype, NOT a product: can a scope be closed by a STEP that declares it terminates, instead of by a separate `.handle` verb? Prior art for the scope runtime's builder (#30).",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.0"
+  }
+}

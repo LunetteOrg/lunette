@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { standardSchema } from './standard-schema.ts'
 import { z } from 'zod'
 import type { Abort } from '../abort.ts'
 import { scope } from '../scope.ts'
-import { runFold, runScope } from '../run-fold.ts'
 import type { RequestCarrier } from '../carrier.ts'
 import {
   forbidden,
@@ -106,61 +106,44 @@ describe('.status(n) — the route default, overridden by a per-outcome verb', (
   const schema = z.object({ id: z.string() })
 
   it('a leaf with no per-outcome verb renders the declared default', async () => {
-    const s = scope()
-      .extend(http)
-      .params(schema)
+    const s = scope(http)
+      .extend(standardSchema)
+      .validate('params', schema)
       .status(201)
       .handle((_deps: {}, ctx) => ({ id: ctx.params.id }))
 
-    const out = await runScope<RequestCarrier, typeof schema, { id: string }>(
-      s,
-      {},
-      { request: req },
-      { id: '1' },
-    )
+    const out = await s({}, { ...{ request: req }, params: { id: '1' } })
     expect(readDefaultStatus(out)).toBe(201)
     expect(toResponse(out).status).toBe(201)
   })
 
   it('json(v, 201) on a leaf wins over the route default', async () => {
-    const s = scope()
-      .extend(http)
-      .params(schema)
+    const s = scope(http)
+      .extend(standardSchema)
+      .validate('params', schema)
       .status(200)
       .handle((_deps: {}, ctx) => json({ id: ctx.params.id }, 201))
 
-    const out = await runScope<RequestCarrier, typeof schema, { id: string }>(
-      s,
-      {},
-      { request: req },
-      { id: '1' },
-    )
+    const out = await s({}, { ...{ request: req }, params: { id: '1' } })
     expect(toResponse(out).status).toBe(201)
   })
 
   it('with no `.status()` at all, the default stays 200', async () => {
-    const s = scope()
-      .extend(http)
+    const s = scope(http)
       .handle(() => ({ ok: true }))
-    const out = await runFold<RequestCarrier, { ok: boolean }>(s, {}, { request: req }, {})
+    const out = await s({}, { request: req, params: {} })
     expect(readDefaultStatus(out)).toBeUndefined()
     expect(toResponse(out).status).toBe(200)
   })
 })
 
 describe('ctx.request — read off the carrier, not seeded by the extension', () => {
-  it('a guard reads the request the host handed to runFold', async () => {
+  it('a guard reads the request the host seeded', async () => {
     const tagged = new Request('http://x/', { headers: { 'x-tag': 'yes' } })
-    const s = scope()
-      .extend(http)
+    const s = scope(http)
       .handle((_deps: {}, ctx) => ({ tag: ctx.request.headers.get('x-tag') }))
 
-    const out = await runFold<RequestCarrier, { tag: string | null }>(
-      s,
-      {},
-      { request: tagged },
-      {},
-    )
+    const out = await s({}, { request: tagged, params: {} })
     expect(out.ok && out.value).toEqual({ tag: 'yes' })
   })
 })

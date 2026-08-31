@@ -1,8 +1,10 @@
 import { describe, expectTypeOf, it } from 'vitest'
+import { standardSchema } from './extensions/standard-schema.ts'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Capability, CarrierGuard, Handler, ScopeExtension } from './index.ts'
+import type { Capability, Carrier, CarrierGuard, Channel, Handler, RequestHead } from './index.ts'
 import { scope } from './scope.ts'
 import { body } from './extensions/body.ts'
+import { http } from './extensions/http.ts'
 
 // The capability alphabet is OPEN: an extension coins its own names and the core
 // enumerates none (§34). This file is the negative that keeps the gate SHUT for
@@ -14,39 +16,68 @@ import { body } from './extensions/body.ts'
 // scope mounts ANYWHERE — in the one mechanism whose whole job is to make a bad
 // mount impossible.
 
-// A third-party extension, written the way `./extensions/*` are but coining a
-// capability @lntt/scope does not know. The runtime is irrelevant here — the
-// declaration is the subject.
-interface SocketExtension extends ScopeExtension {
+// A third-party channel, written the way `./extensions/*` are but coining a
+// capability @lntt/scope does not know. It extends `Channel`, which is how the
+// brand arrives — an author never names the symbol.
+interface SocketChannel extends Channel {
+  readonly __admission: { readonly websocket: true }
   readonly __ctx?: { readonly socket: { send(data: string): void } }
   readonly __caps?: { readonly websocket: true }
 }
-declare const websocket: SocketExtension
+declare const websocket: SocketChannel
+
+// The carrier that admits it. A channel is added to a CARRIER, and a carrier's
+// admitted set is written out — so a third-party channel needs a carrier that
+// lists it, exactly as a third-party capability needs a MOUNT that claims it.
+// The supply side of both gates is closed on purpose (§34), and #44 is where
+// opening it is tracked; what this costs is that `http` will not take this
+// channel until `http` says so, which is the definition-side echo of the same
+// rule.
+interface SocketCarrier extends Carrier {
+  readonly __admits?: { readonly websocket: true }
+  readonly __declares?: { readonly status: true }
+}
+declare const socketCarrier: SocketCarrier
 
 // Two mounts standing in for two hosts, written exactly as an adapter writes one
 // (`packages/integration/src/*.ts`): `Handler<…, Cap>` is what makes `Cap`
 // inferable, and the guard is the only other clause.
-declare const httpMount: <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
-  h: Handler<Need, S, R, Cap> & CarrierGuard<Cap, 'body' | 'cookies' | 'headers'>,
+// The mount reads the scope's REGISTRY, which the core keeps opaque — a host
+// narrows it to what it needs (`{ params: S }`) at its own signature.
+type AnyRegistry = Readonly<Record<string, unknown>>
+// The seed an `http` scope requires. It is contravariant (it is the callable's
+// parameter), so a mount naming `object` here would refuse every real scope.
+type HttpSeed = { request: RequestHead; params: Readonly<Record<string, string>> }
+
+declare const httpMount: <Need extends object, Reg extends AnyRegistry, R, Seed extends object, Cap extends Capability>(
+  h: Handler<Need, Reg, R, Seed, Cap> & CarrierGuard<Cap, 'body' | 'set-cookie' | 'response-headers'>,
 ) => void
 
-declare const socketMount: <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
-  h: Handler<Need, S, R, Cap> & CarrierGuard<Cap, 'body' | 'cookies' | 'headers' | 'websocket'>,
+declare const socketMount: <Need extends object, Reg extends AnyRegistry, R, Seed extends object, Cap extends Capability>(
+  h: Handler<Need, Reg, R, Seed, Cap> &
+    CarrierGuard<Cap, 'body' | 'set-cookie' | 'response-headers' | 'websocket'>,
 ) => void
 
-declare const bodylessMount: <Need extends object, S extends StandardSchemaV1, R, Cap extends Capability>(
-  h: Handler<Need, S, R, Cap> & CarrierGuard<Cap, 'cookies'>,
+declare const bodylessMount: <
+  Need extends object,
+  Reg extends AnyRegistry,
+  R,
+  Seed extends object,
+  Cap extends Capability,
+>(
+  h: Handler<Need, Reg, R, Seed, Cap> & CarrierGuard<Cap, 'set-cookie'>,
 ) => void
 
 // The same shape as `bodylessMount`, kept separate so the named-type-argument
 // cases below read against a carrier that plainly lacks `body`.
 declare const httpMountCookiesOnly: <
   Need extends object,
-  S extends StandardSchemaV1,
+  Reg extends AnyRegistry,
   R,
+  Seed extends object,
   Cap extends Capability,
 >(
-  h: Handler<Need, S, R, Cap> & CarrierGuard<Cap, 'cookies'>,
+  h: Handler<Need, Reg, R, Seed, Cap> & CarrierGuard<Cap, 'set-cookie'>,
 ) => void
 
 // Reads the capability parameter back off a built handler, which is the axis
@@ -56,18 +87,19 @@ declare const httpMountCookiesOnly: <
 // never` — the `__int` phantom's invariant shape — does not structurally
 // extend `(i: any) => any`, so a fixed `any` in that slot would make the
 // WHOLE match fail for exactly the scopes this file needs to read `Cap` off.
-type CapOf<H> = H extends Handler<any, any, any, infer C, infer _Int, any> ? C : never
+type CapOf<H> = H extends Handler<any, any, any, any, infer C, infer _Int, any> ? C : never
 
-const socketScope = scope()
+const socketScope = scope(socketCarrier)
   .extend(websocket)
   .handle((_deps: {}, ctx) => {
     ctx.socket.send('hi')
     return { ok: true }
   })
 
-const bodyScope = scope()
-  .extend(body)
-  .body({} as StandardSchemaV1<unknown, { title: string }>)
+const bodyScope = scope(http)
+  .extend(body('json'))
+  .extend(standardSchema)
+  .validate('body', {} as StandardSchemaV1<unknown, { title: string }>)
   .handle(() => ({ ok: true }))
 
 describe('a capability the core never named', () => {
@@ -107,25 +139,33 @@ describe('the shipped capabilities keep behaving', () => {
 describe('a mount that names its type arguments', () => {
   it('cannot declare away a capability the scope requires', () => {
     // @ts-expect-error CarrierGuard: naming `never` does not shed the `body` requirement
-    httpMountCookiesOnly<object, StandardSchemaV1, unknown, never>(bodyScope)
+    httpMountCookiesOnly<object, AnyRegistry, unknown, HttpSeed, never>(bodyScope)
   })
 
   it('still takes a scope whose capability the carrier does provide', () => {
-    httpMount<object, StandardSchemaV1, unknown, 'body'>(bodyScope)
+    httpMount<object, AnyRegistry, unknown, HttpSeed, 'body'>(bodyScope)
   })
 })
 
 // A capability key that is not a string: dropping it would leave `never`, which
 // is the fail-OPEN this file exists to prevent. It becomes a name no carrier
 // claims instead, so the scope mounts nowhere (§34).
-interface OddExtension extends ScopeExtension {
+interface OddChannel extends Channel {
+  readonly __admission: { readonly odd: true }
   readonly __caps?: { readonly [k: symbol]: true }
 }
-declare const odd: OddExtension
+declare const odd: OddChannel
+
+interface OddCarrier extends Carrier {
+  readonly __admits?: { readonly odd: true }
+}
+declare const oddCarrier: OddCarrier
 
 describe('a capability key that is not a string', () => {
   it('mounts nowhere rather than silently carrying nothing', () => {
-    const oddScope = scope().extend(odd).handle(() => ({ ok: true }))
+    const oddScope = scope(oddCarrier)
+      .extend(odd)
+      .handle(() => ({ ok: true }))
     // @ts-expect-error CarrierGuard: a non-string capability key is claimed by no carrier
     httpMount(oddScope)
   })

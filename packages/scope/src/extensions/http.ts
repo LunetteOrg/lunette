@@ -1,13 +1,12 @@
-import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { ABORT, OK, type Abort, type Ok } from '../abort.ts'
 import type { Outcome, RequestHead } from '../carrier.ts'
-import type { ScopeExtension, ScopeExtensionValue, Sink } from '../scope.ts'
+import type { Step } from '../fold.ts'
+import type { Carrier, ScopeExtensionValue } from '../scope.ts'
 
-// THE HTTP CARRIER. It owns its whole vocabulary — the verb that names its
-// input (`.params`, because on HTTP that is what the input IS: route params),
+// THE HTTP CARRIER. It owns its whole vocabulary — the entry that names its
+// input (`params`, because on HTTP that is what the host-supplied input IS),
 // the words that stop the fold, and the words that shape a success. Nothing
-// here is in the core, and the core knows none of these names (§ the core
-// coins no vocabulary).
+// here is in the core, and the core knows none of these names (§40).
 
 // ── the vocabulary ───────────────────────────────────────────────────────────
 // Each verb carries its own name in the type. That is the whole mechanism:
@@ -66,30 +65,43 @@ export interface HttpEffect {
   readonly httpStatus: number | undefined
 }
 
-export interface HttpExtension extends ScopeExtension {
-  // The carrier exposes what IT has. There is no shared `request` extension in
-  // this file — `RequestHead` is a core TYPE, and every carrier that holds one
-  // puts it on its own ctx, which is why a read-only guard typed against
-  // `RequestHead` still works whichever carrier is in play.
+export interface HttpCarrier extends Carrier {
+  // The carrier exposes what IT has. There is no shared `request` extension —
+  // `RequestHead` is a core TYPE, and every carrier that holds one puts it on
+  // its own ctx, which is why a read-only guard typed against `RequestHead`
+  // still works whichever carrier is in play.
   readonly __ctx?: { readonly request: RequestHead }
+  // The entry this carrier populates and `validate` may refine. On HTTP the
+  // host-supplied input IS the route params, and it arrives as strings — which
+  // is what `ctx.params` holds for a scope that never validated.
+  readonly __validatable?: { readonly params: Readonly<Record<string, string>> }
+  // What the host hands over per invocation: the request it holds, and the
+  // params its router matched. Typed, so seeding the wrong key is an error
+  // naming it rather than a ctx entry that is quietly `undefined`.
+  readonly __seed?: {
+    readonly request: RequestHead
+    readonly params: Readonly<Record<string, string>>
+  }
+  // The transport FEATURES this protocol has — not a list of channels, which
+  // would mean knowing every channel anyone might write. A channel asks for a
+  // feature, so one written by a third party over a feature already here
+  // composes with no change to us; only a genuinely new transport feature needs
+  // whoever wrote the carrier, which is §34's machinery rule at the definition
+  // site. HTTP has all five. A host that merely does not IMPLEMENT one is the
+  // MOUNT's business (§34), not this list's.
+  readonly __admits?: {
+    readonly body: true
+    readonly query: true
+    readonly 'request-headers': true
+    readonly 'set-cookie': true
+    readonly 'response-headers': true
+  }
   readonly __declares?: {
     readonly status: true
     readonly redirect: true
     readonly 'ok-status': true
   }
   readonly __effects?: HttpEffect
-  readonly __methods?: { readonly params: true; readonly status: true }
-
-  // The INPUT verb, named for what it is on this carrier: route params. `X` is
-  // the schema itself (not just its output `T`), the same way the core's
-  // former `.input` preserved it — `Handler.schema` is read by the MOUNTS for
-  // the host's native validator (`sValidator('param', handler.schema)`), so
-  // widening to the bare `StandardSchemaV1` interface here would erase exactly
-  // what they need.
-  params<X extends StandardSchemaV1, Self = this>(
-    this: Self,
-    schema: X,
-  ): Self & { readonly __schema?: X }
 
   // The route's DEFAULT success status, kept as the literal `N` in the type so
   // a host's native codec can pin its response union to it
@@ -101,29 +113,29 @@ export interface HttpExtension extends ScopeExtension {
   ): Self & { readonly __effects?: { readonly httpStatus: N } }
 }
 
-// `ctx.request` needs no runtime seeding here: unlike `cookies`/`headers` (which
-// WRITE into a sink the fold creates), `request` is READ off the carrier the
-// host hands to `runFold` — `{ request }` (`RequestCarrier`, `carrier.ts`) is
-// already merged into `ctx` before any guard runs. This extension's job is
-// only to widen the TYPE (`__ctx`), the same way `extensions/request.ts` does.
-const httpStatusSink =
-  (status: number): (() => Sink) =>
-  () => ({ key: 'httpStatus', ctx: undefined, collect: () => status })
-
+// `ctx.request` needs no runtime seeding and `ctx.params` needs no prepare step:
+// unlike `cookies`/`headers` (which WRITE into a sink the fold creates) or
+// `query` (which DERIVES its entry from the URL), both are handed over by the
+// host — `{ request }` is the carrier, and the route params are the `entries`
+// argument, since a router matched them and the request does not carry them.
+// This carrier's job on those two axes is only to widen the TYPE.
+//
+// The status sink has no `ctxPath`: nothing writes through it during the fold,
+// it only carries what `.status(n)` fixed out with the effects.
+// `.status(n)` writes nothing during the fold — it only carries the literal out
+// with the effects — so its step has no ctx to contribute at all.
 const runtime: ScopeExtensionValue = {
-  methods(state, rebuild) {
-    return {
-      params(schema: StandardSchemaV1) {
-        return rebuild({ ...state, schema })
+  methods: {
+    status:
+      (n: number): Step =>
+      async (_app, _ctx, next) => {
+        const out = await next({})
+        return { ...out, effects: { ...out.effects, httpStatus: n } }
       },
-      status(n: number) {
-        return rebuild({ ...state, sinks: [...state.sinks, httpStatusSink(n)] })
-      },
-    }
   },
 }
 
-export const http = runtime as unknown as HttpExtension
+export const http = runtime as unknown as HttpCarrier
 
 // The reader, exported next to `.status()` so the cast lives HERE and not in
 // every host pack. A scope that never called `.status()` collected nothing.

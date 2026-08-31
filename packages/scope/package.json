@@ -1,7 +1,7 @@
 {
   "name": "@lntt/scope",
   "version": "0.0.0",
-  "description": "The host-agnostic scope runtime for @lntt/wire: a scope (guard/leaf) model run as a typed fold. Framework-free — the host integrations live in @lntt/integration; carrier extensions ship as tree-shakable subpaths, each owning its own input channel and outcome vocabulary (./http, ./body, ./cookies, ./headers, ./request).",
+  "description": "The host-agnostic scope runtime for @lntt/wire: a scope (a carrier, its channels, a guard/leaf stack) run as a typed fold. Framework-free \u2014 the host integrations live in @lntt/integration. Carriers and channels ship as tree-shakable subpaths, each owning the ctx entries it populates and the outcome vocabulary it coins (./http, ./trpc, ./react-router, ./body, ./query, ./request-cookies, ./request-headers, ./cookies, ./headers) \u2014 validation among them (./standard-schema).",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -10,9 +10,12 @@
     "./cookies": "./src/extensions/cookies.ts",
     "./headers": "./src/extensions/headers.ts",
     "./http": "./src/extensions/http.ts",
-    "./request": "./src/extensions/request.ts",
-    "./trpc": "./src/extensions/trpc.ts",
-    "./react-router": "./src/extensions/react-router.ts"
+    "./query": "./src/extensions/query.ts",
+    "./react-router": "./src/extensions/react-router.ts",
+    "./request-cookies": "./src/extensions/request-cookies.ts",
+    "./request-headers": "./src/extensions/request-headers.ts",
+    "./standard-schema": "./src/extensions/standard-schema.ts",
+    "./trpc": "./src/extensions/trpc.ts"
   },
   "scripts": {
     "test": "vitest run",

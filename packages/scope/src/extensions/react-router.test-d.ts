@@ -5,8 +5,7 @@ import { data, reactRouter, redirect } from './react-router.ts'
 
 describe('reactRouter — read-only ctx.request, no Abort/Ok vocabulary of its own', () => {
   it('adds `ctx.request`, typed the same as every other carrier', () => {
-    scope()
-      .extend(reactRouter)
+    scope(reactRouter)
       .guard((_app: {}, ctx) => {
         expectTypeOf(ctx.request).toEqualTypeOf<RequestHead>()
         return {}

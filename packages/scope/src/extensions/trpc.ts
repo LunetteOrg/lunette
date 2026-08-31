@@ -1,7 +1,6 @@
-import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { ABORT, type Abort } from '../abort.ts'
 import type { RequestHead } from '../carrier.ts'
-import type { ScopeExtension, ScopeExtensionValue } from '../scope.ts'
+import type { Carrier } from '../scope.ts'
 
 // THE RPC CARRIER. Its vocabulary overlaps HTTP's in MEANING but not in
 // words, and that is the point: `notFound()` here produces an RPC code, not
@@ -49,34 +48,28 @@ export const tooManyRequests = (message?: string): Abort<{ readonly code: true }
 export const unprocessableContent = (message?: string): Abort<{ readonly code: true }> =>
   abort('UNPROCESSABLE_CONTENT', message)
 
-export interface RpcExtension extends ScopeExtension {
+export interface RpcCarrier extends Carrier {
   // tRPC's context holds a `Request` too (the same shape HTTP hosts carry),
   // so this carrier offers `ctx.request` the same way `http` does — same
   // TYPE, different owner, no shared extension in the middle.
   readonly __ctx?: { readonly request: RequestHead }
+  // The entry this carrier populates, named for what it is HERE: on RPC the
+  // host-supplied input IS the whole payload, a different thing from HTTP's
+  // route params, so it gets its own name rather than one name meaning two
+  // things (§40). Unvalidated it is `unknown` — a payload has no shape until a
+  // schema gives it one, which is why `validate('input', s)` is the norm here
+  // while `validate('params', s)` is optional on HTTP.
+  readonly __validatable?: { readonly input: unknown }
+  readonly __seed?: { readonly request: RequestHead; readonly input: unknown }
+  // It admits the READ channels and neither write one: tRPC reads headers and
+  // incoming cookies like anything else holding a `RequestHead`, has no
+  // readable body (so neither `json` nor `form`), drops `Set-Cookie`, and puts
+  // nothing in the query string — an RPC contract has no place for it.
+  readonly __admits?: { readonly 'request-headers': true }
   readonly __declares?: { readonly code: true }
-  readonly __methods?: { readonly input: true }
-
-  // The INPUT verb, named for what it is on THIS carrier: on RPC the input
-  // IS the whole payload, a different channel from HTTP's route params, so it
-  // gets its own name rather than one verb meaning two things. `X` is the
-  // schema itself (not just its output `T`) — `handler.schema` is what the
-  // mount hands to tRPC's native `.input(...)`, so narrowing here would erase
-  // exactly what the mount needs.
-  input<X extends StandardSchemaV1, Self = this>(
-    this: Self,
-    schema: X,
-  ): Self & { readonly __schema?: X }
 }
 
-const runtime: ScopeExtensionValue = {
-  methods(state, rebuild) {
-    return {
-      input(schema: StandardSchemaV1) {
-        return rebuild({ ...state, schema })
-      },
-    }
-  },
-}
-
-export const rpc = runtime as unknown as RpcExtension
+// No methods, no prepare step, no sink: the payload is handed over by the mount
+// as the host-supplied entry (tRPC validates it natively with the same schema),
+// and `ctx.request` is read off the carrier. This carrier is pure declaration.
+export const rpc = {} as unknown as RpcCarrier

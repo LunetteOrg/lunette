@@ -1,18 +1,25 @@
 import type { Outcome } from '../carrier.ts'
-import type { ScopeExtension, ScopeExtensionValue, Sink } from '../scope.ts'
+import type { Channel, ScopeExtensionValue } from '../scope.ts'
 
-// The `cookies` extension — a tree-shakable subpath (`@lntt/scope/cookies`).
-// It owns EVERYTHING about cookies: the shape, the sink a scope writes, the
-// effect that leaves with the `Outcome`, and the reader a host uses to get it
-// back. The core knows none of it — the fold sees an opaque sink like any other
-// (§34).
+// The `cookies` channel — WRITING `Set-Cookie` (`@lntt/scope/cookies`). It owns
+// everything about that: the shape, the sink a scope writes, the effect that
+// leaves with the `Outcome`, and the reader a host uses to get it back. The core
+// knows none of it — the fold sees an opaque sink like any other (§34).
 //
-// Injecting it (`scope().extend(cookies)`) adds the `Set-Cookie` sink on
-// `ctx.cookies` AND declares the `cookies` capability, so a cookie-setting scope
-// is REJECTED at the mount site on a host that cannot render `Set-Cookie` (tRPC
-// drops it). There is no per-call declaration — setting is a runtime
-// `ctx.cookies.set(...)` — so `.extend(cookies)` IS the declaration: a scope
-// that does not inject it has no `ctx.cookies` and no `effects.cookies`.
+// It lands at `ctx.response.cookies`, because everything a scope WRITES lives
+// under `ctx.response` while everything it READS sits at the top level. Before
+// that split, this sink held `ctx.cookies` — the natural name for the incoming
+// cookie the `request-cookies` channel now populates — and `ctx.cookies.set(…)`
+// read as though it mutated the request.
+//
+// Extending it declares the `set-cookie` capability, so a cookie-setting scope
+// is REJECTED at the mount on a host that cannot render it (tRPC drops it). The
+// capability is named for the MACHINERY, not the subject: what a host either
+// does or does not do is flush that header.
+//
+// There is no per-call declaration — setting is a runtime
+// `ctx.response.cookies.set(...)` — so `.extend(cookies)` IS the declaration: a
+// scope that does not add it has no sink and no `effects.cookies`.
 export interface CookieOptions {
   readonly path?: string
   readonly httpOnly?: boolean
@@ -37,37 +44,38 @@ export interface CookieSink {
   set(name: string, value: string, options?: CookieOptions): void
 }
 
-// What this extension deposits in `outcome.effects`.
+// What this channel deposits in `outcome.effects`.
 export interface CookieEffect {
   readonly cookies: readonly SetCookie[]
 }
 
-export interface CookiesExtension extends ScopeExtension {
-  readonly __ctx?: { readonly cookies: CookieSink }
-  readonly __caps?: { readonly cookies: true }
+export interface CookiesChannel extends Channel {
+  readonly __admission: { readonly 'set-cookie': true }
+  readonly __ctx?: { readonly response: { readonly cookies: CookieSink } }
+  readonly __caps?: { readonly 'set-cookie': true }
   readonly __effects?: CookieEffect
 }
 
-const cookiesRuntime: ScopeExtensionValue = {
-  methods() {
-    return {}
-  },
-  sink: (): Sink => {
+const runtime: ScopeExtensionValue = {
+  // Its own step, and it WRAPS the rest of the fold — which is what makes the
+  // collected cookies survive a short-circuit from deeper in: a guard that
+  // drops the session cookie and then redirects still emits the `Set-Cookie`.
+  // The `response` spread is what lets the other write channel sit beside this
+  // one instead of replacing it.
+  step: async (_app, ctx, next) => {
     const pending: SetCookie[] = []
-    return {
-      key: 'cookies',
-      ctx: {
-        set: (name: string, value: string, options: CookieOptions = {}) =>
-          pending.push({ name, value, options }),
-      } satisfies CookieSink,
-      collect: () => pending as readonly SetCookie[],
+    const sink: CookieSink = {
+      set: (name, value, options = {}) => void pending.push({ name, value, options }),
     }
+    const response = (ctx as { response?: object }).response
+    const out = await next({ response: { ...response, cookies: sink } })
+    return { ...out, effects: { ...out.effects, cookies: pending as readonly SetCookie[] } }
   },
 }
 
-export const cookies = cookiesRuntime as unknown as CookiesExtension
+export const cookies = runtime as unknown as CookiesChannel
 
 // The reader, exported next to the sink so the cast lives HERE and not in every
-// host pack. A scope that never injected the extension simply collected none.
+// host pack. A scope that never added the channel simply collected none.
 export const readCookies = (outcome: Outcome<unknown, object>): readonly SetCookie[] =>
   (outcome.effects as Partial<CookieEffect>).cookies ?? []

@@ -14,8 +14,7 @@ describe('an undeclared intent on the rpc carrier', () => {
   })
 
   it('the cure is `.extend(rpc)`, and nothing else changes', () => {
-    scope()
-      .extend(rpc)
+    scope(rpc)
       .guard(() => forbidden())
       .handle(() => ({ ok: true }))
   })
@@ -26,8 +25,7 @@ describe('an undeclared intent on the rpc carrier', () => {
 // rather than sharing a "semantic" one.
 describe('a carrier does not declare another carrier’s words', () => {
   it("rejects http's forbidden() on a scope that only extended rpc", () => {
-    scope()
-      .extend(rpc)
+    scope(rpc)
       // @ts-expect-error ⛔ this scope does not declare the intent: status
       .guard(() => httpForbidden())
   })

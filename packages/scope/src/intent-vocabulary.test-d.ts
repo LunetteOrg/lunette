@@ -18,7 +18,15 @@ import type { IntentGuard } from './adapter-guard.ts'
 // `Cap` throughout this file — none of these scopes need a capability),
 // `(x: never) => never` does not structurally extend `(x: any) => any` —
 // the same trap `capability-alphabet.test-d.ts`'s `CapOf` had to work around.
-type IntOf<H> = H extends Handler<infer _N, infer _S, infer _R, infer _C, infer I, infer _E>
+type IntOf<H> = H extends Handler<
+  infer _N,
+  infer _S,
+  infer _R,
+  infer _Seed,
+  infer _C,
+  infer I,
+  infer _E
+>
   ? I
   : never
 
@@ -34,8 +42,7 @@ describe('an undeclared intent', () => {
   })
 
   it('the cure is `.extend()`, and nothing else changes', () => {
-    scope()
-      .extend(http)
+    scope(http)
       .guard(() => notFound())
       .handle(() => ({ ok: true }))
   })
@@ -51,8 +58,7 @@ declare const mystery: () => Abort
 
 describe('a bare Abort', () => {
   it('fails closed even on a scope that extended a carrier', () => {
-    scope()
-      .extend(http)
+    scope(http)
       // @ts-expect-error ⛔ this scope does not declare the intent: __unknown_intent
       .guard(() => mystery())
   })
@@ -63,8 +69,7 @@ describe('a bare Abort', () => {
 // type, inferred at once, rather than from inside a union constituent) is
 // what makes this compile at all — and what makes the accumulated set carry
 // both names, not just the first candidate TypeScript would otherwise pick.
-const throttled = scope()
-  .extend(http)
+const throttled = scope(http)
   .guard((deps: { readonly banned: boolean }) => (deps.banned ? forbidden() : redirect('/login')))
   .handle(() => ({ ok: true }))
 
@@ -91,13 +96,11 @@ describe('a mount that names its type arguments', () => {
 // The scope below is RIGHT — it declared `redirect` correctly by extending
 // `http` — so only the PAIRING with a host that cannot render it is wrong,
 // and that error cannot move earlier: the same scope mounts fine elsewhere.
-const redirecting = scope()
-  .extend(http)
+const redirecting = scope(http)
   .guard(() => redirect('/login'))
   .handle(() => ({ ok: true }))
 
-const statusOnly = scope()
-  .extend(http)
+const statusOnly = scope(http)
   .guard(() => forbidden())
   .handle(() => ({ ok: true }))
 
@@ -109,12 +112,13 @@ const statusOnly = scope()
 // trap above.
 declare const toRpcLikeMount: <
   Need extends object,
-  S extends StandardSchemaV1,
+  Reg extends Readonly<Record<string, unknown>>,
   R,
+  Seed extends object,
   Cap extends Capability,
   Int extends PropertyKey,
 >(
-  h: Handler<Need, S, R, Cap, Int> & IntentGuard<Int, 'status'>,
+  h: Handler<Need, Reg, R, Seed, Cap, Int> & IntentGuard<Int, 'status'>,
 ) => void
 
 describe('IntentGuard — the host does not handle that scope', () => {

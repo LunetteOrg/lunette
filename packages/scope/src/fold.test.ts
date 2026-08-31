@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { forbidden, httpError, notFound, unauthorized, http } from './extensions/http.ts'
 import { scope } from './scope.ts'
-import { runFold } from './run-fold.ts'
 import { cookies, readCookies } from './extensions/cookies.ts'
 import type { RequestCarrier } from './carrier.ts'
 import { makeRepos, type Repos } from './domain.fixture.ts'
+import { runSteps, type Step } from './fold.ts'
+import { guardStep, leafStep } from './steps.ts'
+import type { Abort } from './abort.ts'
+import { standardSchema } from './extensions/standard-schema.ts'
 
 // The core fold, driven directly with a PLAIN app object — no host, no chain
 // (@lntt/scope is framework-free; a wire chain is only a convenience for
@@ -17,8 +20,9 @@ const bearer = (userId: string) =>
 const schema = z.object({ courseId: z.string() })
 // Reads `ctx.request` for the session AND has the HTTP vocabulary to abort
 // with (`unauthorized`/`forbidden`/`notFound`) — the `http` profile.
-const ownedCourse = scope().extend(http)
-  .params(schema)
+const ownedCourse = scope(http)
+  .extend(standardSchema)
+  .validate('params', schema)
   .guard((deps: Pick<Repos, 'sessionRepo'>, ctx) => {
     const session = deps.sessionRepo.get(ctx.request)
     return session ? { session } : unauthorized()
@@ -36,8 +40,11 @@ const ownedCourse = scope().extend(http)
   .handle((deps: Pick<Repos, 'courseView'>, ctx) => deps.courseView.detail(ctx.course))
 
 describe('the scope fold at runtime', () => {
+  // A scope IS the function that runs it: the app first (process lifetime),
+  // everything belonging to THIS invocation second — the carrier the host holds
+  // and the entries its router matched, in one seed.
   const run = (req: Request, params: { courseId: string }) =>
-    runFold<RequestCarrier, { id: string; title: string }>(ownedCourse, app, { request: req }, params)
+    ownedCourse(app, { request: req, params })
 
   it('accumulates enrichments then runs the leaf; short-circuits on abort', async () => {
     const ok = await run(bearer('u-admin'), { courseId: 'c1' })
@@ -76,144 +83,255 @@ describe('the scope fold at runtime', () => {
       .guard(() => ({ third: 'three' as const }))
       .handle((_deps: {}, ctx) => ({ seen: [ctx.first, ctx.second, ctx.third] }))
 
-    const out = await runFold<RequestCarrier, { seen: string[] }>(
-      across,
-      {},
-      { request: new Request('http://x/') },
-      {},
-    )
-    expect(out).toEqual({ ok: true, value: { seen: ['one', 'two', 'three'] }, intent: undefined, effects: {} })
+    const out = await across({}, { request: new Request('http://x/') })
+    expect(out).toEqual({
+      ok: true,
+      value: { seen: ['one', 'two', 'three'] },
+      intent: undefined,
+      effects: {},
+    })
   })
 })
 
-// The fold runs extension `prepare` steps FIRST, over the raw carrier, and owns
-// the extension sinks — tested here generically (a plain handler + a fake step),
-// independent of any one extension.
-describe('the fold — prepare steps and extension sinks', () => {
-  it('runs prepare steps before the guards, merging their enrichment into ctx', async () => {
-    const handler = {
-      guards: [],
-      prepare: [async () => ({ tag: 'from-prepare' as const })],
-      leaf: (_app: object, ctx: { tag?: string }) => ({ seen: ctx.tag }),
-    }
-    const out = await runFold<object, { seen: string | undefined }>(handler, {}, {}, {})
-    expect(out).toEqual({ ok: true, value: { seen: 'from-prepare' }, intent: undefined, effects: {} })
+// The PRIMITIVE, driven directly: an ordered stack of steps around a leaf. Every
+// verb the builder offers is sugar over this — a channel populating an entry, a
+// `validate`, a guard, a sink — so what is tested here is the one mechanism they
+// all reduce to, independent of any of them.
+describe('the step stack', () => {
+  const seed = { request: new Request('http://x/') }
+
+  it('threads each step`s delta inward and runs the leaf at the centre', async () => {
+    const populate: Step = (_app, _ctx, next) => next({ tag: 'from-a-step' as const })
+    const out = await runSteps([populate, leafStep((_app: object, ctx: object) => ({ seen: (ctx as { tag?: string }).tag }))], {}, seed)
+    expect(out).toEqual({ ok: true, value: { seen: 'from-a-step' }, intent: undefined, effects: {} })
   })
 
-  it('a prepare step returning an abort short-circuits — no guards, no leaf', async () => {
+  it('a step that does not call next stops the fold — no later step, no leaf', async () => {
     let ran = false
-    const handler = {
-      guards: [() => ((ran = true), {})],
-      prepare: [async () => forbidden()],
-      leaf: () => ({}),
-    }
-    const out = await runFold<object, object>(handler, {}, {}, {})
-    expect(out.ok).toBe(false)
-    if (!out.ok && 'abort' in out) expect(out.abort.intent).toMatchObject({ status: 403 })
-    else throw new Error('expected an abort')
+    const stopper: Step = async () => ({
+      ok: false,
+      abort: forbidden() as unknown as Abort<never>,
+      effects: {},
+    })
+    const out = await runSteps([stopper, guardStep(() => ((ran = true), {})), leafStep(() => ({ never: true }))], {}, seed)
     expect(ran).toBe(false)
+    expect(out.ok).toBe(false)
   })
 
-  it('a prepare step returning the `invalid` branch short-circuits the same way', async () => {
+  it('the core`s own `invalid` branch stops it the same way', async () => {
     let ran = false
-    const handler = {
-      guards: [() => ((ran = true), {})],
-      prepare: [async () => ({ issues: [{ message: 'bad shape' }] })],
-      leaf: () => ({}),
-    }
-    const out = await runFold<object, object>(handler, {}, {}, {})
-    expect(out.ok).toBe(false)
-    if (!out.ok && 'invalid' in out) expect(out.invalid.issues).toEqual([{ message: 'bad shape' }])
-    else throw new Error('expected the invalid branch')
+    const invalid: Step = async () => ({
+      ok: false,
+      invalid: { issues: [{ message: 'bad shape' }] },
+      effects: {},
+    })
+    const out = await runSteps([invalid, guardStep(() => ((ran = true), {})), leafStep(() => ({ never: true }))], {}, seed)
     expect(ran).toBe(false)
+    expect(out.ok === false && 'invalid' in out && out.invalid.issues[0]?.message).toBe('bad shape')
   })
 
-  it('instantiates extension SINKS per invocation and collects them by key', async () => {
-    // The fold knows only the shape (`key`, `ctx`, `collect`) — never what a
-    // sink means. A cookie jar and a header bag are indistinguishable from here,
-    // which is what keeps response concerns out of the core.
-    const notes: string[] = []
-    const handler = {
-      guards: [],
-      prepare: [],
-      sinks: [
-        () => {
-          const written: string[] = []
-          notes.push('created')
-          return {
-            key: 'audit',
-            ctx: { note: (what: string) => written.push(what) },
-            collect: () => written,
-          }
-        },
-      ],
-      leaf: (_app: object, ctx: object) => {
-        ;(ctx as { audit: { note(w: string): void } }).audit.note('leaf ran')
-        return { ok: true }
-      },
+  it('runs steps IN THE ORDER THEY WERE WRITTEN, not by category', async () => {
+    const order: string[] = []
+    const mark = (name: string): Step => (_app, _ctx, next) => {
+      order.push(name)
+      return next({})
     }
+    await runSteps([mark('a'), guardStep(() => (order.push('guard'), {})), mark('b'), leafStep(() => {
+      order.push('leaf')
+      return {}
+    })], {}, seed)
+    // The property that makes `gated().extend(body('json'))` authenticate BEFORE
+    // the body is read: nothing is hoisted, so a guard that aborts first means
+    // the parse never happens.
+    expect(order).toEqual(['a', 'guard', 'b', 'leaf'])
+  })
+})
 
-    const out = await runFold<object, { ok: boolean }, never, { audit: string[] }>(handler, {}, {}, {})
-    expect(out.effects).toEqual({ audit: ['leaf ran'] })
+describe('sinks, as steps that wrap the rest', () => {
+  const seed = { request: new Request('http://x/') }
+  // A collecting step, written the way a channel writes one: open the
+  // collector, hand its surface inward, attach what it collected on the way
+  // out. There is no `Sink` shape in between — the loop that needed one is gone.
+  const audit = (): Step => async (_app, _ctx, next) => {
+    const written: string[] = []
+    const out = await next({ audit: { note: (what: string) => void written.push(what) } })
+    return { ...out, effects: { ...out.effects, audit: written } }
+  }
 
-    // per INVOCATION: a second run starts from an empty sink
-    const again = await runFold<object, { ok: boolean }, never, { audit: string[] }>(handler, {}, {}, {})
-    expect(again.effects).toEqual({ audit: ['leaf ran'] })
-    expect(notes).toEqual(['created', 'created'])
+  it('opens one per invocation and collects it into the outcome', async () => {
+    const leaf = (_app: object, ctx: object) => {
+      ;(ctx as { audit: { note(w: string): void } }).audit.note('leaf')
+      return { ok: true }
+    }
+    const stack = [audit(), leafStep(leaf)]
+    const first = await runSteps(stack, {}, seed)
+    const second = await runSteps(stack, {}, seed)
+    // fresh each time: a sink that leaked across invocations would show two
+    expect(first.effects).toEqual({ audit: ['leaf'] })
+    expect(second.effects).toEqual({ audit: ['leaf'] })
   })
 
-  it('collects what the sinks hold even when a guard aborts', async () => {
-    // A 4xx still carries its effects: a rate-limit guard that records something
-    // and then aborts must have both travel out.
-    const handler = {
-      guards: [
-        (_app: object, ctx: object) => {
-          ;(ctx as { audit: { note(w: string): void } }).audit.note('rejected')
+  it('keeps what it collected when something deeper short-circuits', async () => {
+    const out = await runSteps(
+      [
+        audit(),
+        guardStep((_app: object, ctx: object) => {
+          ;(ctx as { audit: { note(w: string): void } }).audit.note('ran')
           return httpError(429)
-        },
+        }),
+        leafStep(() => ({ never: true })),
       ],
-      prepare: [],
-      sinks: [
-        () => {
-          const written: string[] = []
-          return { key: 'audit', ctx: { note: (w: string) => written.push(w) }, collect: () => written }
-        },
-      ],
-      leaf: () => ({ never: true }),
-    }
-
-    const out = await runFold<object, { never: boolean }, never, { audit: string[] }>(handler, {}, {}, {})
+      {},
+      seed,
+    )
+    // The sink WRAPS the rest, so an abort from inside still comes back out
+    // through it — which is what a logout (drop the cookie, then redirect)
+    // depends on.
     expect(out.ok).toBe(false)
-    expect(out.effects).toEqual({ audit: ['rejected'] })
+    expect(out.effects).toEqual({ audit: ['ran'] })
   })
 
-  it('leaves effects empty for a scope that injected no sink at all', async () => {
-    const out = await runFold<object, { ok: boolean }>(
-      { guards: [], prepare: [], leaf: () => ({ ok: true }) },
-      {},
-      {},
-      {},
-    )
+  it('leaves effects empty for a stack with no sink at all', async () => {
+    const out = await runSteps([leafStep(() => ({ ok: true }))], {}, seed)
     expect(out.effects).toEqual({})
   })
 })
 
-// The effects ride the abort on EVERY branch. The guard branch is pinned above;
-// the leaf branch was only pinned by the adapters' tests, so within this package
-// the core's own contract leaned on its consumers.
-describe('the fold — effects on a leaf abort', () => {
+describe('effects on a leaf abort', () => {
   it('carries what the leaf wrote before it aborted', async () => {
-    const s = scope()
+    const s = scope(http)
       .extend(cookies)
-      .extend(http)
       .handle((_deps: {}, ctx) => {
         // A logout is exactly this shape: drop the cookie AND redirect.
-        ctx.cookies.set('session', '', { maxAge: 0 })
+        ctx.response.cookies.set('session', '', { maxAge: 0 })
         return forbidden()
       })
 
-    const out = await runFold<object, never, 'cookies', {}, 'cookies'>(s, {}, {}, {})
+    const out = await s<{}, 'set-cookie'>(
+      {},
+      { request: new Request('http://x/'), params: {} },
+    )
     expect(out.ok).toBe(false)
     expect(readCookies(out)).toEqual([{ name: 'session', value: '', options: { maxAge: 0 } }])
+  })
+})
+
+// `.step()` puts the primitive in the open, and this is what makes that claim
+// checkable rather than a story: the same thing the builder's other verbs
+// produce, written by hand, composing with them and running where it is written.
+describe('.step() — the primitive, in userland', () => {
+  it('composes with the sugar and runs in declaration order', async () => {
+    const order: string[] = []
+    const s = scope(http)
+      .guard(() => (order.push('guard-a'), { a: 1 as const }))
+      .step(async (_app, ctx, next) => {
+        order.push('step')
+        // it sees what came before, and may enrich — the types just do not
+        // know about it, which is the honest price of claiming nothing
+        expect((ctx as { a?: number }).a).toBe(1)
+        return next({ fromStep: true })
+      })
+      .guard(() => (order.push('guard-b'), {}))
+      .handle((_deps: {}, ctx) => {
+        order.push('leaf')
+        return { seen: (ctx as { fromStep?: boolean }).fromStep }
+      })
+
+    const out = await s({}, { request: new Request('http://x/'), params: {} })
+    expect(order).toEqual(['guard-a', 'step', 'guard-b', 'leaf'])
+    expect(out.ok && out.value).toEqual({ seen: true })
+  })
+
+  it('can stop the fold by not calling next, like any other step', async () => {
+    let reached = false
+    const s = scope(http)
+      .step(async () => ({ ok: false, abort: forbidden() as never, effects: {} }))
+      .handle(() => ((reached = true), { never: true }))
+
+    const out = await s({}, { request: new Request('http://x/'), params: {} })
+    expect(reached).toBe(false)
+    expect(out.ok).toBe(false)
+  })
+})
+
+// THE PARITY TEST. If the sugar is really sugar, the same scope written with
+// nothing but `.step()` must behave identically — same enrichments, same
+// short-circuit, same effects. What the sugar buys is not power: it is not
+// having to call `next` correctly.
+describe('the sugar is sugar', () => {
+  const seed = () => ({ request: bearer('u-admin'), params: { courseId: 'c1' } })
+
+  // The three fold behaviours, hand-written: let through or stop (a guard),
+  // wrap `next` and act on the way out (a collecting channel), stop without
+  // continuing (a leaf). The guard here GUARDS — it admits admins and refuses
+  // everyone else — which is the shape the verb is named for; one that only
+  // enriches is the degenerate case of the same shape.
+  const sugared = scope(http)
+    .extend(cookies)
+    .guard((deps: Pick<Repos, 'sessionRepo' | 'adminRepo'>, ctx) => {
+      const session = deps.sessionRepo.get(ctx.request)
+      if (!session) return unauthorized()
+      const admin = deps.adminRepo.byId(session.userId)
+      return admin ? { admin } : forbidden()
+    })
+    .handle((_deps: {}, ctx) => {
+      ctx.response.cookies.set('seen', ctx.admin.id)
+      return { who: ctx.admin.id }
+    })
+
+  const raw = scope(http)
+    .step(async (_app, ctx, next) => {
+      // what the `cookies` channel's step does, by hand
+      const pending: { name: string; value: string; options: object }[] = []
+      const response = (ctx as { response?: object }).response
+      const out = await next({
+        response: {
+          ...response,
+          cookies: { set: (name: string, value: string, options = {}) => void pending.push({ name, value, options }) },
+        },
+      })
+      return { ...out, effects: { ...out.effects, cookies: pending } }
+    })
+    .step(async (app, ctx, next) => {
+      // what `guardStep` does, by hand
+      const deps = app as Pick<Repos, 'sessionRepo' | 'adminRepo'>
+      const session = deps.sessionRepo.get((ctx as { request: Request }).request)
+      if (!session) return { ok: false, abort: unauthorized() as never, effects: {} }
+      const admin = deps.adminRepo.byId(session.userId)
+      if (!admin) return { ok: false, abort: forbidden() as never, effects: {} }
+      return next({ admin })
+    })
+    .step(async (_app, ctx) => {
+      // what `leafStep` does, by hand: it simply never calls `next`
+      const c = ctx as {
+        admin: { id: string }
+        response: { cookies: { set(n: string, v: string): void } }
+      }
+      c.response.cookies.set('seen', c.admin.id)
+      return { ok: true, value: { who: c.admin.id }, intent: undefined, effects: {} }
+    })
+    // `.handle` is still required, and that is the honest limit: closing the
+    // builder into a callable is not fold work, so no raw step can do it.
+    .handle(() => ({ unreachable: true }))
+
+  it('produces the same outcome either way', async () => {
+    const a = await sugared<Repos, 'set-cookie'>(app, seed())
+    const b = await raw<Repos, 'set-cookie'>(app, seed())
+    expect(a.ok && a.value).toEqual({ who: 'u-admin' })
+    expect(b.ok && b.value).toEqual({ who: 'u-admin' })
+    expect(readCookies(a)).toEqual(readCookies(b))
+  })
+
+  it('short-circuits the same way when the guard refuses', async () => {
+    const anon = { request: new Request('http://x/'), params: { courseId: 'c1' } }
+    const a = await sugared<Repos, 'set-cookie'>(app, anon)
+    const b = await raw<Repos, 'set-cookie'>(app, anon)
+    expect(a.ok).toBe(false)
+    expect(b.ok).toBe(false)
+  })
+
+  it('refuses an EXTENSION here, naming the verb that keeps its declarations', () => {
+    // @ts-expect-error ⛔ this declares things — add it with .extend, which keeps them
+    scope(http).step(cookies)
   })
 })

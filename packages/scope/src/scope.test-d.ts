@@ -2,9 +2,10 @@ import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
 import type { Admin, Course, Repos, Session } from './domain.fixture.ts'
 import { forbidden, notFound, unauthorized } from './extensions/http.ts'
-import { scope, type Handler, type ScopeExtension, type ScopeExtensionValue } from './scope.ts'
+import { scope, type Channel, type Handler, type ScopeExtensionValue } from './scope.ts'
 import { http } from './extensions/http.ts'
 import type { RequestHead } from './carrier.ts'
+import { standardSchema } from './extensions/standard-schema.ts'
 
 // One schema, fixed through the carrier's own input verb (`http`'s `.params`,
 // since `.input` is not part of the carrier-agnostic core — see `§ the core
@@ -12,10 +13,11 @@ import type { RequestHead } from './carrier.ts'
 const schema = z.object({ courseId: z.string() })
 type S = typeof schema
 
-describe('scope().extend(http) — the type contract', () => {
+describe('scope(http) — the type contract', () => {
   it('a guard reads its declared app slot, the carrier ctx, and the schema params', () => {
-    scope().extend(http)
-      .params(schema)
+    scope(http)
+      .extend(standardSchema)
+      .validate('params', schema)
       .guard((app: Pick<Repos, 'sessionRepo'>, ctx) => {
         expectTypeOf(app.sessionRepo).toEqualTypeOf<Repos['sessionRepo']>()
         expectTypeOf(ctx.request).toEqualTypeOf<RequestHead>()
@@ -29,8 +31,9 @@ describe('scope().extend(http) — the type contract', () => {
   })
 
   it('later guards see earlier enrichments in ctx, typed; ordering is enforced', () => {
-    scope().extend(http)
-      .params(schema)
+    scope(http)
+      .extend(standardSchema)
+      .validate('params', schema)
       .guard((app: Pick<Repos, 'sessionRepo'>, ctx) => {
         const s = app.sessionRepo.get(ctx.request)
         return s ? { session: s } : unauthorized()
@@ -43,8 +46,9 @@ describe('scope().extend(http) — the type contract', () => {
       })
 
     // reading an enrichment before the guard that provides it does not compile
-    scope().extend(http)
-      .params(schema)
+    scope(http)
+      .extend(standardSchema)
+      .validate('params', schema)
       .guard((_app: {}, ctx) => {
         // @ts-expect-error — `admin` is not enriched yet
         return { leaked: ctx.admin }
@@ -52,8 +56,9 @@ describe('scope().extend(http) — the type contract', () => {
   })
 
   it('the leaf sees enrichments + carrier but NEVER the app repos', () => {
-    const handler = scope().extend(http)
-      .params(schema)
+    const handler = scope(http)
+      .extend(standardSchema)
+      .validate('params', schema)
       .guard((app: Pick<Repos, 'sessionRepo'>, ctx) => {
         const s = app.sessionRepo.get(ctx.request)
         return s ? { session: s } : unauthorized()
@@ -84,8 +89,9 @@ describe('scope().extend(http) — the type contract', () => {
     expectTypeOf(handler).toMatchTypeOf<
       Handler<
         Pick<Repos, 'sessionRepo' | 'adminRepo' | 'courseRepo'>,
-        S,
+        { params: S },
         { title: string },
+        { request: RequestHead; params: Readonly<Record<string, string>> },
         never,
         'status'
       >
@@ -95,7 +101,7 @@ describe('scope().extend(http) — the type contract', () => {
   // (each extension's contract lives next to it: `src/extensions/*.test-d.ts`.)
 
   it('a param-less http scope (no .params) still gets the carrier and requires no app', () => {
-    const handler = scope().extend(http).handle((_deps: {}, ctx) => {
+    const handler = scope(http).handle((_deps: {}, ctx) => {
       expectTypeOf(ctx.request).toEqualTypeOf<RequestHead>()
       // @ts-expect-error — repos are not in the ctx bag
       ctx.sessionRepo
@@ -115,7 +121,7 @@ describe('scope() — the carrier-agnostic base', () => {
         // @ts-expect-error — the agnostic base commits to no carrier: no `request`
         ctx.request
         // @ts-expect-error — no `cookies` sink either (it is the `cookies` extension's)
-        ctx.cookies
+        ctx.response.cookies
         return { seen: true as const }
       })
       .handle((_deps: {}, ctx) => {
@@ -128,7 +134,7 @@ describe('scope() — the carrier-agnostic base', () => {
 
   it('has no `.params`/`.input` at all — the input channel is a carrier verb', () => {
     // @ts-expect-error — `.params` arrives with `http`, `.input` never existed
-    scope().params(schema)
+    scope().extend(standardSchema).validate('params', schema)
   })
 
   it('an agnostic scope produces a Handler with Cap = never and Int = never', () => {
@@ -146,20 +152,24 @@ describe('scope() — the carrier-agnostic base', () => {
 // The collision gate (§4) covers the BUILDER's own verbs, not only other
 // extensions': an extension contributing `guard` would otherwise replace the
 // real one at runtime, since extensions mount after the base.
-interface HijacksGuard extends ScopeExtension {
-  readonly __methods?: { guard: true }
+interface HijacksGuard extends Channel {
+  readonly __admission: { readonly query: true }
+  // A REAL method that redefines a verb the builder owns. The gate reads what
+  // the type HAS, so declaring the name alone would no longer say anything.
+  guard(g: unknown): unknown
 }
 declare const hijacksGuard: HijacksGuard & ScopeExtensionValue
 
-interface OwnMethod extends ScopeExtension {
-  readonly __methods?: { sniff: true }
+interface OwnMethod extends Channel {
+  readonly __admission: { readonly query: true }
+  sniff(what: string): unknown
 }
 declare const ownMethod: OwnMethod & ScopeExtensionValue
 
 describe('the collision gate covers the base verbs', () => {
   it('rejects an extension that redefines one, and accepts a name of its own', () => {
-    // @ts-expect-error an extension may not redefine a verb the builder owns
-    scope().extend(hijacksGuard)
-    scope().extend(ownMethod)
+    // @ts-expect-error a channel may not redefine a verb the builder owns
+    scope(http).extend(hijacksGuard)
+    scope(http).extend(ownMethod)
   })
 })

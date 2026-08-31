@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { standardSchema } from './standard-schema.ts'
 import { z } from 'zod'
 import { scope } from '../scope.ts'
-import { runFold } from '../run-fold.ts'
 import type { RequestCarrier } from '../carrier.ts'
 import {
   conflict,
@@ -30,27 +30,26 @@ describe('the rpc constructors — every word coins the SAME declared name', () 
   })
 })
 
-describe('.input(schema) — the payload channel, distinct from http .params', () => {
-  it('feeds the fold the same way params does, under ctx.params', async () => {
+describe("validate('input', schema) — the payload entry, distinct from http's params", () => {
+  it('feeds the fold the same way params does, under ctx.input', async () => {
     const schema = z.object({ id: z.string() })
-    const s = scope()
-      .extend(rpc)
-      .input(schema)
-      .handle((_deps: {}, ctx) => ({ id: ctx.params.id }))
+    const s = scope(rpc)
+      .extend(standardSchema)
+      .validate('input', schema)
+      .handle((_deps: {}, ctx) => ({ id: ctx.input.id }))
 
-    const out = await runFold<RequestCarrier, { id: string }>(s, {}, { request: req }, { id: '1' })
+    const out = await s({}, { request: req, input: { id: '1' } })
     expect(out.ok && out.value).toEqual({ id: '1' })
   })
 })
 
 describe('ctx.request — read off the carrier, same shape as http', () => {
-  it('a guard reads the request the host handed to runFold', async () => {
+  it('a guard reads the request the host seeded', async () => {
     const tagged = new Request('http://x/', { headers: { 'x-tag': 'yes' } })
-    const s = scope()
-      .extend(rpc)
+    const s = scope(rpc)
       .handle((_deps: {}, ctx) => ({ tag: ctx.request.headers.get('x-tag') }))
 
-    const out = await runFold<RequestCarrier, { tag: string | null }>(s, {}, { request: tagged }, {})
+    const out = await s({}, { request: tagged, input: undefined })
     expect(out.ok && out.value).toEqual({ tag: 'yes' })
   })
 })
