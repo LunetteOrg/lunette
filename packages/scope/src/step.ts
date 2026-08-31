@@ -105,17 +105,21 @@ export const invalid = (issues: Invalid['issues']): Outcome<never> => ({
 // builder is told nothing (measured, above).
 export type Next<Add extends object> = (delta: Add) => Promise<Outcome<unknown>>
 
-// A step, as the author writes it. `Need` is what it wants of the app, `Req`
-// what it wants of the ctx, `Add` what it hands inward, `R` whatever it hands
-// BACK — and `R` is deliberately unconstrained, because the three things a step
-// may return have nothing in common but being values.
+// A step, as the author writes it — the formula, named. `Need` is what it wants
+// of the app, `Req` what it wants of the ctx, `Add` what it hands inward, `R`
+// whatever it hands BACK, and `R` is deliberately unconstrained because the
+// three things a step may return have nothing in common but being values.
 //
-// `R` is also where the intents live. A step returning `unauthorized()` has
-// that word in its return TYPE, so the builder reads it by distributing over
-// the whole return (§1: never infer from inside a union constituent). While a
-// step had to hand back a pre-built `Outcome` the word was cast away before the
+// `R` is also where the words live. A step returning `unauthorized()` has that
+// word in its return TYPE, so the builder reads it by distributing over the
+// whole return (§1: never infer from inside a union constituent). While a step
+// had to hand back a pre-built `Outcome` the word was cast away before the
 // builder could see it, and a raw step contributed `never` — the fail-open this
 // shape removes rather than documents.
+//
+// Nothing in the core is annotated with this: `.step` infers all four from the
+// function it is given, which is the point. It is here to be READ, and to be
+// the shape a carrier or an extension is written against.
 export type Step<Need extends object, Req extends object, Add extends object, R> = (
   app: Need,
   ctx: Req,

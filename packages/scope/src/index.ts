@@ -26,7 +26,10 @@ export type {
 } from './scope.ts'
 
 // The primitive a carrier or an extension is written against.
-export { outcomeOf, invalid, runSteps, OUTCOME } from './step.ts'
+// `runSteps` is NOT among them: a scope IS the function that runs it, so a
+// hand-wired host calls the scope and never the fold. Exporting the fold would
+// be a second entry point to the same thing.
+export { outcomeOf, invalid } from './step.ts'
 export type { Step, AnyStep, Extension, Next, Outcome, Invalid, Issue, Verbs } from './step.ts'
 
 // The two brands a carrier's words carry, and the readers the fold uses. What a
