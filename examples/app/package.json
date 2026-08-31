@@ -1,0 +1,27 @@
+{
+  "name": "@lntt/example-app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example app (issue #1 structure): a realistic RR7+Drizzle composition root as an @lntt/wire chain, with its use cases exposed as @lntt/scope fragments.",
+  "type": "module",
+  "exports": {
+    ".": "./app/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.17",
+    "@lntt/integration": "workspace:*",
+    "@lntt/scope": "workspace:*",
+    "@lntt/wire": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.0"
+  }
+}

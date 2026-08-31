@@ -483,6 +483,14 @@ const pick = (source: Bag, keys: Iterable<PropertyKey>): Bag => {
   return out
 }
 
+// The chain's axes, read back off a built VALUE — what an adapter or a
+// build-once handle needs when it takes `C extends Lunette<any, any, any>` and
+// has to name that chain's public surface or its seed. `PubOf` goes through
+// `build`'s return type so it carries the same `Expand` the caller sees.
+export type PubOf<C> = C extends { build: (...a: never[]) => Promise<{ app: infer A }> } ? A : never
+export type SeedOf<C> = C extends Lunette<any, any, infer S> ? S : never
+export type BuiltOf<C> = C extends { build: (...a: never[]) => Promise<infer B> } ? B : never
+
 export class Lunette<
   Ctx extends object = {},
   Pub extends object = {},

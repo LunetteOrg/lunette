@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // The counterpart of `wrangler.jsonc`, identical but for `main`: it points at
+  // a worker that builds the chain at MODULE SCOPE. Used only by
+  // `test/module-scope.node.test.ts`, which asserts the runtime refuses to start
+  // it — the same chain, the same bindings, the build moved one scope out.
+  "name": "lntt-example-workers-hono-eager",
+  "main": "test/fixture/eager-worker.ts",
+  "compatibility_date": "2026-08-01",
+  "kv_namespaces": [{ "binding": "LINKS", "id": "links-namespace" }],
+  "vars": {
+    "LABEL": "hono on workers",
+    "SIGNING_SECRET": "dev-secret-not-for-deployment"
+  }
+}

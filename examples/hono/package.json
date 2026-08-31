@@ -1,0 +1,24 @@
+{
+  "name": "@lntt/example-hono",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example: mount @lntt/example-app on Hono via @lntt/integration/hono, with a typed hc client and an integration test.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lntt/example-app": "workspace:*",
+    "@lntt/integration": "workspace:*",
+    "@lntt/scope": "workspace:*",
+    "@lntt/wire": "workspace:*"
+  },
+  "devDependencies": {
+    "@hono/standard-validator": "^0.2.3",
+    "@types/node": "^24.13.2",
+    "hono": "^4.12.25",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.0"
+  }
+}
