@@ -1,5 +1,19 @@
+import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { isAbort, isOk, type Abort, type Ok } from './abort.ts'
-import type { Invalid } from './carrier.ts'
+
+// A schema issue, from Standard Schema's own issue shape — a TYPE, not a
+// vocabulary word: every carrier can have one, so it belongs to the outcome
+// rather than to any carrier.
+export type Issue = StandardSchemaV1.Issue
+
+// The fold failing ON ITS OWN: the input did not validate. Deliberately NOT an
+// abort — an abort is a word from a carrier's vocabulary and the core has none,
+// so minting one here would be exactly the kind of vocabulary word this design
+// keeps out of the core. Its own branch instead, so a codec that forgets it
+// fails to COMPILE rather than silently mishandling it.
+export interface Invalid {
+  readonly issues: readonly Issue[]
+}
 
 // THE PRIMITIVE. A step wraps the rest of the fold: it reads `app` and the ctx
 // as it stands, and either continues inward with what it populates or returns

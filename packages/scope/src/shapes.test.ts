@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import { scope } from './base.ts'
-import { code, fixture, gone, other, refused } from './carrier.fixture.ts'
-import type { Next, Outcome } from './primitive.ts'
+import { scope } from './scope.ts'
+import { code, fixture, gone, other, refused } from './fixture/carrier.ts'
+import type { Next, Outcome } from './step.ts'
 
 // THE SHAPES A STEP TAKES — one per thing a step is for. There is no category
 // here and no phase: every one is the same primitive, and each runs where it
@@ -11,7 +11,7 @@ import type { Next, Outcome } from './primitive.ts'
 // Read them for what is NOT in them. No step builds an outcome, none casts, and
 // none mentions a brand: a step hands back the result of `next`, a WORD from
 // the carrier, or a plain domain value, and the fold normalises whichever
-// arrives. The words come from `carrier.fixture.ts`, exactly as a real scope
+// arrives. The words come from `fixture/carrier.ts`, exactly as a real scope
 // imports `unauthorized`/`redirect` from `@lntt/scope/http` — and the scope is
 // started with THAT carrier, `scope(fixture)`, which is what makes the words
 // legal here: a carrier is chosen exactly once, and coining is its job.

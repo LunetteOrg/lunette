@@ -1,5 +1,4 @@
 import type { Abort, Ok } from './abort.ts'
-import type { DepGuard } from './adapter-guard.ts'
 import {
   readStep,
   runSteps,
@@ -8,7 +7,7 @@ import {
   type Next,
   type Outcome,
   type Verbs,
-} from './primitive.ts'
+} from './step.ts'
 
 // THE BASE BUILDER. One verb, `.step()`, and everything else is sugar to be
 // written on top of it — `guard`, `validate`, `handle`, `extend` each earn
@@ -37,6 +36,24 @@ import {
 //   a type that is not a key collapses, which is why the other union-valued
 //   axes are maps of NAMES. So a guard that can hand back a domain value of its
 //   own now appears in what the scope produces, where before it vanished.
+
+// ── gate: the CHAIN does not expose what the scope demands ───────────────────
+// `Need` (what the scope requires of the app) and `Pub` (what the chain
+// exposes) are two independent inferred generics with no shared annotated slot,
+// so contravariance cannot relate them and a brand is required. The conditional
+// vanishes on success (`X & unknown` is `X`, and the argument is accepted
+// unchanged) and becomes an unsatisfiable branded object on failure, so the
+// error lands on the call naming the gap.
+//
+// `Pub extends Need` accepts a SUPERSET: a chain that exposes more than a scope
+// requires is fine, and the extra singletons are ignored.
+//
+// The MOUNT-side gates — a host that cannot render an intent, a host that does
+// not implement a capability — are not here. They cannot move earlier (the same
+// scope is correct on another host) and they come back with the host mounts.
+export type DepGuard<Pub, Need> = Pub extends Need
+  ? unknown
+  : { readonly __ERROR_chain_Pub_missing_deps: Need }
 
 // ── the accumulated state ────────────────────────────────────────────────────
 // One object, one member per axis. Everything the builder knows is here, and

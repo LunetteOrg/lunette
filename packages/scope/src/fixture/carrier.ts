@@ -1,6 +1,7 @@
-import { ABORT, type Abort } from './abort.ts'
+import { ABORT, type Abort } from '../abort.ts'
 
-// A CARRIER, as a fixture. Not a shipped one — `@lntt/scope/http` and
+// A CARRIER, as a FIXTURE — this directory holds nothing that ships. Not a real
+// carrier — `@lntt/scope/http` and
 // `@lntt/scope/trpc` are those — but the same shape, so the examples read like
 // real code instead of minting a word inline where it would be mistaken for
 // something the core provides.

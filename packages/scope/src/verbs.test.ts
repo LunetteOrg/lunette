@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import { scope } from './base.ts'
-import { fixture, refused } from './carrier.fixture.ts'
-import type { Next, StepValue } from './primitive.ts'
+import { scope } from './scope.ts'
+import { fixture, refused } from './fixture/carrier.ts'
+import type { Next, StepValue } from './step.ts'
 
 // A VERB — the fourth thing a step may say, and the only one that is not about
 // the fold at all. The other three (what it knows of the app and of the ctx,

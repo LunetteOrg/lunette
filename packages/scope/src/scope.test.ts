@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { scope } from './base.ts'
-import { outcomeOf, type Next, type Outcome } from './primitive.ts'
+import { scope } from './scope.ts'
+import { outcomeOf, type Next, type Outcome } from './step.ts'
 
 // The base builder has ONE verb, so every one of these is written with nothing
 // but `.step()`. What the sugar will buy later is not power — it is not having
