@@ -27,7 +27,7 @@
 //
 // TERMINATION is not among them: not calling `next` ends the fold, and there is
 // nothing to declare. Enriching the BUILDER is a different axis and a different
-// verb (`Extension`, in `scope.ts`).
+// verb (`Extension`, below).
 //
 // The third one cost a measurement. `Add` occurs only in a parameter position
 // of `next`, so it is NOT inferable from the `next(...)` calls in the body: a
@@ -314,6 +314,19 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 //   bound function, and one named `toString` makes `String(scope)` throw from
 //   wherever the scope is interpolated.
 //
+//   ACCESSORS on `Object.prototype`, of which `__proto__` is the one that
+//   matters. It fails a THIRD way, neither throwing nor shadowing: assigning to
+//   it runs the inherited SETTER, so `self['__proto__'] = wrapper` replaces the
+//   scope's [[Prototype]] and installs no property at all. Verified — the verb
+//   silently does not exist, `Object.hasOwn(scope, '__proto__')` is false, and
+//   the scope keeps working in every visible way because the wrapper it now
+//   inherits from is itself a function. Reachable only as an OWN key, so a
+//   `methods` map from `JSON.parse` or `Object.defineProperty` and not from an
+//   object literal — which is precisely the shape the runtime half exists for.
+//   The `__defineGetter__` family beside it merely shadows, and is listed for
+//   the same reason the rest of `Object.prototype` is: an alphabet that claims
+//   to be closed has to be.
+//
 //   PROTOCOL names, which the language gives meaning to on any object. Only
 //   `then` is reachable — a verb name is a string key, so `Symbol.iterator` and
 //   its kind cannot be one — and it is the worst of the three. A scope carrying
@@ -348,6 +361,12 @@ type ReservedVerb =
   | 'isPrototypeOf'
   | 'propertyIsEnumerable'
   | 'toLocaleString'
+  | '__defineGetter__'
+  | '__defineSetter__'
+  | '__lookupGetter__'
+  | '__lookupSetter__'
+  // an inherited ACCESSOR, which neither throws nor shadows
+  | '__proto__'
   // given meaning by the language itself
   | 'then'
 
@@ -565,6 +584,11 @@ const RESERVED_VERBS: ReadonlySet<string> = new Set([
   'isPrototypeOf',
   'propertyIsEnumerable',
   'toLocaleString',
+  '__defineGetter__',
+  '__defineSetter__',
+  '__lookupGetter__',
+  '__lookupSetter__',
+  '__proto__',
   'then',
 ])
 
@@ -594,7 +618,7 @@ async function runSteps(steps: readonly AnyStep[], app: object, args: object): P
     }
     // Nothing happens on the way out. What the step returned is what the caller
     // gets, and the assertion is the one place the fold admits that `Passed` is
-    // a type-level understatement (see `step.ts`).
+    // a type-level understatement (see `Passed`, above).
     const next = ((delta: object) => at(i + 1, { ...seen, ...delta })) as unknown as Next<object>
     return step(app, seen, next)
   }

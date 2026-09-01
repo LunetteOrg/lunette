@@ -260,6 +260,27 @@ describe('a verb cannot take a name the surface already owns', () => {
     expect(() => unchecked(shadowsThen)).toThrow(/cannot be named 'then'/)
   })
 
+  it('refuses one named `__proto__`, which would REPLACE the scope`s prototype', () => {
+    // The third way a name can fail, and the reason the list is grouped by
+    // failure rather than by origin. `__proto__` is an inherited ACCESSOR:
+    // assigning to it runs the setter, so the wrapper becomes the scope's
+    // [[Prototype]] and no property is installed. The verb silently does not
+    // exist, and the scope keeps working in every visible way, because what it
+    // now inherits from is itself a function.
+    //
+    // Only reachable as an OWN key — an object literal's `__proto__` sets the
+    // prototype instead of making one — so this is built the way a `methods`
+    // map from data would be, which is what the runtime half is for.
+    const methods: Record<string, unknown> = {}
+    Object.defineProperty(methods, '__proto__', {
+      value: () => (async () => 'x') as unknown as AnyStep,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    })
+    expect(() => unchecked({ methods })).toThrow(/cannot be named '__proto__'/)
+  })
+
   it('refuses one named `valueOf`, from the half of the prototype chain that is not a function`s', () => {
     // `Object.prototype`, which the list had missed while claiming to be
     // closed over "what every function carries".
