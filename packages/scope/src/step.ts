@@ -40,7 +40,7 @@
 // has something to say. A required field would put `intent: undefined` on every
 // hand-written `ok`, which reads as a value that matters and is not one.
 // Registered for the same reason the word brands are — see `words.ts`.
-export const OUTCOME: unique symbol = Symbol.for('lntt.scope.outcome')
+export const OUTCOME: unique symbol = Symbol.for('lntt.scope.outcome.1')
 
 type Branded = { readonly [OUTCOME]: true }
 
