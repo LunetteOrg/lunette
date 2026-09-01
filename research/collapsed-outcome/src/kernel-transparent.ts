@@ -39,8 +39,15 @@ declare const PASSED: unique symbol
 
 // What a wrapping step is handed by `next`: an answer it did not produce and
 // cannot read without asking its carrier.
+//
+// The member is REQUIRED, and that was a BUG here until it was found against the
+// shipped core. Optional, this is a weak type: `R extends Passed` then holds for
+// anything that COULD carry the key, which an index signature can — so `ValueOf`
+// ate a leaf returning `Record<string, number>` and the scope declared `never`.
+// Corrected so the prior art does not teach the mistake; the README's numbers
+// are unaffected and were re-taken to confirm it.
 export interface Passed {
-  readonly [PASSED]?: true
+  readonly [PASSED]: true
 }
 
 // Transparent: what the scope hands back IS what the leaf returned.

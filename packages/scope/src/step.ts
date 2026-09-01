@@ -78,8 +78,17 @@ export interface Word<I extends object = UnknownIntent> {
 // carrier of realistic size, §42).
 declare const PASSED: unique symbol
 
+// The member is REQUIRED, and that is load-bearing rather than tidy. Optional,
+// this is a WEAK TYPE: `R extends Passed` then holds for anything that could
+// carry the key, so an index signature satisfies it. A leaf returning
+// `Record<string, number>` — a tally, a bag of headers, a wide row — was
+// EXCLUDED by `ValueOf` and the scope declared `never`, which is assignable to
+// everything, so every consumer downstream compiled and received at runtime a
+// value the types called impossible. Requiring the key costs nothing: nobody
+// constructs a `Passed`, and the only value that ever stands for one is the
+// assertion inside the fold.
 export interface Passed {
-  readonly [PASSED]?: true
+  readonly [PASSED]: true
 }
 
 // What a step calls to continue inward. Its parameter is what the step

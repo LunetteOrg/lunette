@@ -208,3 +208,35 @@ describe('what a scope accumulated, read from outside', () => {
     expectTypeOf<ResultOf<typeof base>>().toEqualTypeOf<never>()
   })
 })
+
+// ── the marker excludes the fold's answer, and NOTHING else ──────────────────
+// `ValueOf` is `Exclude<R, Passed>`, so what `Passed` matches decides what a
+// scope is allowed to say it produces. It matched too much: written with an
+// OPTIONAL member it was a weak type, and `R extends Passed` then holds for any
+// type that COULD carry the key — which an index signature can.
+//
+// The failure was silent in the worst way. A leaf returning `Record<string,
+// number>` — a tally, a bag of headers, a wide typed row — was excluded, the
+// scope declared `never`, and `never` is assignable to everything: every
+// consumer downstream compiled and got at runtime a value the types had called
+// impossible. Pinned here because nothing about it is visible at the call site.
+describe('what the marker excludes', () => {
+  it('does not eat a leaf whose value has an index signature', async () => {
+    const tally = scope(fixture).step(
+      async (_app: {}, _ctx: {}) => ({ hits: 1 }) as Record<string, number>,
+    )
+    expectTypeOf<ResultOf<typeof tally>>().toEqualTypeOf<Record<string, number>>()
+
+    const bag = scope(fixture).step(async (_app: {}, _ctx: {}) => ({}) as object)
+    expectTypeOf<ResultOf<typeof bag>>().toEqualTypeOf<object>()
+
+    const out = await tally({}, { token: null, params: {} })
+    expect(out).toEqual({ hits: 1 })
+  })
+
+  it('still excludes what it is FOR — a step that only passes through', () => {
+    // the whole point of the marker: this scope produces nothing of its own
+    const base = scope(fixture).step(async (_app: {}, _ctx, next: Next<{ x: 1 }>) => next({ x: 1 }))
+    expectTypeOf<ResultOf<typeof base>>().toEqualTypeOf<never>()
+  })
+})
