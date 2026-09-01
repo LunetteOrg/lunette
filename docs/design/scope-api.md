@@ -945,18 +945,32 @@ carry the two measurements the builder's form was settled on.
 
 ### In order
 
-| | |
-|---|---|
-| **#60** | port the carriers — `http`, `trpc`, `react-router`. `RequestHead` comes back with them, and it is what makes the body lock work. Blocks the rest |
-| **#66** | a translating step: a leaf reports domain errors as VALUES, and something has to turn the ones a host must render into the carrier's words. Belongs with the carriers, and is the first real consumer of the shape §42 left behind |
-| **#51** | two steps populating the same ctx key: the types say `never`, the runtime says last-writer-wins, and nothing errors. Moved UP from orthogonal — the gate lives in `.step`, beside the two already there, and the ctx goes from two entries to six once #62 lands. It is also the prerequisite for any parallel step, where last-writer-wins stops being deterministic |
-| **#64** | validation per carrier: one factory, each carrier's own word. The core's `invalid` branch is gone with the carrier-free `.validate` (§41), so this is what gives a scope a way to refuse an input again |
-| **#61** | the outbound side as a returned value: `response(v, init)`, with `json`/`html`/`text` as its sugar. Adds the envelope; the effects axis it replaces is already gone. ALSO closes the known limit above `ValueOf` — a WRAP step that replaces `value` is invisible to what the scope reports, and it only becomes expressible once the outbound side is a value a step RETURNS |
-| **#62** | port the read extensions: `body`, `query`, `cookies`, `headers` — none of which needs the retired transport-feature alphabet |
-| **#63** | decide which sugars come back — `guard`, `handle`, or neither. Both have already lost the reasons they were going to exist, so the failure mode is silence, not a wrong answer |
-| **#67** | composable scopes: a guard written once against a DECLARED vocabulary and no carrier, mounted on any carrier that coins it. Sharing a prefix already works and costs nothing; what this adds is splicing a fragment built elsewhere, and the second type parameter that lets one demand words without choosing a carrier. #51 is a prerequisite — splicing intersects `acc` |
-| **#58** | bring `@lntt/integration` back, with its route/intent/capability gates |
-| **#59** | rewrite `examples/` — LAST, and the real proof: an API that cannot be written naturally in an example is not settled, whatever the type tests say |
+**The order lives in the [project](https://github.com/orgs/LunetteOrg/projects/1),
+not here**, and the reason is that this file lives on a BRANCH. A table here is
+right only for whoever is standing on the branch that last edited it — which,
+while several slices are in flight, is nobody.
+
+What carries the sequence instead is the issues' own `blocked by` relations, so
+"this before that" is a claim on the issue rather than a position in a list, and
+it is the same claim from every branch. The graph as it stands:
+
+```
+#60 carriers ──┬──→ #66 translating step   needs a vocabulary to translate INTO
+               ├──→ #64 validation         needs a word to refuse WITH
+               ├──→ #61 outbound           the words belong to a carrier
+               ├──→ #62 read extensions    needs `RequestHead`
+               └──→ #67 composable scopes  needs ≥2 vocabularies to be agnostic across
+
+#51 ctx collisions ──→ #67                 splicing intersects `acc`
+
+#60, #61, #62 ───────→ #58 integration     mounts render words and read entries
+
+#58, #63, #64, #66, #67 ──→ #59 examples   LAST, and the real proof
+```
+
+Two orderings are deliberately NOT edges, because they are preferences and not
+blocks: #61 before #62, and #63 before #67. A partial order is honest where a
+total one would be invented.
 
 Parked, and deliberately unscheduled — neither has a case in hand, which is the
 discipline that removed `validate` from the core:
