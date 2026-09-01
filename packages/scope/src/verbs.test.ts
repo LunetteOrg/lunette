@@ -301,3 +301,61 @@ describe('awaiting a scope', () => {
     expect(await settles(build())).toBe('settled')
   })
 })
+
+// ── two extensions cannot both own a verb name ───────────────────────────────
+// The two halves used to disagree and neither said so. `Surface` intersects, so
+// a shared name becomes an OVERLOAD LIST where TypeScript prefers the EARLIER
+// signature for arguments it accepts; `.extend`'s merge is `{ ...verbs,
+// ...ext.methods }` and keeps the LATER factory. So the call site was checked
+// against one extension and served by the other.
+interface TagString {
+  tag<S extends State>(this: Scope<S>, v: string): Surface<S>
+}
+interface TagNumber {
+  tag<S extends State>(this: Scope<S>, v: number): Surface<S>
+}
+
+const ran: string[] = []
+const tagFactory = (which: string) => (v: unknown) =>
+  (async (_a: {}, _c: {}, next: Next<{}>) => {
+    ran.push(`${which}:${typeof v}`)
+    return next({})
+  }) as unknown as AnyStep
+
+const tagsA: Extension<TagString> = { methods: { tag: tagFactory('A') as (...a: never[]) => AnyStep } }
+const tagsB: Extension<TagNumber> = { methods: { tag: tagFactory('B') as (...a: never[]) => AnyStep } }
+
+describe('a verb name already contributed by another extension', () => {
+  it('is REFUSED at the second `.extend`, naming it', () => {
+    const refused = () => {
+      // @ts-expect-error ⛔ a verb under this name is already contributed: tag
+      scope<{}>().extend(tagsA).extend(tagsB)
+    }
+    expect(typeof refused).toBe('function')
+  })
+
+  it('and refused at RUNTIME too, the way an extension loaded by name reaches it', () => {
+    const unchecked = (ext: object) =>
+      scope<{}>().extend(tagsA).extend(ext as unknown as Extension<{}>)
+    expect(() => unchecked(tagsB)).toThrow(/already contributed: tag/)
+  })
+
+  it('the same extension twice is refused as well — it is the same collision', () => {
+    const refused = () => {
+      // @ts-expect-error ⛔ a verb under this name is already contributed: header
+      scope<{}>().extend(headers).extend(headers)
+    }
+    expect(typeof refused).toBe('function')
+  })
+
+  it('two extensions with DIFFERENT names compose, which is the case that must not break', async () => {
+    const h = scope<{}>()
+      .extend(headers)
+      .extend(pins)
+      .header('x', '1')
+      .pin(201)
+      .step(async (_app: {}, ctx: { readonly pinned: 201 }) => String(ctx.pinned))
+
+    expect(await h({}, {})).toBe('201 [x=1]')
+  })
+})
