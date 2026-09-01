@@ -2,9 +2,14 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import { scope, type IntentsOf, type Next, type ResultOf } from './index.ts'
 import { elsewhere, fixture, refused, type Elsewhere, type Refusal } from './fixture/carrier.ts'
 
-// The type contract of the base builder. Everything here is written with the
-// ONE verb, because that is the claim under test: the primitive says all five
-// things a step has to say, and nothing else is needed to say them.
+// THE TYPE CONTRACT, which is what a `*.test-d.ts` file is for in this repo:
+// the engine is guaranteed by the runtime tests, and the types guarantee the
+// user's world. If a refactor breaks a line here, the refactor is wrong even
+// when everything else stays green.
+//
+// Everything is written with the ONE verb, because that is the claim under
+// test: the primitive says all five things a step has to say, and nothing else
+// is needed to say them.
 
 interface Repos {
   readonly users: { readonly byId: (id: string) => { readonly name: string } | undefined }

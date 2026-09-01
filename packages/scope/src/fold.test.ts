@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { scope, type Next } from './index.ts'
 
+// THE FOLD, on a scope with NO CARRIER — which is the half `shapes.test.ts`
+// cannot cover, since every one of its cases needs words to say. A bare
+// `scope()` runs nowhere in the sense §40 means it, and composes perfectly well
+// in every other: ordering, stopping, wrapping and the run's arguments as the
+// ctx it starts from are all decided here, before any carrier exists.
+//
 // The base builder has ONE verb, so every one of these is written with nothing
 // but `.step()`. What the sugar will buy later is not power — it is not having
 // to call `next` correctly.
