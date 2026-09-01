@@ -4,7 +4,7 @@ import {
   code, fixture, gone, isWord, other, refused, served,
   type Refusal, type Served,
 } from './fixture/carrier.ts'
-import type { Word } from './words.ts'
+import type { Word } from './step.ts'
 import type { Next } from './step.ts'
 
 // THE SHAPES A STEP TAKES — one per thing a step is for. There is no category

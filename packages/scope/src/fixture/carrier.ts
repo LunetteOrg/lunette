@@ -1,4 +1,4 @@
-import type { Word } from '../words.ts'
+import type { Word } from '../step.ts'
 
 // A CARRIER, as a FIXTURE — this directory ships nothing. Not a real carrier,
 // but the same shape, so the tests read like real code instead of minting a

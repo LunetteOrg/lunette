@@ -28,10 +28,12 @@ export type {
   ResultOf,
 } from './scope.ts'
 
-// What a step is written against. `Passed` is what `next` hands back — read
-// `step.ts` for why it says nothing, and who pays for that.
-export type { Step, AnyStep, Next, Passed } from './step.ts'
-
-// How a carrier DECLARES a word. A type and nothing else: the core builds no
-// words, brands none, and recognises none at runtime (§42).
-export type { Word, UnknownIntent } from './words.ts'
+// What a step is written against, and what it may hand back. `Word` is how a
+// carrier DECLARES one of its words — a type and nothing else, since the core
+// builds none and recognises none at runtime. `Passed` is what `next` gives
+// back; read `step.ts` for why it says nothing, and who pays for that (§42).
+//
+// `UnknownIntent` is NOT here. It exists so that a `Word` written without its
+// parameter fails CLOSED, and nothing else: no carrier writes it, and the gate
+// reports the key rather than the name. It is exported the day a case needs it.
+export type { Step, AnyStep, Next, Passed, Word } from './step.ts'

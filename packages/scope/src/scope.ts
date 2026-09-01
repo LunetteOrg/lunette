@@ -1,5 +1,4 @@
-import type { Word } from './words.ts'
-import type { AnyStep, Next, Passed } from './step.ts'
+import type { AnyStep, Next, Passed, Word } from './step.ts'
 
 // THE BASE BUILDER. One verb, `.step()`, and everything else is sugar written
 // on top of it.
@@ -77,7 +76,7 @@ export interface State {
 // One projection, therefore, where the two-branch shape needed two. "What does
 // this scope produce" and "what can it hand back at all" stopped being
 // different questions when the branch went (§42).
-export type ValueOf<R> = Exclude<R, Passed>
+type ValueOf<R> = Exclude<R, Passed>
 
 // The load-bearing shape on the intent axis. Inferring from INSIDE a union
 // constituent (`(ctx) => E | Refusal`) makes TypeScript pick the first
@@ -227,7 +226,7 @@ type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Sur
 // name AND the schema's output type, which is its whole job. The duplicate
 // that buys this is tied by NAME below, so a verb with no factory — or a factory
 // no verb declares — is an error here.
-export type Verbs = Readonly<Record<string, (...args: never[]) => AnyStep>>
+type Verbs = Readonly<Record<string, (...args: never[]) => AnyStep>>
 
 export interface Extension<M extends object> {
   // One factory per declared verb, keyed alike. A factory never receives the

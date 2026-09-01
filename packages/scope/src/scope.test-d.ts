@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import { scope } from './scope.ts'
-import { fixture, refused, type Refusal } from './fixture/carrier.ts'
+import { scope, type IntentsOf, type ResultOf } from './scope.ts'
+import { elsewhere, fixture, refused, type Elsewhere, type Refusal } from './fixture/carrier.ts'
 import { type Next } from './step.ts'
 
 // The type contract of the base builder. Everything here is written with the
@@ -160,5 +160,51 @@ describe('what a step knows of the app', () => {
     )
     // @ts-expect-error — the run brings `id`, not `courseId`
     h({}, { courseId: 'c1' })
+  })
+})
+
+// ── what a scope tells anything OUTSIDE the builder ──────────────────────────
+// `StateOf` and its two readers are how a mount asks what a scope accumulated,
+// and they are the demand side of the intent axis: the supply gate asks whether
+// the CARRIER coins a word, and these answer what the STEPS actually say. A
+// mount is checked against the second, so a host that cannot render one of them
+// fails to compile rather than degrading at runtime.
+//
+// Public and, until now, pinned nowhere — which mattered because §42 changed
+// what `ResultOf` means: it used to be the domain side only, and it is now
+// everything a step hands back.
+describe('what a scope accumulated, read from outside', () => {
+  const s = scope(fixture)
+    .step(async (_app: {}, ctx, next: Next<{ user: string }>) =>
+      ctx.token === null ? refused('anonymous') : next({ user: ctx.token }),
+    )
+    .step(async (_app: {}, ctx: { readonly user: string }, next: Next<{}>) =>
+      ctx.user === 'moved' ? elsewhere('/here') : next({}),
+    )
+    .step(async (_app: {}, ctx: { readonly user: string }) => ctx.user.length)
+
+  it('reports every word its steps can say, accumulated across all of them', () => {
+    // TWO names from three steps: the leaf says none, and the two guards say
+    // one each. A mount asks exactly this question.
+    expectTypeOf<IntentsOf<typeof s>>().toEqualTypeOf<'refusal' | 'elsewhere'>()
+  })
+
+  it('reports the words BESIDE the domain value, and never the marker', () => {
+    // `Passed` is machinery: two of these steps hand it back, and it appears in
+    // neither reader. What is left is what the steps produced themselves.
+    expectTypeOf<ResultOf<typeof s>>().toEqualTypeOf<number | Refusal | Elsewhere>()
+  })
+
+  it('a scope that says nothing demands nothing of a host', () => {
+    // The agnostic case: no carrier, no words, so no host can fail to render
+    // them — which is why a bare `scope()` mounts anywhere.
+    const silent = scope().step(async (_app: {}, _ctx: {}) => 'just a value')
+    expectTypeOf<IntentsOf<typeof silent>>().toEqualTypeOf<never>()
+    expectTypeOf<ResultOf<typeof silent>>().toEqualTypeOf<string>()
+  })
+
+  it('a base with no leaf produces nothing, and says so', () => {
+    const base = scope(fixture).step(async (_app: {}, _ctx, next: Next<{ x: 1 }>) => next({ x: 1 }))
+    expectTypeOf<ResultOf<typeof base>>().toEqualTypeOf<never>()
   })
 })
