@@ -1,7 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import { scope, type IntentsOf, type ResultOf } from './scope.ts'
+import { scope, type IntentsOf, type Next, type ResultOf } from './index.ts'
 import { elsewhere, fixture, refused, type Elsewhere, type Refusal } from './fixture/carrier.ts'
-import { type Next } from './step.ts'
 
 // The type contract of the base builder. Everything here is written with the
 // ONE verb, because that is the claim under test: the primitive says all five
