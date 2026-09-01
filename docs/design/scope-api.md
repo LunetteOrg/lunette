@@ -948,6 +948,7 @@ carry the two measurements the builder's form was settled on.
 | | |
 |---|---|
 | **#60** | port the carriers — `http`, `trpc`, `react-router`. `RequestHead` comes back with them, and it is what makes the body lock work. Blocks the rest |
+| **#66** | a translating step: a leaf reports domain errors as VALUES, and something has to turn the ones a host must render into the carrier's words. Belongs with the carriers, and is the first real consumer of the shape §42 left behind |
 | **#51** | two steps populating the same ctx key: the types say `never`, the runtime says last-writer-wins, and nothing errors. Moved UP from orthogonal — the gate lives in `.step`, beside the two already there, and the ctx goes from two entries to six once #62 lands. It is also the prerequisite for any parallel step, where last-writer-wins stops being deterministic |
 | **#64** | validation per carrier: one factory, each carrier's own word. The core's `invalid` branch is gone with the carrier-free `.validate` (§41), so this is what gives a scope a way to refuse an input again |
 | **#61** | the outbound side as a returned value: `response(v, init)`, with `json`/`html`/`text` as its sugar. Adds the envelope; the effects axis it replaces is already gone. ALSO closes the known limit above `ValueOf` — a WRAP step that replaces `value` is invisible to what the scope reports, and it only becomes expressible once the outbound side is a value a step RETURNS |
