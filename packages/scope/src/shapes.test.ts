@@ -319,3 +319,62 @@ describe('a step that hands back nothing', () => {
     expect(out).toBeNull()
   })
 })
+
+// ── a step may not re-populate a ctx key ─────────────────────────────────────
+// The types intersected where the runtime overwrote, and `never` made the
+// disagreement silent: assignable to everything, so every later use compiled
+// while the run handed back the second step's value. Refused now, because the
+// difference between a refinement and a collision is intent and no type can
+// read it — and because under parallel steps last-writer-wins is not even
+// deterministic.
+describe('two steps populating the same ctx key', () => {
+  it('is REFUSED at the step that wrote the second, with the key named', () => {
+    const refused = () => {
+      scope(fixture)
+        .step(async (_a: {}, _c: {}, next: Next<{ user: string }>) => next({ user: 'ada' }))
+        // @ts-expect-error ⛔ this ctx key is already populated: user
+        .step(async (_a: {}, _c: {}, next: Next<{ user: number }>) => next({ user: 42 }))
+    }
+    expect(typeof refused).toBe('function')
+  })
+
+  it('refuses a NARROWING too, which is the case an extension exists for', () => {
+    // `{ id: string }` is a subtype of `unknown`, so this is a refinement and
+    // not a collision — but the primitive cannot tell, and guessing is what the
+    // gate refuses to do. The way to say it deliberately is a verb.
+    const refused = () => {
+      scope(fixture)
+        .step(async (_a: {}, _c: {}, next: Next<{ body: unknown }>) => next({ body: {} }))
+        // @ts-expect-error ⛔ this ctx key is already populated: body
+        .step(async (_a: {}, _c: {}, next: Next<{ body: { id: string } }>) =>
+          next({ body: { id: 'p1' } }),
+        )
+    }
+    expect(typeof refused).toBe('function')
+  })
+
+  it('refuses the SAME step added twice, because the gate reads names and not types', () => {
+    // The one case the gate refuses that was not broken: same key, same type,
+    // so the second write is harmless. Refused anyway — adding a populating
+    // step twice is a composition mistake either way (it runs for nothing), and
+    // admitting it would mean comparing TYPES as well as names, which is the
+    // more expensive machine this shape was chosen over.
+    const withPage = async (_a: {}, _c: {}, next: Next<{ page: number }>) => next({ page: 3 })
+    const refused = () => {
+      // @ts-expect-error ⛔ this ctx key is already populated: page
+      scope(fixture).step(withPage).step(withPage)
+    }
+    expect(typeof refused).toBe('function')
+  })
+
+  it('does NOT touch refining what the carrier brought, which `Ctx` already decides', async () => {
+    // `token` is an ARGS key, not an acc one, so the gate never sees it and the
+    // REFINE shape above is unaffected — pinned because it is the case that
+    // would break if the gate read the wrong axis.
+    const h = scope(fixture)
+      .step(refineToken)
+      .step(async (_a: {}, ctx: { readonly token: string }) => ctx.token)
+
+    expect(await h({}, { token: null, params: {} })).toBe('anonymous')
+  })
+})

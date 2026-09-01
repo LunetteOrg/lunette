@@ -224,6 +224,38 @@ export type ResultOf<Sc> = ValueOf<StateOf<Sc>['returns']>
 // What `.step` grows. An extension writes its own transformation instead —
 // `Refined<S, N, T>` in the validation extension is one — which is how a verb
 // can REPLACE an entry where a step can only add to it.
+// ── gate: a step may not re-populate a ctx key ───────────────────────────────
+// The types INTERSECT where the runtime OVERWRITES, and the disagreement is
+// silent. Two steps populating `user` give `string & number`, which is `never`,
+// while the fold's `{ ...seen, ...delta }` hands back the second value. `never`
+// is what makes it silent rather than merely wrong: it is assignable to
+// everything, so the field typechecks at every later use and nothing downstream
+// complains about a value the types called impossible.
+//
+// REFUSED rather than resolved, and that is the whole choice. Aligning the
+// types to the runtime — an `Omit`, mirroring `Ctx` — is one line and makes the
+// two agree, but it leaves the COLLISION silent, and the difference between a
+// refinement and a collision is INTENT, which no type can read. Under parallel
+// steps it is worse: `Promise.all` has no order, so last-writer-wins stops
+// being deterministic and there is no correct answer to converge on. `wire`
+// reached the same verdict for the chain's context (`DupKeyMsg`), and this is
+// principle 1 applied to the scope's.
+//
+// The deliberate case has a way out already, and it costs nothing to offer: a
+// VERB does not come through here. `.extend`'s wrapper pushes its step directly,
+// so an extension writing its own state transformation — `Refined<S, N, T>`, the
+// one `Grown` names below — replaces an entry where a step may only add. The
+// primitive refuses; an extension that MEANS to replace says so in its own
+// signature.
+//
+// It rides the ARGUMENT for `ReturnGate`'s reason, and reads NAMES only —
+// `Extract` over two `keyof`s, the cheap shape `VerbGate` uses. Measured at
+// +9.9% instantiations across this package, which is what closing a silent
+// `never` costs.
+type CtxGate<S extends State, Add, U = Extract<keyof Add, keyof S['acc']>> = [U] extends [never]
+  ? unknown
+  : `⛔ this ctx key is already populated: ${U & string} — an extension may REPLACE it, a step may not`
+
 type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Surface<{
   need: S['need'] & Need2
   args: S['args']
@@ -291,7 +323,8 @@ export interface Scope<S extends State> {
   // arrives.
   step<Need2 extends object, Add extends object, Ret>(
     s: ((app: Need2, ctx: Ctx<S>, next: Next<Add>) => Ret | Promise<Ret>) &
-      ReturnGate<S, Ret>,
+      ReturnGate<S, Ret> &
+      CtxGate<S, Add>,
   ): Grown<S, Need2, Add, Ret>
 
   // Enrich the BUILDER, and only the builder: this pushes no step, and an

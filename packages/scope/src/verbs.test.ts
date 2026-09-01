@@ -71,6 +71,60 @@ const pins: Extension<PinVerb> = {
   methods: { pin: withPin as unknown as (...a: never[]) => AnyStep },
 }
 
+// ── the way past the ctx gate, and the reason it may be closed at all ────────
+// `.step` refuses re-populating a key, because it cannot tell a refinement from
+// a collision. An extension CAN tell — it is the one saying so — and it does not
+// come through `.step`: `.extend`'s wrapper pushes the step directly, so a verb
+// declaring its own state transformation replaces an entry the primitive may
+// only add to. This is what makes the gate affordable rather than a wall, and it
+// is the shape a validation verb will have.
+const narrowBody = () =>
+  async (_app: {}, ctx: { readonly body: unknown }, next: Next<{ body: { id: string } }>) =>
+    next({ body: ctx.body as { id: string } })
+
+interface NarrowVerb {
+  narrow<S extends State>(
+    this: Scope<S>,
+  ): Surface<{
+    need: S['need']
+    args: S['args']
+    // REPLACES, where `Grown` would intersect — an `Omit`, exactly as `Ctx` does
+    // for the args axis, and legible here because the verb states it.
+    acc: Omit<S['acc'], 'body'> & { readonly body: { id: string } }
+    returns: S['returns']
+    vocabulary: S['vocabulary']
+    verbs: S['verbs']
+  }>
+}
+
+const narrows: Extension<NarrowVerb> = {
+  methods: { narrow: narrowBody as unknown as (...a: never[]) => AnyStep },
+}
+
+describe('an extension replaces a ctx entry where a step may not', () => {
+  it('narrows a key an earlier step populated, and the leaf reads the narrow type', async () => {
+    const h = scope<{}>()
+      .step(async (_app: {}, _ctx: {}, next: Next<{ body: unknown }>) => next({ body: { id: 'p1' } }))
+      .extend(narrows)
+      .narrow()
+      .step(async (_app: {}, ctx: { readonly body: { id: string } }) => ctx.body.id)
+
+    expect(await h({}, {})).toBe('p1')
+  })
+
+  it('and the same thing written as a STEP is refused, which is the whole point', () => {
+    const refused = () => {
+      scope<{}>()
+        .step(async (_a: {}, _c: {}, next: Next<{ body: unknown }>) => next({ body: {} }))
+        // @ts-expect-error ⛔ this ctx key is already populated: body
+        .step(async (_a: {}, _c: {}, next: Next<{ body: { id: string } }>) =>
+          next({ body: { id: 'p1' } }),
+        )
+    }
+    expect(typeof refused).toBe('function')
+  })
+})
+
 describe('an extension enriches the builder, and nothing else', () => {
   it('adds NO step — that is the difference from `.step`, and it is observable', () => {
     const bare = scope<{}>()
