@@ -352,11 +352,8 @@ const RESERVED_VERBS: ReadonlySet<string> = new Set([
 // it was.
 function outcomeOf(result: unknown): Outcome<unknown> {
   if (isOutcome(result)) return result
-  if (isAbort(result)) return { [OUTCOME]: true, ok: false, abort: result as Abort<never> }
-  if (isOk(result)) {
-    const value = result as Ok<unknown, never>
-    return { [OUTCOME]: true, ok: true, value: value.value, intent: value.intent }
-  }
+  if (isAbort(result)) return { [OUTCOME]: true, ok: false, intent: result.intent }
+  if (isOk(result)) return { [OUTCOME]: true, ok: true, value: result.value, intent: result.intent }
   return { [OUTCOME]: true, ok: true, value: result }
 }
 

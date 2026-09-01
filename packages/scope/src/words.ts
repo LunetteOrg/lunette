@@ -7,8 +7,14 @@
 // Read this file asking "what does it know about HTTP?" The answer is nothing —
 // every HTTP name lives in the carrier that offers HTTP.
 
-export const ABORT: unique symbol = Symbol('scope.abort')
-export const OK: unique symbol = Symbol('scope.ok')
+// REGISTERED, not fresh. `Symbol()` is unique per module evaluation, so two
+// copies of this package in one dependency graph mint two different brands and
+// stop recognising each other's words — a `refused()` from one is read by the
+// other as an ordinary domain value, and the run SUCCEEDS with the abort object
+// inside `value`. Verified, and silent. The global registry makes the brand what
+// it is meant to be: a contract about a shape, not about an instance.
+export const ABORT: unique symbol = Symbol.for('lntt.scope.abort')
+export const OK: unique symbol = Symbol.for('lntt.scope.ok')
 
 // Written without its parameter, `Abort` means "an intent nobody declared" and
 // fails CLOSED — refused wherever a gate checks it — rather than collapsing to

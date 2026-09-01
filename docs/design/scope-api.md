@@ -804,6 +804,77 @@ rediscover them.
   every `.step` against a phantom intersected once. It is the intersection that
   is expensive: `Self` gains a member per verb and every later read walks all of
   them, while a parameterised read is one indexed access.
+- **Where the builder's cost actually is**, on a 21-step chain with a carrier and
+  words (24,349 instantiations), removing one piece at a time:
+
+  | piece | share |
+  |---|---|
+  | `Ctx` = `Omit<args, keyof acc> & acc`, recomputed per step | **16%** |
+  | `Surface` = `Scope<S> & S['verbs']`, per step | **15%** |
+  | `WordGate` | 11% |
+  | the `result` accumulation | 6% |
+  | one whole member of `State` | **1.3%** |
+  | `DepGuard` | ~0 — it rides the call, not each step |
+
+  So the seven state members are ~9% together and two DERIVED types are 31%.
+  The members are not the cost, which also means a new axis is affordable when
+  one is needed. Neither derived type is reducible: `Ctx`'s `Omit` is what makes
+  refinement expressible at all, and the obvious `Surface` shortcut — skip the
+  intersection when `verbs` is empty — breaks the inference of `S` through
+  `this`, so every verb sees `Scope<State>`.
+
+- **DRYing `Grown`'s seven-line rebuild** with `With<S, P> = Omit<S, keyof P> & P`
+  so it lists only the members it changes: 24,349 → **35,769 (+47%)**, types
+  +28%. The repetition IS the optimisation, and this is the same intersection
+  cost measured above from the other direction.
+
+- **`result` and `intents` as two projections against one raw union.** Storing
+  what the steps RETURN and projecting at the two readers: 24,349 → 24,057, a
+  wash — the raw union GROWS where the extracted one did not, since a
+  pass-through step used to contribute `never`. Kept for legibility, and for one
+  thing that was not expected: the eager extraction is LOSSY, so a WRAP step
+  replacing `value` was dropped from what the scope reports. The raw form keeps
+  the material to narrow that.
+
+- **The gate on a step that returns nothing**: +9.1% standing beside `WordGate`,
+  **+7.1% merged into it** — sharing the `Awaited<Ret>` is worth 2%. What it
+  buys: forgetting `return` in front of `next(…)` otherwise SUCCEEDS with
+  `value: undefined`, discarding work the inner steps really did. It surfaces
+  without the gate as `string | void` at whoever consumes `out.value`, in
+  another file, and not at all in a test reading `out.ok && out.value`.
+
+### At runtime
+
+Node, ns per run, warmed. Absolute values drift between processes, so only
+comparisons within one run are meaningful.
+
+  | | 5 steps | 20 steps | |
+  |---|---|---|---|
+  | continuation passing (shipped) | 749 | 4,670 | |
+  | composed once, memoised on first call | 700 | 4,522 | −6.5% / −3.2% |
+  | | | | |
+  | ctx merged by spread (shipped) | 1,251 | 6,213 | |
+  | ctx as a prototype chain | 3,193 | 12,336 | **+155%** |
+  | steps synchronous, no `await` per level | 649 | 3,580 | −48% |
+  | | | | |
+  | continuation passing | 810 | 4,626 | |
+  | generators + an interpreter | 2,210 | 10,637 | **+173%** |
+
+  Three findings. **The whole fold is 1–6 µs**, against an HTTP request of
+  hundreds of µs to milliseconds — under 1%, so pre-composing its closures buys
+  3-6% of something that is not where the time goes. **A prototype-chain ctx is
+  2.5x SLOWER**, not faster: the chain deepens per step and every read walks it,
+  so principle 7 costs nothing here and earns something. **Generators are 2.7x**,
+  with a simplified interpreter; a real effect runtime does more.
+
+- **Effect systems do not discover parallelism either.** `Effect.all([a, b])` is
+  the same authored claim `.parallel(a, b)` would be, and a program written in
+  sequence stays sequential. What owning a scheduler buys is what happens on
+  FAILURE: `Promise.all` rejects while the losing branch runs to completion, its
+  errors unhandled and its resources unreleased; an interpreter interrupts it and
+  runs its finalizers. The axis is the quality of the concurrency once asked
+  for, never its discovery.
+
 - **A verb's signature declared against computed**, on an identical workload
   that uses NO verb at all: 6,637 → 5,056 instantiations (**−23.8%**), types
   −19.8%. The computed machinery — a conditional plus four extraction types,

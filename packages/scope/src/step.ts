@@ -1,4 +1,3 @@
-import type { Abort } from './words.ts'
 
 // THE PRIMITIVE. A step wraps the rest of the fold: it reads `app` and the ctx
 // as it stands, and either continues inward with what it populates or returns
@@ -40,14 +39,15 @@ import type { Abort } from './words.ts'
 // nothing about rendering and the host's default applies, while `json(v, 201)`
 // has something to say. A required field would put `intent: undefined` on every
 // hand-written `ok`, which reads as a value that matters and is not one.
-export const OUTCOME: unique symbol = Symbol('scope.outcome')
+// Registered for the same reason the word brands are — see `words.ts`.
+export const OUTCOME: unique symbol = Symbol.for('lntt.scope.outcome')
 
 type Branded = { readonly [OUTCOME]: true }
 
 export type Outcome<R> = Branded &
   (
     | { readonly ok: true; readonly value: R; readonly intent?: unknown }
-    | { readonly ok: false; readonly abort: Abort<never> }
+    | { readonly ok: false; readonly intent: unknown }
   )
 
 // What a step calls to continue inward. Its parameter is what the step

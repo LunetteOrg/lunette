@@ -128,7 +128,7 @@ describe('the five shapes, composed', () => {
     log.length = 0
     const out = await noteScope(app, { token: null, params: {} })
     expect(out.ok).toBe(false)
-    expect(!out.ok && out.abort.intent).toEqual({
+    expect(!out.ok && out.intent).toEqual({
       kind: 'refused',
       why: 'no session',
     })
@@ -139,7 +139,7 @@ describe('the five shapes, composed', () => {
     const empty: Repos = { ...app, notes: { byId: () => undefined } }
     const out = await noteScope(empty, { token: 'good', params: {} })
     expect(out.ok).toBe(false)
-    expect(!out.ok && out.abort.intent).toEqual({ kind: 'gone', what: 'note' })
+    expect(!out.ok && out.intent).toEqual({ kind: 'gone', what: 'note' })
   })
 
   it('is the function that runs it AND still a builder', async () => {
