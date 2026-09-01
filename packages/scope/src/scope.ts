@@ -345,8 +345,9 @@ export interface Scope<S extends State> {
   // is not expressible.
   //
   // `Ret` is unconstrained on purpose: the three things a step may return have
-  // nothing in common but being values, and the fold normalises whichever
-  // arrives.
+  // nothing in common but being values, and the fold touches none of them —
+  // what it hands back is what the step returned (§42). Which of the three it
+  // was is a question for the carrier, and the core never asks it.
   step<Need2 extends object, Add extends object, Ret>(
     s: ((app: Need2, ctx: Ctx<S>, next: Next<Add>) => Ret | Promise<Ret>) &
       ReturnGate<S, Ret> &

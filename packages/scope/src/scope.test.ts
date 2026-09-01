@@ -45,8 +45,8 @@ describe('the step primitive, folded', () => {
     const h = scope()
       .step(async (_app: {}, _ctx, _next: Next<{}>) => {
         seen.push('stopped here')
-        // Not calling `next` is the whole of stopping. What comes back is a
-        // plain domain value — the fold turns it into the outcome.
+        // Not calling `next` is the whole of stopping, and what the caller
+        // gets is this string — the fold adds nothing on the way out.
         return 'early'
       })
       .step(async (_app: {}, _ctx: {}) => {

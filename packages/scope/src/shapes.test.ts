@@ -12,10 +12,10 @@ import type { Next } from './step.ts'
 // was written. What tells them apart is which of the five things it says, and
 // that is visible in the signature every time.
 //
-// Read them for what is NOT in them. No step builds an outcome, none casts, and
-// none mentions a brand: a step hands back the result of `next`, a WORD from
-// the carrier, or a plain domain value, and the fold normalises whichever
-// arrives. The words come from `fixture/carrier.ts`, exactly as a real scope
+// Read them for what is NOT in them. No step builds a result, none casts, and
+// none mentions a brand: a step hands back what `next` gave it, a WORD from the
+// carrier, or a plain domain value, and the fold hands back whichever arrived,
+// untouched. The words come from `fixture/carrier.ts`, exactly as a real scope
 // imports `unauthorized`/`redirect` from `@lntt/scope/http` — and the scope is
 // started with THAT carrier, `scope(fixture)`, which is what makes the words
 // legal here: a carrier is chosen exactly once, and coining is its job.
@@ -216,9 +216,11 @@ describe('what a scope may say, read off the steps', () => {
 
 // ── the SUCCESS side of a word ───────────────────────────────────────────────
 // A leaf that succeeds AND has something to say about how the result should be
-// rendered. It is the other half of the same mechanism the aborts use, and the
-// half `response`/`json` will be built on — so the fold's `ok` normalisation is
-// exercised here rather than waiting for its first real producer.
+// rendered — the half `response`/`json` will be built on. Worth its own block
+// because it is where the price of ONE channel is visible: a word carrying a
+// value appears in what the scope yields, so a caller goes through the carrier
+// to reach the domain value. The refusals cost the same, and it is the same
+// cost that makes every one of them legible in the scope's own type (§42).
 describe('a word on the success side', () => {
   const served3 = scope(fixture).step(async (_app: {}, _ctx: {}) => served(3, 'cache'))
 
