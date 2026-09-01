@@ -8,7 +8,7 @@ import type { Next } from './step.ts'
 
 // Declaring termination, written out. `handle` will be sugar for exactly this
 // one line, and for nothing else: the leaf itself needs no wrapping, because
-// the fold normalises whatever any step hands back.
+// the fold hands back whatever any step returned, untouched.
 interface Repos {
   readonly users: { readonly byId: (id: string) => { readonly name: string } | undefined }
 }
@@ -34,7 +34,7 @@ describe('the step primitive, folded', () => {
       })
 
     const out = await h(app, {})
-    expect(out.ok && out.value).toEqual({ sum: 3 })
+    expect(out).toEqual({ sum: 3 })
     // The AFTER exists because a step wraps `next` — which a pre-hook plus a
     // collector could not express.
     expect(seen).toEqual(['a', 'b', 'leaf', 'a-out'])
@@ -55,20 +55,26 @@ describe('the step primitive, folded', () => {
       })
 
     const out = await h(app, {})
-    expect(out.ok && out.value).toBe('early')
+    expect(out).toBe('early')
     expect(seen).toEqual(['stopped here'])
   })
 
   it('a step wraps the rest, so it can change what came back', async () => {
     const h = scope()
       .step(async (_app: {}, _ctx, next: Next<{}>) => {
-        const out = await next({})
-        return out.ok ? { ...out, value: `wrapped(${String(out.value)})` } : out
+        // What `next` hands back declines to say what it is (`Passed`), so a
+        // step that DECORATES has to state what it expects. That is the whole
+        // cost of the fold producing nothing of its own, and it lands on the
+        // only shape that reads the way back. Here the scope is agnostic, so
+        // what comes back is the domain value; on a carrier it is that
+        // carrier's union, asserted once in a helper it ships (§42).
+        const inner = (await next({})) as unknown as string
+        return `wrapped(${inner})`
       })
       .step(async (_app: {}, _ctx: {}) => 'inner')
 
     const out = await h(app, {})
-    expect(out.ok && out.value).toBe('wrapped(inner)')
+    expect(out).toBe('wrapped(inner)')
   })
 
   it('reads the scope execution parameters as the ctx it starts from', async () => {
@@ -80,8 +86,7 @@ describe('the step primitive, folded', () => {
       })
       .step(async (_app: {}, ctx: { name: string }) => ctx.name)
 
-    expect((await h(app, { id: 'u1' })).ok).toBe(true)
-    expect(await h(app, { id: 'u1' }).then((o) => o.ok && o.value)).toBe('Ada')
-    expect(await h(app, { id: 'nope' }).then((o) => o.ok && o.value)).toBe('anonymous')
+    expect(await h(app, { id: 'u1' })).toBe('Ada')
+    expect(await h(app, { id: 'nope' })).toBe('anonymous')
   })
 })

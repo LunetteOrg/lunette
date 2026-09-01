@@ -1,5 +1,5 @@
-import { isAbort, isOk, type Abort, type Ok } from './words.ts'
-import { OUTCOME, type AnyStep, type Next, type Outcome } from './step.ts'
+import type { Word } from './words.ts'
+import type { AnyStep, Next, Passed } from './step.ts'
 
 // THE BASE BUILDER. One verb, `.step()`, and everything else is sugar written
 // on top of it.
@@ -50,7 +50,8 @@ export interface State {
   readonly args: object
   // What the steps have populated so far.
   readonly acc: object
-  // What the scope can YIELD: the union of the domain values its steps return.
+  // What the scope can YIELD: the union of everything its steps return, words
+  // included — with one channel there is nowhere else for them to be (§42).
   readonly returns: unknown
   // The two sides `ReturnGate` compares, and they are supply and demand.
   // `vocabulary` is what the carrier COINS — every word this scope may say,
@@ -68,40 +69,21 @@ export interface State {
 }
 
 // ── reading what a step handed back ──────────────────────────────────────────
-// Of the three things a step may return, two contribute NO domain value: the
-// outcome `next` gave it (it is passing through — the brand says so) and a WORD
-// (it contributes on the intent axis instead). What is left is the value.
+// The fold hands back what the leaf returned, so what a scope YIELDS is the
+// union its steps accumulated — words included, since a word is a value like
+// any other and the core has no branch to put it on. The one thing taken out is
+// the marker `next` returns: that is machinery, and no consumer should see it.
 //
-// KNOWN LIMIT: a WRAP step that awaits `next` and hands back
-// `{ ...out, value: somethingElse }` is outcome-shaped too, so its new value is
-// dropped and the scope reports the leaf's type while producing the wrapper's.
-// Fixing it needs the outbound side to be a shape of its OWN — something a step
-// returns that is not the outcome it was handed — so that passing an outcome
-// through and replacing its value stop being the same type. Not designed: no
-// case has asked for it, and a wrap step that only decorates does not hit it.
-type AnyOutcome = Outcome<unknown>
-type AnyAbort = Abort<never> | Abort<any>
-type ValueOf<R> = R extends AnyOutcome
-  ? never
-  : R extends AnyAbort
-    ? never
-    : R extends Ok<infer V, any>
-      ? V
-      : R
+// One projection, therefore, where the two-branch shape needed two. "What does
+// this scope produce" and "what can it hand back at all" stopped being
+// different questions when the branch went (§42).
+export type ValueOf<R> = Exclude<R, Passed>
 
-// The load-bearing shape on the intent axis, and why a step returns a WORD
-// rather than a pre-built outcome. Inferring from INSIDE a union constituent
-// (`(ctx) => E | Abort<I>`) makes TypeScript pick the first candidate and
-// reject the rest, so a step that can return two different words stops
-// compiling. Infer the WHOLE return type and distribute afterwards.
-//
-// One conditional per case, not two: an outer `extends AnyAbort` guard around
-// the `infer` would be redundant and paid for on every step.
-type IntentKeysOf<R> = R extends Abort<infer I>
-  ? keyof I
-  : R extends Ok<any, infer I>
-    ? keyof I
-    : never
+// The load-bearing shape on the intent axis. Inferring from INSIDE a union
+// constituent (`(ctx) => E | Refusal`) makes TypeScript pick the first
+// candidate and reject the rest, so a step that can return two different words
+// stops compiling. Infer the WHOLE return type and distribute afterwards.
+type IntentKeysOf<R> = R extends Word<infer I> ? keyof I : never
 
 // ── gate: what the step HANDS BACK ───────────────────────────────────────────
 // Two things are checked about one type, so they share the `Awaited` — measured
@@ -109,18 +91,18 @@ type IntentKeysOf<R> = R extends Abort<infer I>
 //
 // FIRST, a step that returns nothing. Forgetting `return` in front of `next(…)`
 // is silent and plausible: the inner steps run, the leaf computes its value,
-// and the fold throws it away — `undefined` is not branded and not a word, so
-// the terminal branch reads it as an ordinary domain value and the run SUCCEEDS
-// with `value: undefined`. A function with no `return` at all infers `void`,
-// while `return undefined` infers `undefined`, and the two are distinct here —
-// so a leaf that really has nothing to hand back says so and passes, and `null`
-// is a domain value that never reaches the check. The gap: a step returning on
-// one path and falling off the other infers `T | undefined`, not `void`, and
-// passes. Catching that would refuse every legitimate result that can be absent.
+// and the fold hands back the wrapper's `undefined` instead — which is an
+// ordinary domain value, so nothing downstream notices. A function with no
+// `return` at all infers `void`, while `return undefined` infers `undefined`,
+// and the two are distinct here — so a leaf that really has nothing to hand
+// back says so and passes, and `null` is a domain value that never reaches the
+// check. The gap: a step returning on one path and falling off the other infers
+// `T | undefined`, not `void`, and passes. Catching that would refuse every
+// legitimate result that can be absent.
 //
 // Without this the mistake still surfaces, but as `string | void` at whoever
-// consumes `out.value` — in another file, pointing at a step its author never
-// wrote, and not at all in a test that only reads `out.ok && out.value`.
+// consumes the result — in another file, pointing at a step its author never
+// wrote, and not at all in a test that only checks the happy value.
 //
 // SECOND, a word the scope does not coin.
 // It rides the ARGUMENT, not the return type. The return-type form is cheaper
@@ -263,7 +245,7 @@ export interface Scope<S extends State> {
   <Pub extends object>(
     app: Pub & DepGuard<Pub, S['need']>,
     args: S['args'],
-  ): Promise<Outcome<ValueOf<S['returns']>>>
+  ): Promise<ValueOf<S['returns']>>
 
   // The ordered stack the call folds.
   readonly steps: readonly AnyStep[]
@@ -326,7 +308,7 @@ type VocabularyOf<C> = C extends { readonly __vocabulary?: infer M }
 // and a map of verbs, and every type claim was checked where the step was
 // added.
 interface Built {
-  (app: object, params: object): Promise<Outcome<unknown>>
+  (app: object, params: object): Promise<unknown>
   readonly steps: readonly AnyStep[]
   step(s: AnyStep): Built
   extend(ext: { methods: Verbs }): Built
@@ -360,44 +342,27 @@ const RESERVED_VERBS: ReadonlySet<string> = new Set([
 // that runs it, so a host calls the scope and never the fold. Not exporting it
 // is what makes that structural instead of stated.
 
-// The ONE place any of the three things a step may return becomes an outcome. It
-// runs on the way back from every step, so an author never calls it: erasing a
-// word's intent down to `Abort<never>` happens here, once, on a value already
-// typed `unknown`, instead of at each call site where the type still said what
-// it was.
-function outcomeOf(result: unknown): Outcome<unknown> {
-  if (isOutcome(result)) return result
-  if (isAbort(result)) return { [OUTCOME]: true, ok: false, intent: result.intent }
-  if (isOk(result)) return { [OUTCOME]: true, ok: true, value: result.value, intent: result.intent }
-  return { [OUTCOME]: true, ok: true, value: result }
-}
-
-const isOutcome = (x: unknown): x is Outcome<unknown> =>
-  typeof x === 'object' && x !== null && OUTCOME in x
-
 // `async` is a contract and not a style: a step may throw SYNCHRONOUSLY, and a
 // plain function would let that escape past the promise the callable returns.
-async function runSteps(
-  steps: readonly AnyStep[],
-  app: object,
-  args: object,
-): Promise<Outcome<unknown>> {
-  const at = async (i: number, seen: object): Promise<Outcome<unknown>> => {
+async function runSteps(steps: readonly AnyStep[], app: object, args: object): Promise<unknown> {
+  const at = async (i: number, seen: object): Promise<unknown> => {
     const step = steps[i]
     if (step === undefined) {
       // Every step passed through, so there is no value to hand back: `R` is
       // `never` for such a scope, and `never` has no inhabitant. Throwing is
       // not a fallback beside that type, it IS it. And by the error convention
       // — a THROW is infrastructure — it is the right branch: a scope with no
-      // leaf is a CONSTRUCTION bug, and `{ ok: true, value: undefined }` would
-      // render a bug as a success.
+      // leaf is a CONSTRUCTION bug, and handing back `undefined` would render a
+      // bug to its caller as a value.
       throw new Error(
         '@lntt/scope: every step passed through and none produced a value — this scope has no leaf',
       )
     }
-    // Normalised on the way out, so every step may hand back whichever of the
-    // three it has.
-    return outcomeOf(await step(app, seen, (delta) => at(i + 1, { ...seen, ...delta })))
+    // Nothing happens on the way out. What the step returned is what the caller
+    // gets, and the assertion is the one place the fold admits that `Passed` is
+    // a type-level understatement (see `step.ts`).
+    const next = ((delta: object) => at(i + 1, { ...seen, ...delta })) as unknown as Next<object>
+    return step(app, seen, next)
   }
   return at(0, args)
 }

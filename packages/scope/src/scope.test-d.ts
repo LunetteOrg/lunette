@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { scope } from './scope.ts'
-import { fixture, refused } from './fixture/carrier.ts'
+import { fixture, refused, type Refusal } from './fixture/carrier.ts'
 import { type Next } from './step.ts'
 
 // The type contract of the base builder. Everything here is written with the
@@ -84,10 +84,10 @@ describe('what a scope yields', () => {
     // The guard's own value is here. Reading only the closing step missed it —
     // which is what the intersection form could not express at all, since `A &
     // B` over a type that is not a key collapses.
-    if (out.ok) expectTypeOf(out.value).toEqualTypeOf<'anonymous' | number>()
+    expectTypeOf(out).toEqualTypeOf<'anonymous' | number>()
   })
 
-  it('a step that passes through or says a WORD contributes no value', async () => {
+  it('a step that says a WORD contributes it, like any other return', async () => {
     const h = scope(fixture)
       .step(async (_app: {}, ctx, next: Next<{ name: string }>) =>
         ctx.token === null ? refused('anonymous') : next({ name: ctx.token }),
@@ -95,13 +95,16 @@ describe('what a scope yields', () => {
       .step(async (_app: {}, ctx: { readonly name: string }) => ctx.name.length)
 
     const out = await h({}, { token: 'good', params: {} })
-    if (out.ok) expectTypeOf(out.value).toEqualTypeOf<number>()
+    // The word is in the union beside the domain value. Passing through is what
+    // contributes nothing — `Passed` is excluded — and that is the only thing
+    // that does (§42).
+    expectTypeOf(out).toEqualTypeOf<number | Refusal>()
   })
 
   // A scope is ALWAYS callable — there is nothing to close. What a base without
-  // a leaf has is `R = never`, and `never` has no inhabitant: there is no `ok`
-  // outcome to hand back, so running one throws rather than reporting a bug to
-  // its caller as a success.
+  // a leaf has is `R = never`, and `never` has no inhabitant: there is nothing
+  // to hand back, so running one throws rather than reporting a bug to its
+  // caller as a value.
   it('a scope whose steps all pass through yields `never`, and running it throws', async () => {
     const base = scope<{ readonly id: string }>().step(
       async (_app: {}, ctx, next: Next<{ upper: string }>) => next({ upper: ctx.id }),
@@ -111,19 +114,23 @@ describe('what a scope yields', () => {
 
     const typed = async () => {
       const o = await base({}, { id: 'u1' })
-      if (o.ok) expectTypeOf(o.value).toEqualTypeOf<never>()
+      expectTypeOf(o).toEqualTypeOf<never>()
     }
     expect(typeof typed).toBe('function')
   })
 
-  // `Outcome<never>` is NOT empty: the other two branches stay inhabited, so a
-  // base that refuses has a perfectly good outcome and never reaches the throw.
-  it('a base that refuses hands back its word, `R = never` notwithstanding', async () => {
+  // And a base that REFUSES is not that case at all: its word is a return like
+  // any other, so `R` is the word's type and not `never`. The two-branch shape
+  // needed a caveat here — `Outcome<never>` was not empty, because the abort
+  // branch stayed inhabited — and with one channel the caveat is gone: `never`
+  // means never (§42).
+  it('a base that refuses has `R` = its word, so it never reaches the throw', async () => {
     const base = scope(fixture).step(async (_app: {}, ctx, next: Next<{}>) =>
       ctx.token === null ? refused('anonymous') : next({}),
     )
     const out = await base({}, { token: null, params: {} })
-    expect(out.ok).toBe(false)
+    expectTypeOf(out).toEqualTypeOf<Refusal>()
+    expect(out).toMatchObject({ kind: 'refused' })
   })
 
   // Still a builder, still callable — both at once, which is the whole point of
@@ -132,7 +139,7 @@ describe('what a scope yields', () => {
     const s = scope(fixture).step(async (_app: {}, _ctx: {}) => 'v' as const)
     expectTypeOf(s).toHaveProperty('step')
     const out = await s({}, { token: null, params: {} })
-    if (out.ok) expectTypeOf(out.value).toEqualTypeOf<'v'>()
+    expectTypeOf(out).toEqualTypeOf<'v'>()
   })
 })
 

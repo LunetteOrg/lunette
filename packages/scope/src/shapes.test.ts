@@ -1,7 +1,10 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { scope } from './scope.ts'
-import { code, fixture, gone, other, refused, served } from './fixture/carrier.ts'
-import { abort } from './words.ts'
+import {
+  code, fixture, gone, isWord, other, refused, served,
+  type Refusal, type Served,
+} from './fixture/carrier.ts'
+import type { Word } from './words.ts'
 import type { Next } from './step.ts'
 
 // THE SHAPES A STEP TAKES — one per thing a step is for. There is no category
@@ -119,7 +122,7 @@ describe('the five shapes, composed', () => {
   it('runs every shape in the order it was written', async () => {
     log.length = 0
     const out = await noteScope(app, { token: 'good', params: { page: '3' } })
-    expect(out.ok && out.value).toBe('u1:hello')
+    expect(out).toBe('u1:hello')
     // the WRAP shape's after runs last, because it wraps the rest
     expect(log).toEqual(['in', 'out'])
   })
@@ -127,25 +130,23 @@ describe('the five shapes, composed', () => {
   it('the guard stops the fold WITH ITS WORD, and the wrap still sees it come back', async () => {
     log.length = 0
     const out = await noteScope(app, { token: null, params: {} })
-    expect(out.ok).toBe(false)
-    expect(!out.ok && out.intent).toEqual({
-      kind: 'refused',
-      why: 'no session',
-    })
+    expect(isWord(out)).toBe(true)
+    expect(out).toMatchObject({ kind: 'refused', intent: { why: 'no session' } })
     expect(log).toEqual(['in', 'out'])
   })
 
   it('a leaf returning a word stops on the word, not on a value', async () => {
     const empty: Repos = { ...app, notes: { byId: () => undefined } }
     const out = await noteScope(empty, { token: 'good', params: {} })
-    expect(out.ok).toBe(false)
-    expect(!out.ok && out.intent).toEqual({ kind: 'gone', what: 'note' })
+    expect(out).toMatchObject({ kind: 'gone', intent: { what: 'note' } })
   })
 
   it('is the function that runs it AND still a builder', async () => {
     const out = await noteScope(app, { token: 'good', params: {} })
-    // the words contribute no value: what a run YIELDS is the domain side only
-    if (out.ok) expectTypeOf(out.value).toEqualTypeOf<string>()
+    // What a run yields is EVERY type its steps hand back, words included:
+    // with one channel there is nowhere else for them to be, and reading the
+    // union is how a caller learns what this scope can say (§42).
+    expectTypeOf(out).toEqualTypeOf<string | Refusal>()
     // and there is nothing to close, so more steps can still be added
     expectTypeOf(noteScope).toHaveProperty('step')
   })
@@ -157,7 +158,7 @@ describe('the five shapes, composed', () => {
       )
       .step(async (_app: {}, ctx: { readonly upper: string }) => ctx.upper)
 
-    expect(await h({}, { token: 'good', params: {} }).then((o) => o.ok && o.value)).toBe('GOOD')
+    expect(await h({}, { token: 'good', params: {} })).toBe('GOOD')
   })
 })
 
@@ -206,8 +207,9 @@ describe('what a scope may say, read off the steps', () => {
       })
       .step(async (_app: {}, _ctx: {}) => 'ok')
 
-    expect((await h({}, { token: null, params: {} })).ok).toBe(false)
-    expect((await h({}, { token: 'good', params: {} })).ok).toBe(true)
+    expect(isWord(await h({}, { token: null, params: {} }))).toBe(true)
+    expect(isWord(await h({}, { token: 'gone', params: {} }))).toBe(true)
+    expect(await h({}, { token: 'good', params: {} })).toBe('ok')
   })
 })
 
@@ -222,18 +224,17 @@ describe('a word on the success side', () => {
 
   it('carries the intent while the VALUE stays the domain`s', async () => {
     const out = await served3({}, { token: null, params: {} })
-    expect(out.ok).toBe(true)
-    expect(out.ok && out.value).toBe(3)
-    expect(out.ok && out.intent).toEqual({ kind: 'served', at: 'cache' })
+    expect(out).toMatchObject({ kind: 'served', value: 3, intent: { at: 'cache' } })
   })
 
-  it('does not wrap what the scope YIELDS — that is the whole reason it is not a value', () => {
-    // `number`, not `Ok<number, …>`: the intent rides beside the value, so a
-    // caller reads the result without unwrapping anything and `ResultOf` keeps
-    // saying what the use case returns.
+  it('DOES appear in what the scope yields — the price of one channel, in the open', () => {
+    // `Served<number>`, not `number`. With no second branch a word has nowhere
+    // to be but the value, so a caller reading the domain value goes through
+    // the carrier first. That is the cost §42 accepted, and it is the same cost
+    // that makes every refusal legible in the scope's own type.
     const check = async () => {
       const out = await served3({}, { token: null, params: {} })
-      if (out.ok) expectTypeOf(out.value).toEqualTypeOf<number>()
+      expectTypeOf(out).toEqualTypeOf<Served<number>>()
     }
     expect(typeof check).toBe('function')
   })
@@ -241,32 +242,35 @@ describe('a word on the success side', () => {
   it('a plain value says nothing at all, which is the other case', async () => {
     const plain = scope(fixture).step(async (_app: {}, _ctx: {}) => 3)
     const out = await plain({}, { token: null, params: {} })
-    expect(out.ok && out.value).toBe(3)
-    // The key is ABSENT, not present-and-undefined: `outcomeOf` omits it for a
-    // plain value, so a codec asking `'intent' in out` gets a straight no and
+    expect(out).toBe(3)
+    // Nothing was added on the way out — a plain value arrives as itself, so a
+    // carrier asking whether this is one of its words gets a straight no and
     // the host's default applies.
-    expect(out.ok && 'intent' in out).toBe(false)
+    expect(isWord(out)).toBe(false)
   })
 })
 
-// ── forgetting the type argument fails CLOSED ────────────────────────────────
-// `abort(...)` names the payload but not the WORD. Left to its constraint the
-// name would be `keyof object`, which is `never` — a word declaring nothing and
-// therefore admitted by every gate. The default is `UnknownIntent` instead, and
-// its key is one no carrier coins.
+// ── forgetting to declare the name fails CLOSED ──────────────────────────────
+// A carrier declares a word by writing its TYPE, and the name lives in `Word`'s
+// parameter. Written WITHOUT it, `Word` means "an intent nobody declared": its
+// key is `__unknown_intent`, which no carrier coins, so the gate refuses it.
+// Left to the constraint instead the name would be `keyof object`, which is
+// `never` — a word declaring nothing and therefore admitted by every gate,
+// which is fail-OPEN.
 describe('a word whose name was never declared', () => {
+  const improvised = (): Word => ({ intent: { kind: 'improvised' } })
+  const declared = (): Word<{ readonly refusal: true }> => ({ intent: { kind: 'improvised' } })
+
   it('is REFUSED by the carrier that does not coin it', () => {
     const refuse = () => {
       // @ts-expect-error ⛔ this scope does not coin the word: __unknown_intent
-      scope(fixture).step(async (_app: {}, _ctx: {}) => abort({ kind: 'improvised' }))
+      scope(fixture).step(async (_app: {}, _ctx: {}) => improvised())
     }
     expect(typeof refuse).toBe('function')
   })
 
   it('and the same word DECLARED passes, so the gate is reading the name', () => {
-    scope(fixture).step(async (_app: {}, _ctx: {}) =>
-      abort<{ readonly refusal: true }>({ kind: 'improvised' }),
-    )
+    scope(fixture).step(async (_app: {}, _ctx: {}) => declared())
     expect(true).toBe(true)
   })
 })
@@ -300,19 +304,18 @@ describe('a step that hands back nothing', () => {
 
     const out = await h({}, { token: null, params: {} })
     // the leaf really ran and really produced a value — and it is gone
-    expect(out.ok).toBe(true)
-    expect(out.ok && out.value).toBeUndefined()
+    expect(out).toBeUndefined()
   })
 
   it('lets a leaf with nothing to hand back say so DELIBERATELY', async () => {
     const h = scope(fixture).step(async (_app: {}, _ctx: {}) => undefined)
     const out = await h({}, { token: null, params: {} })
-    expect(out.ok && 'value' in out).toBe(true)
+    expect(out).toBeUndefined()
   })
 
   it('and `null` is an ordinary domain value, not the mistake', async () => {
     const h = scope(fixture).step(async (_app: {}, _ctx: {}) => null)
     const out = await h({}, { token: null, params: {} })
-    expect(out.ok && out.value).toBeNull()
+    expect(out).toBeNull()
   })
 })

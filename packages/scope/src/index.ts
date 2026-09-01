@@ -28,10 +28,10 @@ export type {
   ResultOf,
 } from './scope.ts'
 
-// What a step is written against.
-export type { Step, AnyStep, Next, Outcome } from './step.ts'
+// What a step is written against. `Passed` is what `next` hands back — read
+// `step.ts` for why it says nothing, and who pays for that.
+export type { Step, AnyStep, Next, Passed } from './step.ts'
 
-// How a carrier COINS a word — the constructors, not the brands they carry. A
-// carrier never touches the symbol; only the fold reads that.
-export { abort, ok } from './words.ts'
-export type { Abort, Ok } from './words.ts'
+// How a carrier DECLARES a word. A type and nothing else: the core builds no
+// words, brands none, and recognises none at runtime (§42).
+export type { Word, UnknownIntent } from './words.ts'

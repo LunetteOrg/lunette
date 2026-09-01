@@ -1,7 +1,7 @@
 
 // THE PRIMITIVE. A step wraps the rest of the fold: it reads `app` and the ctx
 // as it stands, and either continues inward with what it populates or returns
-// an outcome of its own and stops.
+// something of its own and stops.
 //
 // Three things a step says, each riding a position the signature already has —
 // which is why a step is a plain FUNCTION and declares nothing:
@@ -22,38 +22,37 @@
 // The annotation IS the declaration, and it sits on the parameter it describes
 // rather than in a phantom beside it.
 
-// ── the outcome ──────────────────────────────────────────────────────────────
-// TWO branches, and what an author WRITES is not this. A step returns
-// whichever it has to hand — the result of `next(...)`, a WORD from its carrier
-// (`unauthorized()`, `redirect('/')`), or a plain domain value — and the fold
-// normalises it. So no step builds an outcome and none casts a word down to
-// `Abort<never>` to make it fit.
+// ── what `next` hands back ───────────────────────────────────────────────────
+// The fold produces NOTHING of its own. A step returns something and the fold
+// hands it back untouched — no branches, no `ok`, no normalising pass — so what
+// a scope yields is what its leaf returned, and what that MEANS belongs to the
+// carrier (§42).
 //
-// Telling the three apart needs no guessing: the fold's outcome is BRANDED, so
-// "did this come back from `next`?" is a symbol check and not a heuristic over
-// a shape a domain value could happen to have.
+// Which leaves one thing to name: what a step sees when it continues inward.
+// When step 2 is written the builder cannot know what step 5 returns — step 5
+// has not been added yet — so `next`'s return type has to stand for "the rest
+// of the fold answered, whatever it said". Typed `unknown` it would poison the
+// union the builder accumulates (`unknown | X` is `unknown`) and the scope
+// would declare nothing at all; an opaque marker excludes cleanly instead, and
+// `ValueOf` takes it back out.
 //
-// `intent` is a word from a carrier's vocabulary and the core never reads what
-// one MEANS, only whether it is there. It is OPTIONAL because omitting it and
-// carrying one are the same statement: a leaf returning a plain value says
-// nothing about rendering and the host's default applies, while `json(v, 201)`
-// has something to say. A required field would put `intent: undefined` on every
-// hand-written `ok`, which reads as a value that matters and is not one.
-// Registered for the same reason the word brands are — see `words.ts`.
-export const OUTCOME: unique symbol = Symbol.for('lntt.scope.outcome.1')
+// So `Passed` is a deliberate understatement. At runtime the inner answer comes
+// back whole; the TYPE declines to say what it is, because at that point in the
+// chain nothing truthful can be said. A step that only observes hands it
+// straight on and never has to know. A step that DECORATES has to read it, and
+// reading it means going through the carrier whose words are in there — one
+// assertion, written once per carrier, never at each step (measured against a
+// carrier of realistic size, §42).
+declare const PASSED: unique symbol
 
-type Branded = { readonly [OUTCOME]: true }
-
-export type Outcome<R> = Branded &
-  (
-    | { readonly ok: true; readonly value: R; readonly intent?: unknown }
-    | { readonly ok: false; readonly intent: unknown }
-  )
+export interface Passed {
+  readonly [PASSED]?: true
+}
 
 // What a step calls to continue inward. Its parameter is what the step
 // POPULATES — annotate it, and the builder knows; leave it bare, and it is told
 // nothing (measured, above).
-export type Next<Add extends object> = (delta: Add) => Promise<Outcome<unknown>>
+export type Next<Add extends object> = (delta: Add) => Promise<Passed>
 
 // A step, as the author writes it — the formula, named. `R` is deliberately
 // unconstrained: the three things a step may return have nothing in common but
@@ -79,5 +78,5 @@ export type Step<Need extends object, Req extends object, Add extends object, R>
 export type AnyStep = (
   app: object,
   ctx: object,
-  next: (delta: object) => Promise<Outcome<unknown>>,
+  next: (delta: object) => Promise<Passed>,
 ) => unknown

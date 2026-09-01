@@ -21,10 +21,13 @@ import type { AnyStep, Next } from './step.ts'
 const withHeader =
   (name: string, value: string) =>
   async (_app: {}, _ctx: {}, next: Next<{}>) => {
-    const out = await next({})
-    // Spreading keeps the fold's brand, so what comes back is still the fold's
-    // own outcome and not a look-alike.
-    return out.ok ? { ...out, value: `${String(out.value)} [${name}=${value}]` } : out
+    // A DECORATING wrap, which is the one shape that pays for the fold
+    // producing nothing of its own: `next` hands back a `Passed` that says
+    // nothing, so the step states what it expects. A real carrier does this
+    // once, in a helper, and every decorator it ships is written against the
+    // carrier's own type (§42).
+    const out = (await next({})) as unknown as string
+    return `${out} [${name}=${value}]`
   }
 
 // ── what the extension declares ──────────────────────────────────────────────
@@ -85,7 +88,7 @@ describe('an extension enriches the builder, and nothing else', () => {
       .header('x-served-by', 'lntt')
       .step(async (_app: {}, _ctx: {}) => 'body')
 
-    expect(await h({}, {}).then((o) => o.ok && o.value)).toBe('body [x-served-by=lntt]')
+    expect(await h({}, {})).toBe('body [x-served-by=lntt]')
   })
 
   it('the verb`s step runs WHERE IT WAS CALLED, like every other step', async () => {
@@ -95,7 +98,7 @@ describe('an extension enriches the builder, and nothing else', () => {
       .header('b', '2')
       .step(async (_app: {}, _ctx: {}) => 'body')
 
-    expect(await h({}, {}).then((o) => o.ok && o.value)).toBe('body [b=2] [a=1]')
+    expect(await h({}, {})).toBe('body [b=2] [a=1]')
   })
 
   it('the verb is not there before the extension that declares it', () => {
@@ -123,7 +126,7 @@ describe('a verb keeps its generics, which is why its signature is written out',
     })
 
     const out = await h.step(async (_app: {}, ctx: { readonly pinned: 201 }) => ctx.pinned)({}, {})
-    expect(out.ok && out.value).toBe(201)
+    expect(out).toBe(201)
   })
 
   it('grows the ctx for the steps after it, exactly as a step would', () => {
