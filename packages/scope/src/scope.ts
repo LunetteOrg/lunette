@@ -39,7 +39,7 @@ type DepGuard<Pub, Need> = Pub extends Need
 // One object, one member per axis. Everything the builder knows is here, and
 // nothing is read out of an intersection.
 export interface State {
-  // What the scope demands of the app — the chain, alive as long as the process
+  // What the scope demands of the app — the chain, alive as long as the
   // process.
   readonly need: object
   // What a run brings — the scope execution parameters, the call's second
@@ -75,8 +75,10 @@ export interface State {
 // KNOWN LIMIT: a WRAP step that awaits `next` and hands back
 // `{ ...out, value: somethingElse }` is outcome-shaped too, so its new value is
 // dropped and the scope reports the leaf's type while producing the wrapper's.
-// Fixing it needs the outbound side to be a value a step RETURNS — the shape
-// the outbound side to be a value a step RETURNS.
+// Fixing it needs the outbound side to be a shape of its OWN — something a step
+// returns that is not the outcome it was handed — so that passing an outcome
+// through and replacing its value stop being the same type. Not designed: no
+// case has asked for it, and a wrap step that only decorates does not hit it.
 type AnyOutcome = Outcome<unknown>
 type AnyAbort = Abort<never> | Abort<any>
 type ValueOf<R> = R extends AnyOutcome
@@ -143,24 +145,9 @@ type ReturnGate<
     ? unknown
     : `⛔ this scope does not coin the word: ${U & string} — is it the right carrier?`
 
-// ── gate: a step that returns NOTHING ────────────────────────────────────────
-// Forgetting `return` in front of `next(…)` is silent and plausible: the inner
-// steps run, the leaf computes its value, and the fold throws it away — the
-// step handed back `undefined`, which is not branded and not a word, so the
-// terminal branch reads it as an ordinary domain value and the run SUCCEEDS
-// with `value: undefined`.
-//
-// A function with no `return` at all infers `void`; `return undefined` infers
-// `undefined`, and the two are distinct in this position. So the mistake is
-// separable from the deliberate case, and a leaf that really has nothing to
-// hand back writes `return undefined` and passes. `null` is a domain value like
-// any other and is not assignable to `void`, so it never reaches here.
-//
-// The gap this leaves: a step that returns on one path and falls off the other
-// infers `T | undefined`, not `void`, and passes. Catching that would mean
-// refusing every legitimate result that can be absent.
-// The ctx a step reads: the arguments the run was given, plus everything the
-// steps before it populated.
+// ── the ctx a step reads ─────────────────────────────────────────────────────
+// The arguments the run was given, plus everything the steps before it
+// populated.
 //
 // An OVERRIDE, not the intersection it looks like. `args & acc` does not
 // replace, and re-populating a key is what a REFINEMENT is: narrowing
@@ -186,10 +173,33 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 // instead, and a verb named `name` or `length` throws from inside `.extend`,
 // because a function's own properties are not writable.
 //
-// The alphabet is CLOSED: what the builder installs plus what every function
-// carries. `U` sits on the ALIAS, not the method, for the reason `ReturnGate`'s
-// does — a defaulted parameter in a method's own list is caller-overridable.
-type ReservedVerb = 'steps' | 'step' | 'extend' | 'name' | 'length' | 'prototype' | 'caller' | 'arguments'
+// The alphabet is CLOSED, and closing it takes BOTH halves of what a function
+// carries: its OWN properties (`name`, `length`, `prototype`, `caller`,
+// `arguments`), where assignment throws and the failure is at least loud, and
+// what it INHERITS from `Function.prototype` (`bind`, `call`, `apply`,
+// `toString`, `constructor`), where assignment quietly succeeds and shadows.
+// The second half is the silent one: a verb named `bind` installs an own
+// property over `Function.prototype.bind`, so `myScope.bind(null, app)` hands
+// back a step-pushing builder instead of a bound function, and a verb named
+// `toString` makes `String(scope)` throw `Cannot convert object to primitive
+// value` from wherever the scope is interpolated.
+//
+// `U` sits on the ALIAS, not the method, for the reason `ReturnGate`'s does —
+// a defaulted parameter in a method's own list is caller-overridable.
+type ReservedVerb =
+  | 'steps'
+  | 'step'
+  | 'extend'
+  | 'name'
+  | 'length'
+  | 'prototype'
+  | 'caller'
+  | 'arguments'
+  | 'bind'
+  | 'call'
+  | 'apply'
+  | 'toString'
+  | 'constructor'
 
 type VerbGate<M, U = Extract<keyof M, ReservedVerb>> = [U] extends [never]
   ? unknown
@@ -335,6 +345,11 @@ const RESERVED_VERBS: ReadonlySet<string> = new Set([
   'prototype',
   'caller',
   'arguments',
+  'bind',
+  'call',
+  'apply',
+  'toString',
+  'constructor',
 ])
 
 // ── the fold ─────────────────────────────────────────────────────────────────
@@ -374,9 +389,8 @@ async function runSteps(
       // `never` for such a scope, and `never` has no inhabitant. Throwing is
       // not a fallback beside that type, it IS it. And by the error convention
       // — a THROW is infrastructure — it is the right branch: a scope with no
-      // leaf is a
-      // CONSTRUCTION bug, and `{ ok: true, value: undefined }` would render a
-      // bug as a success.
+      // leaf is a CONSTRUCTION bug, and `{ ok: true, value: undefined }` would
+      // render a bug as a success.
       throw new Error(
         '@lntt/scope: every step passed through and none produced a value — this scope has no leaf',
       )

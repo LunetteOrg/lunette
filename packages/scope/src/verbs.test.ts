@@ -165,6 +165,26 @@ describe('a verb cannot take a name the surface already owns', () => {
     expect(() => unchecked(shadowsStep)).toThrow(/cannot be named 'step'/)
   })
 
+  it('refuses one named `bind`, which assignment does NOT protect — it shadows silently', () => {
+    // `name` is an own, non-writable property, so that one at least threw.
+    // `bind` is inherited from `Function.prototype`: assigning over it succeeds,
+    // and `myScope.bind(null, app)` then hands back a step-pushing builder
+    // instead of a bound function, at whatever call site expected a function.
+    const shadowsBind = {
+      methods: { bind: () => (async () => 'x') as unknown as AnyStep },
+    }
+    expect(() => unchecked(shadowsBind)).toThrow(/cannot be named 'bind'/)
+  })
+
+  it('refuses one named `toString`, which would otherwise break every interpolation', () => {
+    // Shadowing it with a verb makes `String(scope)` throw `Cannot convert
+    // object to primitive value` — from the template literal, never from here.
+    const shadowsToString = {
+      methods: { toString: () => (async () => 'x') as unknown as AnyStep },
+    }
+    expect(() => unchecked(shadowsToString)).toThrow(/cannot be named 'toString'/)
+  })
+
   it('refuses one named `name`, which would otherwise throw from inside the core', () => {
     // A function's `name` is not writable, so this used to surface as
     // `TypeError: Cannot assign to read only property 'name' of function` —
