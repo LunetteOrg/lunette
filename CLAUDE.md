@@ -13,8 +13,10 @@ the `errore` library (errors as values) applied to DI.
   packages/scope        @lntt/scope  the host-agnostic scope runtime — ONE
                         primitive (a step wrapping the rest of the fold) and a
                         scope IS the function that runs it, from the first line.
-                        BEING REBUILT (#30): the core is `primitive.ts` +
-                        `base.ts` and nothing else ships yet. The carriers, the
+                        BEING REBUILT (#30): the core is `step.ts` (the
+                        primitive, the words, what `next` hands back) +
+                        `scope.ts` (the builder, the gates, the fold) behind
+                        `index.ts`, and nothing else ships yet. The carriers, the
                         extensions, the host mounts and the examples land on it
                         in that order. The contract is docs/design/scope-api.md
                         — READ IT FIRST; its "Where this goes next" is the work
@@ -108,9 +110,10 @@ the tracker when relevant — never from here.
   the name survives only at the MOUNT) ·
   intent (a word a carrier coins) · vocabulary (`State['vocabulary']`, a
   carrier's `__vocabulary`: every word a scope MAY say — the supply side
-  `ReturnGate` reads a step's return against) · intents (`State['intents']`: the
-  words the steps written so far actually SAY — the demand side, accumulated at
-  every `.step`, and what a MOUNT asks about) · registry (opaque: steps write, mounts
+  `ReturnGate` reads a step's return against) · intents (`IntentsOf`: the words
+  the steps written so far actually SAY — the demand side, and what a MOUNT asks
+  about. NOT a state member: it is COMPUTED from `State['returns']`, since the
+  state carries what steps return and nothing projected from it) · registry (opaque: steps write, mounts
   read) · effects · outcome (RETIRED with §42 — the fold produces nothing of its
   own, so there is no `ok`/`abort` and no branch: a scope hands back what its
   leaf RETURNED, and whether that went well is the carrier's statement. What was
