@@ -940,15 +940,27 @@ carry the two measurements the builder's form was settled on.
 | | |
 |---|---|
 | **#60** | port the carriers — `http`, `trpc`, `react-router`. `RequestHead` comes back with them, and it is what makes the body lock work. Blocks the rest |
+| **#51** | two steps populating the same ctx key: the types say `never`, the runtime says last-writer-wins, and nothing errors. Moved UP from orthogonal — the gate lives in `.step`, beside the two already there, and the ctx goes from two entries to six once #62 lands. It is also the prerequisite for any parallel step, where last-writer-wins stops being deterministic |
 | **#64** | validation per carrier: one factory, each carrier's own word. The core's `invalid` branch is gone with the carrier-free `.validate` (§41), so this is what gives a scope a way to refuse an input again |
-| **#61** | the outbound side as a returned value: `response(v, init)`, with `json`/`html`/`text` as its sugar. Adds the envelope; the effects axis it replaces is already gone |
+| **#61** | the outbound side as a returned value: `response(v, init)`, with `json`/`html`/`text` as its sugar. Adds the envelope; the effects axis it replaces is already gone. ALSO closes the known limit above `ValueOf` — a WRAP step that replaces `value` is invisible to what the scope reports, and it only becomes expressible once the outbound side is a value a step RETURNS |
 | **#62** | port the read extensions: `body`, `query`, `cookies`, `headers` — none of which needs the retired transport-feature alphabet |
 | **#63** | decide which sugars come back — `guard`, `handle`, or neither. Both have already lost the reasons they were going to exist, so the failure mode is silence, not a wrong answer |
 | **#58** | bring `@lntt/integration` back, with its route/intent/capability gates |
 | **#59** | rewrite `examples/` — LAST, and the real proof: an API that cannot be written naturally in an example is not settled, whatever the type tests say |
 
-Untouched and orthogonal: **#51**, two steps populating the same ctx key are
-still silent.
+Parked, and deliberately unscheduled — neither has a case in hand, which is the
+discipline that removed `validate` from the core:
+
+- a **`.parallel(a, b)`** verb. The shape is settled: children take no `next`, so
+  wrapping is inexpressible; both read `Ctx<S>`, so cross-dependency is refused
+  by contravariance. Two of the three safety conditions come free from the
+  signature, and the third is #51. What is missing is a real pair of independent
+  guards slow enough to be worth it.
+- a **`@lntt/scope/effect`** dialect — an extension, never a core change, whose
+  verb runs an `Effect` and maps its error channel onto a carrier's words. The
+  interesting part is the bridge from `ctx.request.signal` to the runtime's
+  interruption, which is where cancellation stops being cooperative. Measured
+  cost of making the FOLD itself effectful: +173%, so this stays a dialect.
 
 ### The reference implementation
 
