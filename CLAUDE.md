@@ -167,6 +167,12 @@ THERE, never in this file. Start from
 <https://github.com/LunetteOrg/lunette/issues>. Extended pattern
 documentation lives in **`docs/`**.
 
+GitHub holds no ORDER, so for work that has one it is written down beside
+the design it belongs to: `@lntt/scope`'s chain is the `### In order`
+table under "Where this goes next" in `docs/design/scope-api.md`, with
+what is deliberately unscheduled listed under it. Print it with
+`awk '/^### In order/,/^## /' docs/design/scope-api.md`.
+
 The decision record (discarded alternatives and why) is
 **`docs/decisions.md`** — consult it BEFORE proposing API changes: many
 ideas already have a reasoned verdict. The persistent memory remains the
