@@ -937,8 +937,8 @@ per slice, deliberately — the branch that produced this document also produced
 
 ### Built and green
 
-`@lntt/scope`: `src/{index,scope,step,words}.ts`, and nothing else — no
-extension ships, and the package has ZERO dependencies. `src/fixture/` holds
+`@lntt/scope`: `src/index.ts`, and nothing else — one file, no extension ships,
+and the package has ZERO dependencies. `src/fixture/` holds
 what does not ship. Every negative is
 mutation-tested. `research/parameterised-builder` and `research/terminal-step`
 carry the two measurements the builder's form was settled on.

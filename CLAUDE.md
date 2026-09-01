@@ -13,10 +13,9 @@ the `errore` library (errors as values) applied to DI.
   packages/scope        @lntt/scope  the host-agnostic scope runtime — ONE
                         primitive (a step wrapping the rest of the fold) and a
                         scope IS the function that runs it, from the first line.
-                        BEING REBUILT (#30): the core is `step.ts` (the
-                        primitive, the words, what `next` hands back) +
-                        `scope.ts` (the builder, the gates, the fold) behind
-                        `index.ts`, and nothing else ships yet. The carriers, the
+                        BEING REBUILT (#30): the core is ONE file, `index.ts`
+                        — where `export` means public, since there is nowhere
+                        else for a name to live — and nothing else ships yet. The carriers, the
                         extensions, the host mounts and the examples land on it
                         in that order. The contract is docs/design/scope-api.md
                         — READ IT FIRST; its "Where this goes next" is the work
