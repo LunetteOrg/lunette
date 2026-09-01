@@ -108,7 +108,7 @@ the tracker when relevant — never from here.
   the name survives only at the MOUNT) ·
   intent (a word a carrier coins) · vocabulary (`State['vocabulary']`, a
   carrier's `__vocabulary`: every word a scope MAY say — the supply side
-  `WordGate` reads a step's return against) · intents (`State['intents']`: the
+  `ReturnGate` reads a step's return against) · intents (`State['intents']`: the
   words the steps written so far actually SAY — the demand side, accumulated at
   every `.step`, and what a MOUNT asks about) · registry (opaque: steps write, mounts
   read) · effects · outcome (`ok`/`abort` — validation left the core with §41,

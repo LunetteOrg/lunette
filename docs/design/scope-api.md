@@ -318,7 +318,7 @@ it did not before.
 The name is CONSTRAINED, not gated: the parameter's type is the union of the
 entries this scope has, so an editor completes it and a typo is told what it
 could have written (`"wrong"` is not assignable to `"params" | "query"`). The
-gate idiom (`WordGate`, §40) is the wrong tool here — it types the parameter
+gate idiom (`ReturnGate`, §40) is the wrong tool here — it types the parameter
 `string` and loses completion. The one case a union cannot express is the EMPTY
 one, where it degrades to `never` and names nothing, so the alias substitutes a
 sentence there:
@@ -456,7 +456,7 @@ be API with no caller (principle 5).
 **And `set-cookie` stops being a capability.** Cookies can only ride a
 carrier's outbound word, and those words are exported from the CARRIER's own
 subpath — `@lntt/scope/trpc` has no `response`, so on an RPC carrier the verb
-does not exist. Import http's into a tRPC scope and `WordGate` refuses it at the
+does not exist. Import http's into a tRPC scope and `ReturnGate` refuses it at the
 definition (it coins `status`/`redirect`/`ok-status`; tRPC's vocabulary is
 `code`), and
 an http scope cannot mount on tRPC anyway — `IntentGuard` refuses it for the
@@ -811,7 +811,7 @@ rediscover them.
   |---|---|
   | `Ctx` = `Omit<args, keyof acc> & acc`, recomputed per step | **16%** |
   | `Surface` = `Scope<S> & S['verbs']`, per step | **15%** |
-  | `WordGate` | 11% |
+  | the word check in `ReturnGate` | 11% |
   | the `result` accumulation | 6% |
   | one whole member of `State` | **1.3%** |
   | `DepGuard` | ~0 — it rides the call, not each step |
@@ -836,8 +836,9 @@ rediscover them.
   replacing `value` was dropped from what the scope reports. The raw form keeps
   the material to narrow that.
 
-- **The gate on a step that returns nothing**: +9.1% standing beside `WordGate`,
-  **+7.1% merged into it** — sharing the `Awaited<Ret>` is worth 2%. What it
+- **The check for a step that returns nothing**: +9.1% as a gate of its own,
+  **+7.1% merged into the word check** — the two ask about the same type, so
+  `ReturnGate` holds both — sharing the `Awaited<Ret>` is worth 2%. What it
   buys: forgetting `return` in front of `next(…)` otherwise SUCCEEDS with
   `value: undefined`, discarding work the inner steps really did. It surfaces
   without the gate as `string | void` at whoever consumes `out.value`, in

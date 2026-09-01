@@ -52,7 +52,7 @@ export interface State {
   readonly acc: object
   // What the scope can YIELD: the union of the domain values its steps return.
   readonly returns: unknown
-  // The two sides `WordGate` compares, and they are supply and demand.
+  // The two sides `ReturnGate` compares, and they are supply and demand.
   // `vocabulary` is what the carrier COINS — every word this scope may say,
   // whether or not anything says it. `intents` is what the steps written so far
   // actually SAY, accumulated at every `.step`. What you MAY say, against what
@@ -187,7 +187,7 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 // because a function's own properties are not writable.
 //
 // The alphabet is CLOSED: what the builder installs plus what every function
-// carries. `U` sits on the ALIAS, not the method, for the reason `WordGate`'s
+// carries. `U` sits on the ALIAS, not the method, for the reason `ReturnGate`'s
 // does — a defaulted parameter in a method's own list is caller-overridable.
 type ReservedVerb = 'steps' | 'step' | 'extend' | 'name' | 'length' | 'prototype' | 'caller' | 'arguments'
 
