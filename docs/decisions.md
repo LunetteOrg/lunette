@@ -1911,9 +1911,23 @@ nullable. The fix — sending a valueless word to `never` — is exactly the rul
 the `abort` branch WAS. An option that has to re-grow half of what it removed
 was not the simplification it claimed.
 
-**Deferred.** How much of a real carrier is decorating wraps, which is the
-number that would price the one cost this has: not measurable without a carrier
-in hand, so it is discovered writing the first. What `Passed` is finally called,
+**The one cost, priced.** How much of a real carrier is decorating wraps was
+deferred as unmeasurable without a carrier in hand, so the research grew one of
+realistic size. A third of its steps decorate — and the cost does not scale with
+them. It is ONE assertion, in one helper the carrier writes once; every
+decorator beyond that is a one-liner against the carrier's own type, with no
+check and no cast, and the carrier never names `Passed` at all (`noUnusedLocals`
+refused the import, which is the proof).
+
+Building it also found a constraint the kernels had not shown: steps unwind
+innermost-first, so a decorator placed before the leaf is handed a raw domain
+value with nothing to attach a header to. A separate `normalise()` step would
+fix that only if whoever composes the scope placed it exactly right. So the
+helper normalises as well as asserting, every decorator is handed a word
+wherever it sits, and the normalising step disappears — which is a better
+answer than the one that prompted the question.
+
+**Deferred.** What `Passed` is finally called,
 and what a wrapping step is shown of it. And rewriting §3's returned/thrown
 convention in the docs without leaning on `ok`/`abort`, which currently carry
 the explanation — the convention itself is unchanged and orthogonal, only its

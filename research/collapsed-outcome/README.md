@@ -187,6 +187,45 @@ anywhere.
 
 So transparency costs the intent axis nothing, on either side.
 
+## What transparency costs a real carrier: one line, once
+
+The deferred question was how much of a carrier is a WRAP that DECORATES, since
+that is the only shape transparency charges. `src/carrier-http.ts` is a carrier
+of realistic size — the steps a real one ships, in the proportions a real one
+has them, with stub bodies because what is counted is each step's SHAPE.
+
+| shape | steps | pays? |
+|---|---|---|
+| POPULATE (`params`, `body`, `cookies`) | 3 | no — never sees the way back |
+| GUARD (`authenticated`) | 1 | no |
+| OBSERVE wrap (`timed`, `traced`) | 2 | no — `Passed` travels through untouched |
+| DECORATE wrap (`withHeader`, `cors`, `setCookie`) | 3 | yes |
+
+A third of the steps decorate, which looked like the cost being real. It is not,
+because the cost does not scale with them:
+
+```
+casts in the carrier's code:   1
+mentions of `Passed` in code:  0
+```
+
+One helper absorbs it. `decorating` does the assertion once, and every decorator
+is written against the carrier's own `HttpWord` — no check, no cast, one line
+each. The carrier never imports `Passed` at all: `noUnusedLocals` refused the
+import, which is the proof that the marker is machinery the core never makes a
+carrier say.
+
+**And building it found a design constraint the kernels had not shown.** Steps
+unwind innermost-first, so a decorator sitting before the leaf is handed the
+leaf's RAW value and has nothing to attach a header to. A separate `normalise()`
+step fixes that only if whoever composes the scope puts it in exactly the right
+place — a rule nobody should have to know, and one `src/carrier-http.test.ts`
+caught by failing. So `decorating` normalises as well as asserting: every
+decorator is handed a word wherever it sits, and the separate normalising step
+disappears. The four runtime tests then show the same three decorators composing
+over a success, over a leaf's refusal, and over a guard's refusal, none of them
+branching on which.
+
 ## What it does NOT model, and why that matters
 
 **A real mount's runtime half.** What is gated here is the type; turning a word
