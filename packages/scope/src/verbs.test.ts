@@ -188,6 +188,26 @@ describe('a verb cannot take a name the surface already owns', () => {
     expect(() => unchecked(shadowsToString)).toThrow(/cannot be named 'toString'/)
   })
 
+  it('refuses one named `then`, which would otherwise make every scope a THENABLE', () => {
+    // The worst of the three categories, and the only one that stops rather
+    // than degrades. `await` on an object carrying `then` calls it with
+    // `(resolve, reject)`; the verb wrapper reads those as the verb's own
+    // arguments, pushes a step and hands back a builder, resolving nothing.
+    const shadowsThen = {
+      methods: { then: () => (async () => 'x') as unknown as AnyStep },
+    }
+    expect(() => unchecked(shadowsThen)).toThrow(/cannot be named 'then'/)
+  })
+
+  it('refuses one named `valueOf`, from the half of the prototype chain that is not a function`s', () => {
+    // `Object.prototype`, which the list had missed while claiming to be
+    // closed over "what every function carries".
+    const shadowsValueOf = {
+      methods: { valueOf: () => (async () => 'x') as unknown as AnyStep },
+    }
+    expect(() => unchecked(shadowsValueOf)).toThrow(/cannot be named 'valueOf'/)
+  })
+
   it('refuses one named `name`, which would otherwise throw from inside the core', () => {
     // A function's `name` is not writable, so this used to surface as
     // `TypeError: Cannot assign to read only property 'name' of function` —
@@ -196,5 +216,34 @@ describe('a verb cannot take a name the surface already owns', () => {
       methods: { name: () => (async () => 'x') as unknown as AnyStep },
     }
     expect(() => unchecked(shadowsName)).toThrow(/cannot be named 'name'/)
+  })
+})
+
+// ── a scope is not a thenable ────────────────────────────────────────────────
+// What guards the VERB case is the refusal above; this pins the INVARIANT that
+// refusal exists to protect, and would catch it being broken from the other
+// direction — the builder itself growing a `then`, for whatever reason seemed
+// good at the time.
+//
+// It races against a timeout on purpose. The failure mode here is not an
+// assertion going red but a promise that never settles, which a runner reports
+// as a timeout minutes later or not at all; 200ms turns that into a red line
+// that says which case hung.
+describe('awaiting a scope', () => {
+  const settles = (v: unknown) =>
+    Promise.race([
+      Promise.resolve(v).then(() => 'settled' as const),
+      new Promise<'hung'>((r) => setTimeout(() => r('hung'), 200)),
+    ])
+
+  it('settles — a scope carries no `then`, so it is not a thenable', async () => {
+    expect(await settles(scope<{}>())).toBe('settled')
+    expect(await settles(scope<{}>().extend(headers))).toBe('settled')
+    expect(await settles(scope<{}>().step(async (_a: {}, _c: {}) => 'v'))).toBe('settled')
+  })
+
+  it('and an `async` function may return one, which is how the hang would reach a caller', async () => {
+    const build = async () => scope<{}>().extend(headers).header('x', '1')
+    expect(await settles(build())).toBe('settled')
   })
 })

@@ -154,33 +154,59 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 // instead, and a verb named `name` or `length` throws from inside `.extend`,
 // because a function's own properties are not writable.
 //
-// The alphabet is CLOSED, and closing it takes BOTH halves of what a function
-// carries: its OWN properties (`name`, `length`, `prototype`, `caller`,
-// `arguments`), where assignment throws and the failure is at least loud, and
-// what it INHERITS from `Function.prototype` (`bind`, `call`, `apply`,
-// `toString`, `constructor`), where assignment quietly succeeds and shadows.
-// The second half is the silent one: a verb named `bind` installs an own
-// property over `Function.prototype.bind`, so `myScope.bind(null, app)` hands
-// back a step-pushing builder instead of a bound function, and a verb named
-// `toString` makes `String(scope)` throw `Cannot convert object to primitive
-// value` from wherever the scope is interpolated.
+// The alphabet is CLOSED, and closing it takes THREE categories — a count this
+// list got wrong twice, each time by declaring closure over a partial
+// enumeration. They differ in HOW they fail, which is why they are named apart
+// rather than merged into one flat list.
+//
+//   OWN properties of a function (`name`, `length`, `prototype`, `caller`,
+//   `arguments`). Assignment THROWS, so the failure is at least loud — which is
+//   exactly why these were the ones noticed first.
+//
+//   INHERITED members: `bind`, `call`, `apply`, `toString`, `constructor` from
+//   `Function.prototype`, and `valueOf`, `hasOwnProperty`, `isPrototypeOf`,
+//   `propertyIsEnumerable`, `toLocaleString` from `Object.prototype`.
+//   Assignment quietly succeeds and SHADOWS — a verb named `bind` makes
+//   `myScope.bind(null, app)` hand back a step-pushing builder instead of a
+//   bound function, and one named `toString` makes `String(scope)` throw from
+//   wherever the scope is interpolated.
+//
+//   PROTOCOL names, which the language gives meaning to on any object. Only
+//   `then` is reachable — a verb name is a string key, so `Symbol.iterator` and
+//   its kind cannot be one — and it is the worst of the three. A scope carrying
+//   `then` IS a thenable, so `await` calls it with `(resolve, reject)`; the verb
+//   wrapper reads those as the verb's own arguments, pushes a step and returns
+//   a builder, resolving nothing. The promise stays pending forever, and any
+//   `async` function returning a scope hangs at a call site with no clue in it.
+//   It does not degrade: it stops.
 //
 // `U` sits on the ALIAS, not the method, for the reason `ReturnGate`'s does —
 // a defaulted parameter in a method's own list is caller-overridable.
 type ReservedVerb =
+  // what the builder installs
   | 'steps'
   | 'step'
   | 'extend'
+  // a function's own properties
   | 'name'
   | 'length'
   | 'prototype'
   | 'caller'
   | 'arguments'
+  // inherited from `Function.prototype`
   | 'bind'
   | 'call'
   | 'apply'
   | 'toString'
   | 'constructor'
+  // inherited from `Object.prototype`
+  | 'valueOf'
+  | 'hasOwnProperty'
+  | 'isPrototypeOf'
+  | 'propertyIsEnumerable'
+  | 'toLocaleString'
+  // given meaning by the language itself
+  | 'then'
 
 type VerbGate<M, U = Extract<keyof M, ReservedVerb>> = [U] extends [never]
   ? unknown
@@ -331,6 +357,12 @@ const RESERVED_VERBS: ReadonlySet<string> = new Set([
   'apply',
   'toString',
   'constructor',
+  'valueOf',
+  'hasOwnProperty',
+  'isPrototypeOf',
+  'propertyIsEnumerable',
+  'toLocaleString',
+  'then',
 ])
 
 // ── the fold ─────────────────────────────────────────────────────────────────
