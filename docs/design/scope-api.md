@@ -28,7 +28,9 @@ two are named as such.
 | **transport feature** | what an extension needs (`body`, `query`, `request-headers`). One alphabet, read twice: against the carrier at `.extend`, against the host at the call. All three are READS — the outbound side needs none, it rides a carrier's word |
 | **intent** | a word a carrier coins (`redirect`, `code`, `rr7-data`) |
 | **registry** | the opaque map steps write and mounts read. The core never looks inside |
-| **outcome** | the two-branch result: `ok`, `abort`. BRANDED, so a step handing one back is told apart from one handing back a domain value. What the fold PRODUCES, never what an author writes |
+| **~~outcome~~** | RETIRED with §42. The fold produces nothing of its own: what a scope hands back is what its leaf returned, and whether that went well is the carrier's statement, not the core's |
+| **word** | a value a step returns instead of a domain value, to SAY something. `Word<I>` is all the core knows of one — it carries an `intent` and declares its name — and a carrier writes the rest |
+| **passed** | what `next` hands back: an opaque marker standing for "the rest of the fold answered, whatever it said". At runtime the inner answer comes back whole; the TYPE declines, because when a step is written the steps after it do not exist yet |
 | **response envelope** | what a carrier's outbound word carries: status, content type, headers, cookies. `json`/`html`/`text` are `response(…)` with a content type filled in |
 
 ## The shape
@@ -42,7 +44,7 @@ const postScope = scope(carrier)   // a carrier brings what a run carries, and i
 
 // A SCOPE IS THE FUNCTION THAT RUNS IT — from the first line, with nothing to
 // close. This is a SCOPE EXECUTION.
-const outcome = await postScope(app, { request, params })
+const result = await postScope(app, { request, params })
 ```
 
 **One verb.** `.step()` is the primitive and, in the base, the whole surface:
@@ -125,19 +127,20 @@ infers the bare constraint and declares nothing. Annotating the parameter IS the
 declaration, and it sits on the parameter it describes rather than in a phantom
 beside it.
 
-**A step returns one of three things, and never builds an outcome.** The
-outcome `next` gave it, a WORD from the carrier's vocabulary, or a plain domain
-value; the fold normalises whichever arrives, on the way back out. Telling them
-apart needs no heuristic: the fold's outcome is BRANDED, so "did this come from
-`next`?" is a symbol check and not a guess about a shape a domain value could
-happen to have (principle 7).
+**A step returns one of three things, and the fold touches none of them.** What
+`next` gave it, a WORD from the carrier's vocabulary, or a plain domain value —
+and whichever arrives is what the caller gets (§42). There is nothing to
+normalise and nothing to tell apart, because the core no longer needs to know
+which it was: that question belongs to the carrier, which coined the words and
+also writes the mount that reads them.
 
-That shape is what closes the intent fail-open rather than documenting it. While
-a step had to hand back a pre-built `Outcome`, a real word was cast down to
-`Abort<never>` and its intent was gone before the builder could read it — so the
-same refusal contributed `status` through the sugar and `never` through a raw
-step. Returning the word keeps its TYPE, and the builder distributes over the
-whole return (trap 1) to collect every word the step can say.
+Returning the WORD rather than a pre-built result is what closes the intent
+fail-open rather than documenting it. While a step had to hand back a built
+outcome, a real word was cast down to an intent-less one and its name was gone
+before the builder could read it — so the same refusal contributed `status`
+through the sugar and `never` through a raw step. Returning the word keeps its
+TYPE, and the builder distributes over the whole return (trap 1) to collect
+every word the step can say.
 
 ### Two verbs, two axes
 
@@ -203,12 +206,13 @@ follow that the intersection form could not express:
   appears in what the scope produces, where before only the closing step did.
 - **A base with no leaf has `R = never`**, which is the honest statement that it
   produces nothing. Running one THROWS: `never` has no inhabitant, so there is
-  no `ok` outcome to return, and a function whose return type is `never` is
-  exactly one that does not return normally. The error convention agrees
-  (principle 3) — a scope with no leaf, run, is a construction bug, and
-  `{ ok: true, value: undefined }` would render a bug to its caller as success.
-  Note `Outcome<never>` is NOT empty: `abort` stays inhabited, so a base that
-  REFUSES has a perfectly good outcome and never reaches the throw.
+  nothing to hand back, and a function whose return type is `never` is exactly
+  one that does not return normally. The error convention agrees (principle 3) —
+  a scope with no leaf, run, is a construction bug, and handing back `undefined`
+  would render a bug to its caller as a value. §42 removed the caveat this used
+  to need: while the outcome had two branches, `Outcome<never>` was NOT empty
+  because `abort` stayed inhabited, so a base that refuses was a separate case.
+  With one channel a refusing base has `R` = its word, and `never` means never.
 
 `research/terminal-step` asked whether a step COULD close the builder and
 answered yes, with a number. The question that mattered was whether the builder
@@ -408,8 +412,11 @@ redirect('/', { cookies: [dropped] })
 ```
 
 **Nothing is written through a sink.** A step that wants to decorate what comes
-back wraps `next` and modifies the outcome — which is the middleware shape the
-primitive already has, and the case that once justified sinks:
+back wraps `next` and modifies what it was handed — which is the middleware
+shape the primitive already has, and the case that once justified sinks. It is
+also the ONE shape that pays for §42: `next` returns a `Passed` that says
+nothing, so a decorating step states what it expects, and a carrier does that
+once in a helper its decorators are written against:
 
 ```ts
 .step(async (app, ctx, next) => {
@@ -675,10 +682,10 @@ Each cost a measurement. A fresh implementation should inherit them, not
 rediscover them.
 
 1. **The intent cannot be inferred from inside a union constituent.**
-   `g: (ctx) => E | Abort<I>` makes TypeScript pick the first abort candidate
+   `g: (ctx) => E | Word<I>` makes TypeScript pick the first word candidate
    and REJECT the rest, so a guard returning two different intents stops
    compiling. Variance does not help — invariant, covariant and contravariant
-   phantoms behave identically — and inferring the whole abort union collapses
+   phantoms behave identically — and inferring the whole word union collapses
    to the constraint (§39's negative). Infer the whole RETURN type and
    distribute afterwards.
 2. **The gate goes on the ARGUMENT, not in the return type.** The return-type
@@ -702,12 +709,12 @@ rediscover them.
    `[BRAND]?: never` reduces `Scope & Http & Cookies` to `never` on the
    conflicting property — and carrier-plus-extension is the ordinary case. Brand
    one side only.
-6. **The success side needs its own word.** `json(v, 201)` sharing the abort
-   side's `status` lets a host that declares it renders status aborts silently
+6. **The success side needs its own word.** `json(v, 201)` sharing the refusal
+   side's `status` lets a host that declares it renders status refusals silently
    accept a success status it cannot express.
-7. **A bare `Abort` must fail closed**, and the consequence reaches every call
-   site: annotating a guard `Promise<{ post } | Abort>` ERASES the intent the
-   constructor declared. Drop such annotations and let the return type infer —
+7. **A bare `Word` must fail closed**, and the consequence reaches every call
+   site: annotating a guard `Promise<{ post } | Word>` ERASES the intent the
+   word's type declared. Drop such annotations and let the return type infer —
    an alias to annotate with reintroduces the promise-to-keep-aligned this
    design removes.
 8. **Defaulted type parameters used as let-bindings must live on a type ALIAS**,
@@ -839,10 +846,10 @@ rediscover them.
 - **The check for a step that returns nothing**: +9.1% as a gate of its own,
   **+7.1% merged into the word check** — the two ask about the same type, so
   `ReturnGate` holds both — sharing the `Awaited<Ret>` is worth 2%. What it
-  buys: forgetting `return` in front of `next(…)` otherwise SUCCEEDS with
-  `value: undefined`, discarding work the inner steps really did. It surfaces
-  without the gate as `string | void` at whoever consumes `out.value`, in
-  another file, and not at all in a test reading `out.ok && out.value`.
+  buys: forgetting `return` in front of `next(…)` otherwise hands back the
+  wrapper's `undefined`, discarding work the inner steps really did. It surfaces
+  without the gate as `string | void` at whoever consumes the result, in another
+  file, and not at all in a test that only checks the happy value.
 
 ### At runtime
 

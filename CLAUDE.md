@@ -111,8 +111,15 @@ the tracker when relevant — never from here.
   `ReturnGate` reads a step's return against) · intents (`State['intents']`: the
   words the steps written so far actually SAY — the demand side, accumulated at
   every `.step`, and what a MOUNT asks about) · registry (opaque: steps write, mounts
-  read) · effects · outcome (`ok`/`abort` — validation left the core with §41,
-  and the third branch went with it) · capability (an OPEN
+  read) · effects · outcome (RETIRED with §42 — the fold produces nothing of its
+  own, so there is no `ok`/`abort` and no branch: a scope hands back what its
+  leaf RETURNED, and whether that went well is the carrier's statement. What was
+  a third branch left with §41, and the other two with §42) · `Word<I>` (all the
+  core knows of a word: it carries an `intent` and DECLARES its name. No brand,
+  no constructor, no predicate — a carrier writes its own types) · `Passed`
+  (what `next` hands back: an opaque marker for "the rest of the fold answered,
+  whatever it said". A step that only observes passes it on; one that DECORATES
+  states what it expects, which is §42's one cost) · capability (an OPEN
   alphabet — the core enumerates none; demand is open, supply is a written-out
   set, so an unclaimed one mounts nowhere, and widening a host's set is a claim
   about machinery, §34) · dialect.
