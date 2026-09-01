@@ -953,6 +953,7 @@ carry the two measurements the builder's form was settled on.
 | **#61** | the outbound side as a returned value: `response(v, init)`, with `json`/`html`/`text` as its sugar. Adds the envelope; the effects axis it replaces is already gone. ALSO closes the known limit above `ValueOf` — a WRAP step that replaces `value` is invisible to what the scope reports, and it only becomes expressible once the outbound side is a value a step RETURNS |
 | **#62** | port the read extensions: `body`, `query`, `cookies`, `headers` — none of which needs the retired transport-feature alphabet |
 | **#63** | decide which sugars come back — `guard`, `handle`, or neither. Both have already lost the reasons they were going to exist, so the failure mode is silence, not a wrong answer |
+| **#67** | composable scopes: a guard written once against a DECLARED vocabulary and no carrier, mounted on any carrier that coins it. Sharing a prefix already works and costs nothing; what this adds is splicing a fragment built elsewhere, and the second type parameter that lets one demand words without choosing a carrier. #51 is a prerequisite — splicing intersects `acc` |
 | **#58** | bring `@lntt/integration` back, with its route/intent/capability gates |
 | **#59** | rewrite `examples/` — LAST, and the real proof: an API that cannot be written naturally in an example is not settled, whatever the type tests say |
 
