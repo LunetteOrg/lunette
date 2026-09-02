@@ -26,7 +26,7 @@ two are named as such.
 | **entry** | a ctx key that `validate` may name. Either ARRIVES in the execution parameters (`params`, `input`) or is DERIVED by an extension (`query`, `body`, …) |
 | **enrichment** | what a guard returns. Also validatable, but declared by nobody — it is a return type |
 | **transport feature** | what an extension needs (`body`, `query`, `request-headers`). One alphabet, read twice: against the carrier at `.extend`, against the host at the call. All three are READS — the outbound side needs none, it rides a carrier's word |
-| **intent** | a word a carrier coins (`redirect`, `code`, `rr7-data`) |
+| **intent** | a word a carrier coins (`redirect`, `code`, `rr-data`) |
 | **registry** | the opaque map steps write and mounts read. The core never looks inside |
 | **~~outcome~~** | RETIRED with §42. The fold produces nothing of its own: what a scope hands back is what its leaf returned, and whether that went well is the carrier's statement, not the core's |
 | **word** | a value a step returns instead of a domain value, to SAY something. `Word<I>` is all the core knows of one — it carries an `intent` and declares its name — and a carrier writes the rest |
@@ -506,7 +506,7 @@ collision the design was creating for itself rather than closing it.
 |---|---|---|---|---|
 | `@lntt/scope/http` | `request: RequestHead`, `params` | `params` | `notFound` `forbidden` `unauthorized` `httpError` `redirect`; `response(v, init)` and its sugar `json` `html` `text` | `body` `query` `request-headers` |
 | `@lntt/scope/trpc` | `request: RequestHead`, `input` | `input` | `notFound` `unauthorized` `forbidden` `conflict` `tooManyRequests` `unprocessableContent`, as CODES. No redirect: an RPC reply has nowhere to go | `request-headers` |
-| `@lntt/scope/react-router` | `request: RequestHead`, `params` | `params` | http's words, plus RR7's own response values (`data(v, {status})`, thrown `redirect`) which nothing else can render | `body` `query` `request-headers` |
+| `@lntt/scope/react-router` | `request: RequestHead`, `params` | `params` | http's words, re-exported by identity, plus ONE of its own: `data(v, status)`, coining `rr-data` — a value handed back through RR7's data pipeline, which nothing else can render | `body` `query` `request-headers` |
 
 The carrier is the PROTOCOL FAMILY, not the host. Hono, Express and a
 hand-wired `node:http` share `http` because they render the same words — there
@@ -548,9 +548,26 @@ cookies are two different extensions with two different capabilities: one
 extension with an all-or-nothing capability would have gated a session-reading
 RPC scope off tRPC for a `Set-Cookie` it never wrote.
 
-`RequestHead` is a core TYPE — url/method/headers, no body accessors — so the
-body stays unreachable except through a declared extension (§34). Every carrier
-that holds one exposes it; there is no shared `request` extension.
+`RequestHead` — url/method/headers, no body accessors — is what makes the body
+unreachable except through a declared extension (§34). Every carrier that holds
+one exposes it; there is no shared `request` extension.
+
+It does NOT live in the core, and the prose here said it did while the core's
+own first paragraph said no HTTP name appears in it. Both cannot be true. It
+lives in `src/carriers/request-head.ts`, internal, with no subpath of its own,
+and each carrier that holds one re-exports it: one definition, so the three
+cannot drift, and no carrier importing another. Defining it in `http.ts` was the
+other candidate and reads wrong — `trpc` would then import the HTTP carrier,
+which says tRPC extends HTTP when it does not.
+
+**React Router's escape hatch is a WORD** (§44). RR7's own `data()` returns a
+value carrying no intent, so said plainly it would be a domain value: the
+carrier's vocabulary would equal `http`'s, and a scope using it would mount
+clean on Hono and break at runtime. `@lntt/scope/react-router` coins `data(v,
+status)` instead, carrying `rr-data`, and the MOUNT calls RR7's function — so
+the subpath imports nothing from `react-router` and the package keeps its zero
+dependencies. The thrown `redirect()` stays unmodelled on purpose: a throw is
+infrastructure by §3, unexamined by the fold and invisible to the types.
 
 ## Extensions
 
@@ -780,6 +797,19 @@ rediscover them.
     coins (§41 — it was the core's `Invalid` branch when this was measured). A
     single `catch` over both told the client its payload was malformed when the
     connection had broken, hiding a 5xx behind a 4xx.
+19. **A negative written with the UNION on the left checks nothing.**
+    `expectTypeOf<keyof RequestHead>().not.toExtend<'json'>()` reads as "the
+    body is not reachable" and passes for any union with more than one member,
+    whether or not `json` is still in it. The name goes on the LEFT:
+    `expectTypeOf<'json'>().not.toExtend<keyof RequestHead>()`. Found by
+    mutation — putting the member back lit nothing.
+20. **A `@ts-expect-error` can be held up by a DIFFERENT error than the one it
+    names.** A test that `scope(http).step(http)` is refused passed, and no
+    mutation of the carrier could break it: `.step` wants a function, and a
+    carrier given a call signature is still refused — for RETURNING NOTHING,
+    which is another gate entirely. The directive proves an error exists, never
+    which one. A negative nothing can turn off is not coverage, and belongs
+    deleted rather than kept for the reassurance.
 
 ## Measured
 
@@ -937,10 +967,12 @@ per slice, deliberately — the branch that produced this document also produced
 
 ### Built and green
 
-`@lntt/scope`: `src/index.ts`, and nothing else — one file, no extension ships,
-and the package has ZERO dependencies. `src/fixture/` holds
-what does not ship. Every negative is
-mutation-tested. `research/parameterised-builder` and `research/terminal-step`
+`@lntt/scope`: `src/index.ts`, the core — one file, where `export` means public
+— plus `src/carriers/`, the three carriers of #60: `./http`, `./trpc` and
+`./react-router`, each a tree-shakable subpath, with `request-head.ts` internal
+beside them. No extension ships yet, and the package still has ZERO
+dependencies — including `react-router`, for §44's reason. `src/fixture/` holds
+what does not ship. Every negative is mutation-tested. `research/parameterised-builder` and `research/terminal-step`
 carry the two measurements the builder's form was settled on.
 
 ### In order

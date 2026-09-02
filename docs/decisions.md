@@ -1932,3 +1932,104 @@ and what a wrapping step is shown of it. And rewriting §3's returned/thrown
 convention in the docs without leaning on `ok`/`abort`, which currently carry
 the explanation — the convention itself is unchanged and orthogonal, only its
 wording depends on a shape that is going away.
+
+### 43. The carrier rides the ARGUMENT; the type slot is refused, not left free
+
+**Decision.** `scope(http)` stays, and a carrier is a VALUE — `{} as HttpCarrier`,
+a value whose only reason to exist is to be a type. The type-parameter form
+`scope<HttpCarrier>()` is refused at the call, by constraining the carrier-free
+overload's `Args` to reject the two names a carrier declares.
+
+**Alternatives.** (a) `scope(carrier)`, the value. (b) `scope<Carrier>()`, the
+type argument, with the carrier-free-with-args form rewritten to declare a
+carrier-shaped literal. (c) Both, with neither refused — the status quo before
+this, which is (a) plus a hole.
+
+**Why.** §35 settled `scope(carrier)` against `.extend(carrier)` — 636.7 against
+638.5 instantiations, no type-level saving — but that compared two VALUE forms,
+and the type-parameter form was never in it. It differs on two axes the older
+measurement did not touch, and both were measured here.
+
+**The cost is exactly zero, per scope.** Two kernels identical but for `scope`'s
+overloads, one workload template, 0 / 24 / 48 scopes, `tsc
+--extendedDiagnostics`, three runs, deterministic every time:
+
+| | 0 scopes | 24 | 48 | per scope |
+|---|---|---|---|---|
+| `scope(fixture)` | 1,745 | 27,568 | 52,864 | **1,054.0** |
+| `scope<FixtureCarrier>()` | 930 | 26,792 | 52,088 | **1,054.0** |
+
+Identical to the single instantiation. The whole difference is a constant ~776
+paid once per program, and it is not the carrier's form: it is the cost of
+having TWO overloads, which is the price of keeping `scope<Args>()`. Cost does
+not decide this.
+
+**Discoverability was an assumption, and it was false.** The prediction on
+record was that a value is completable and a type argument is not. Driving
+`tsserver` at both positions, with the carriers unimported: `scope(⎸)` offers
+`fixture` as an auto-import, and `scope<⎸>()` offers `FixtureCarrier` as one.
+Both get signature help listing both overloads. What actually differs is noise —
+138 candidates against 223 — which is a preference, not an argument.
+
+**What decides it is that the type slot is already occupied.** `scope<Args>()`
+is the carrier-free form declaring what a run brings, and it is the common case.
+So `scope(http)` and `scope<HttpCarrier>()` are both legal calls meaning
+different things: written the second way the carrier lands in `args`, `ctx`
+becomes the declaration itself, and the vocabulary stays `never`. It fails
+CLOSED — the first word said fires `ReturnGate` — but what it says is `⛔ this
+scope does not coin the word: status — is it the right carrier?`, which is the
+wrong question about the right carrier, asked in another step and another file.
+Taking option (b) would close that by deleting the carrier-free form and making
+every agnostic scope write `scope<{ __args: … }>()`: the common case made worse
+to improve one the measurement says is already even.
+
+So the hole is closed instead, and where it belongs. `Args` is constrained to
+`object & { __args?: never; __vocabulary?: never }` — these two names are what a
+CARRIER declares, and run parameters carrying either would be one — and the
+error lands on the call naming the property that gave it away. It is a
+constraint rather than one of the message-carrying gates because the form has no
+argument to intersect a message onto; what it buys instead is the position.
+
+**Also measured**, and worth keeping: a non-carrier passed as the argument is
+already refused there, because `Carrier`'s members are all optional and a weak
+type reports a value with nothing in common. A step gets `has no properties in
+common with type 'Carrier'`; an options object gets its own key named.
+
+### 44. React Router's escape hatch is a WORD the mount renders, not a re-exported function
+
+**Decision.** `@lntt/scope/react-router` imports nothing from `react-router`. It
+re-exports HTTP's words unchanged — a 404 does not differ there — and coins ONE
+word of its own, `data(value, status)`, carrying an intent named `rr-data`.
+Calling RR7's real `data()` is the MOUNT's job (#58), exactly as rendering a 404
+is. The package stays at zero dependencies.
+
+**Alternatives.** (a) Re-export RR7's `data`/`redirect` from the subpath, with
+`react-router` as an optional peer dependency — the previous implementation's
+posture. (b) Wrap them in words typed with RR7's own types, which needs the
+dependency to type the payload. (c) The word carries its arguments; the mount
+calls the function.
+
+**Why.** (a) does not do what the carrier exists for. RR7's `data()` returns a
+value with no `intent` on it, so `ReturnGate` reads it as an ordinary domain
+value: the vocabulary of `react-router` would then be identical to `http`'s, and
+a scope using the escape hatch would mount CLEAN on Hono and break at runtime.
+That is the exact failure the intent axis exists to prevent, arriving through
+the one carrier whose reason for existing is that its escape hatch is
+unrenderable elsewhere.
+
+(b) fixes the gate and buys the dependency. (c) fixes the gate and does not,
+because a word has never been anything but a declaration carrying its arguments
+— which is how every other word in every other carrier already works. Choosing
+otherwise here would have made this one carrier special for no reason it could
+name.
+
+**What is deliberately NOT modelled** is RR7's other escape hatch, a THROWN
+`redirect()`. By §3's convention a thrown value is infrastructure: the fold lets
+it through untouched and the type system never sees it. A scope wanting a
+redirect its types can read RETURNS `redirect()` — HTTP's word, which this
+carrier re-exports — and the mount calls RR7's function. The thrown form still
+works, and it works the way any thrown value does: unexamined.
+
+**The re-export is by IDENTITY**, and that is pinned. Two constructors producing
+equal-looking objects would be two WORDS, and a mount reading one would not read
+the other — the same condition split in half by an import path.
