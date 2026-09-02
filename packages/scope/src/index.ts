@@ -51,9 +51,9 @@
 // fails CLOSED — refused wherever a gate checks it — rather than collapsing to
 // `never` and mounting anywhere: a word that declares nothing is admitted by
 // every gate, which is fail-OPEN.
-// NOT exported, and now that is simply true rather than something the barrel
-// had to say. It exists so a `Word` written without its parameter fails CLOSED,
-// and nothing else: no carrier writes it, and the gate reports the KEY
+//
+// NOT exported, and in one file that is simply true rather than something a
+// barrel had to explain. No carrier writes it, and the gate reports the KEY
 // (`__unknown_intent`) rather than this name, so it never reaches an error
 // message either. It goes public the day a case needs it.
 interface UnknownIntent {
@@ -428,6 +428,24 @@ export type ResultOf<Sc> = ValueOf<StateOf<Sc>['returns']>
 // `Extract` over two `keyof`s, the cheap shape `VerbGate` uses. Measured at
 // +9.9% instantiations across this package, which is what closing a silent
 // `never` costs.
+// A LIMIT, measured and left open rather than papered over: `Add = any` defeats
+// this gate, and defeats `ReturnGate` the same way. `Next<any>` — which an
+// author reaches for to silence an error elsewhere — makes `keyof any` be
+// `string | number | symbol`, none of which extends a literal key, so `Extract`
+// yields `never` and the collision walks through.
+//
+// It cannot be closed HERE. Detecting `any` is easy (`0 extends 1 & Add`) and
+// was tried; it does not fire, and the reason is not the detector. Once `Add` is
+// inferred `any`, the PARAMETER's own type contains `any`, and assignability
+// short-circuits before the intersected gate is ever read — verified down to a
+// six-line reproduction with no library code in it. Any gate riding an argument
+// whose inference produced `any` is unreadable by construction.
+//
+// Moving the check to the RETURN type would catch it, and costs what §39 priced
+// and rejected: it only fires when something downstream touches the poisoned
+// type, so a BASE — steps with no leaf, the shape a shared `gated()` has —
+// swallows it and surfaces it in whichever file finally uses the scope, naming
+// a step its author never wrote. That trade is worse than this hole.
 type CtxGate<S extends State, Add, U = Extract<keyof Add, keyof S['acc']>> = [U] extends [never]
   ? unknown
   : `⛔ this ctx key is already populated: ${U & string} — an extension may REPLACE it, a step may not`
@@ -493,6 +511,14 @@ export interface Scope<S extends State> {
   // than the scope holds is refused right here, naming the missing member. A
   // step reading what the scope has not got is not a rule the core enforces — it
   // is not expressible.
+  //
+  // Which makes it the ONE check here that a CONSUMER's tsconfig can turn off,
+  // and the difference is worth knowing: the other gates are conditional types
+  // intersected onto this argument, and they hold whatever the consumer sets.
+  // This one is not a gate we wrote, it is a shape that cannot be written — so
+  // with `strictFunctionTypes: false` (or `strict: false`, which implies it) the
+  // shape becomes writable and the lock is simply gone. Measured against a
+  // relaxed tsconfig: three of four survive, this is the one that does not.
   //
   // `Ret` is unconstrained on purpose: the three things a step may return have
   // nothing in common but being values, and the fold touches none of them —
