@@ -1,5 +1,16 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { scope, type IntentsOf, type Next, type ResultOf, type Word } from './index.ts'
+import {
+  scope,
+  type AnyStep,
+  type Extension,
+  type IntentsOf,
+  type Next,
+  type ResultOf,
+  type Scope,
+  type State,
+  type Surface,
+  type Word,
+} from './index.ts'
 import {
   badArgs,
   badVocab,
@@ -325,5 +336,94 @@ describe('a carrier declared wrong', () => {
       scope(badVocab).step(async (_app: {}, _ctx: {}) => refusedWord('no'))
     }
     void refused
+  })
+})
+
+// ── a verb that SAYS a word has to declare it ────────────────────────────────
+// The one place the accumulation above is not automatic, and it is worth
+// pinning because the verbs that will exercise it are the ones being written
+// next.
+//
+// `.step` states what a step returns twice over: `ReturnGate<S, Ret>` refuses a
+// word the carrier does not coin, and `Grown` puts `Awaited<Ret>` into
+// `returns`, which is what `IntentsOf` reads. A verb goes through neither.
+// `Extension`'s factories are typed `(...args: never[]) => AnyStep`, so the
+// step's return type is erased before the core could look at it, and
+// `.extend`'s wrapper pushes the step directly.
+//
+// That bypass is DELIBERATE on the ctx axis — it is what lets a verb REPLACE an
+// entry where `CtxGate` refuses (see `verbs.test.ts`) — and the return axis
+// comes along with it. So the declared signature is the only statement of what
+// a verb produces, and the rule is: a verb whose step returns a word writes
+// that word into `returns` itself.
+const refuse = () => async (_app: {}, _ctx: {}, _next: Next<{}>) => refused('by a verb')
+
+interface DeclaringVerb {
+  // `S['returns'] | Refusal` — the word's own type, unioned onto what the scope
+  // already says. This is the line the rule is about.
+  refuse<S extends State>(
+    this: Scope<S>,
+  ): Surface<{
+    need: S['need']
+    args: S['args']
+    acc: S['acc']
+    returns: S['returns'] | Refusal
+    vocabulary: S['vocabulary']
+    verbs: S['verbs']
+  }>
+}
+
+interface SilentVerb {
+  // The same factory, declared as a pass-through — which is what every verb
+  // that does NOT produce a word correctly says, and what copying one of those
+  // leaves behind.
+  refuse<S extends State>(
+    this: Scope<S>,
+  ): Surface<{
+    need: S['need']
+    args: S['args']
+    acc: S['acc']
+    returns: S['returns']
+    vocabulary: S['vocabulary']
+    verbs: S['verbs']
+  }>
+}
+
+const declaring: Extension<DeclaringVerb> = {
+  methods: { refuse: refuse as unknown as (...a: never[]) => AnyStep },
+}
+
+const silent: Extension<SilentVerb> = {
+  methods: { refuse: refuse as unknown as (...a: never[]) => AnyStep },
+}
+
+describe('a verb declares the words it says, because nothing computes them', () => {
+  it('one that declares its word is read by a mount exactly like a step`s', () => {
+    const s = scope(fixture)
+      .extend(declaring)
+      .refuse()
+      .step(async (_app: {}, _ctx: {}) => 'served')
+
+    expectTypeOf<IntentsOf<typeof s>>().toEqualTypeOf<'refusal'>()
+    expectTypeOf<ResultOf<typeof s>>().toEqualTypeOf<string | Refusal>()
+  })
+
+  it('one that omits it is INVISIBLE to a mount, and the word still arrives', () => {
+    // The hole, pinned as a hole rather than left to be discovered by whoever
+    // writes the next carrier. Same factory, same runtime — the scope really
+    // does hand back a `Refusal` — and the reader says `never`, so a host that
+    // cannot render a refusal mounts this without a word of complaint.
+    //
+    // The core cannot close it: with the factory's return type erased at the
+    // `Extension` boundary, there is nothing here to compare the declaration
+    // against. If it is ever closed it will be by a verb declaring its step's
+    // type, and this line is what goes red when that lands.
+    const s = scope(fixture)
+      .extend(silent)
+      .refuse()
+      .step(async (_app: {}, _ctx: {}) => 'served')
+
+    expectTypeOf<IntentsOf<typeof s>>().toEqualTypeOf<never>()
+    expectTypeOf<ResultOf<typeof s>>().toEqualTypeOf<string>()
   })
 })

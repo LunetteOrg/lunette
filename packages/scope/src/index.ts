@@ -480,6 +480,20 @@ type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Sur
 // no verb declares — is an error here.
 type Verbs = Readonly<Record<string, (...args: never[]) => AnyStep>>
 
+// A verb SAYS its own words. `.step` states a return twice — `ReturnGate`
+// refuses one the carrier does not coin, `Grown` unions it into `returns`, and
+// `IntentsOf` reads that — and a verb goes through neither: the factories below
+// are typed to `AnyStep`, so the step's return type is erased here, before
+// anything could compare it against a declaration. The bypass is the same one
+// that lets a verb REPLACE a ctx entry, and on this axis it costs a rule the
+// core cannot enforce:
+//
+//   returns: S['returns'] | TheWord     a verb whose step returns a word
+//   returns: S['returns']               a verb that only passes through
+//
+// Get it wrong in the second direction and the scope really does hand the word
+// back while every reader says it says nothing — so a host that cannot render
+// it mounts clean. Pinned both ways in `contract.test-d.ts`.
 export interface Extension<M extends object> {
   // One factory per declared verb, keyed alike. A factory never receives the
   // builder or a callback to rebuild it: pushing the step is the core's job.
