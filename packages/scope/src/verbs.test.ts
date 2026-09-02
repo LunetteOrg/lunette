@@ -387,3 +387,64 @@ describe('a verb name already contributed by another extension', () => {
     expect(await h({}, {})).toBe('201 [x=1]')
   })
 })
+
+// ── the alphabet is closed, and this is what proves it ───────────────────────
+// It has declared closure three times and been short three times — first
+// `Function.prototype`, then the protocol names, then the accessors — and each
+// miss was a CATEGORY, never a single name. Three reviews found them one at a
+// time.
+//
+// So this does not compare the list against another list written by hand. It
+// derives the QUESTION from the runtime — every name actually reachable on a
+// scope, walked off the real prototype chain — and asks the gate to answer.
+// A category that nobody thought of is still on that chain, so it is still
+// asked about.
+//
+// If a future runtime adds a member to `Function.prototype`, this goes red.
+// That is not a false alarm: the alphabet would really be short again.
+//
+// WHAT IT DOES NOT COVER, and the limit is worth stating rather than implying
+// closure it cannot give: a name the LANGUAGE gives meaning to is not on any
+// prototype, so `then` is absent from the walk and would be absent from a
+// successor's. Three of the four categories are enumerable from the runtime and
+// are closed here; the fourth stays a judgement, and its one member is pinned
+// by name above. Verified by deleting each category in turn — the sweep goes
+// red naming what went missing, except that one.
+describe('every name reachable on a scope is refused as a verb', () => {
+  const unchecked = (name: string) =>
+    scope<{}>().extend({
+      methods: { [name]: () => (async () => 'x') as unknown as AnyStep },
+    } as unknown as Extension<{}>)
+
+  // What a scope IS: a function, with everything a function inherits.
+  const reachable = [
+    ...Object.getOwnPropertyNames(function named() {}),
+    ...Object.getOwnPropertyNames(Function.prototype),
+    ...Object.getOwnPropertyNames(Object.prototype),
+  ].filter((n) => n !== 'caller' && n !== 'arguments')
+  // `caller`/`arguments` are own properties of `Function.prototype` in sloppy
+  // mode only and are poisoned accessors in strict mode; they are IN the list
+  // and cannot be probed by assignment, so they are checked by name below.
+
+  it('refuses every one of them, so no category can be missing', () => {
+    const accepted = reachable.filter((name) => {
+      try {
+        unchecked(name)
+        return true
+      } catch {
+        return false
+      }
+    })
+    expect(accepted).toEqual([])
+  })
+
+  it('and the two names that cannot be probed are on the list anyway', () => {
+    for (const name of ['caller', 'arguments']) {
+      expect(() => unchecked(name)).toThrow(new RegExp(`cannot be named '${name}'`))
+    }
+  })
+
+  it('the sweep is not vacuous — an ordinary name still passes', () => {
+    expect(() => unchecked('header')).not.toThrow()
+  })
+})

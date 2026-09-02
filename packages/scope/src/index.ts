@@ -338,57 +338,45 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 //
 // `U` sits on the ALIAS, not the method, for the reason `ReturnGate`'s does —
 // a defaulted parameter in a method's own list is caller-overridable.
-type ReservedVerb =
+// ONE list, read twice. The type derives from the array, so the two halves of
+// this gate cannot drift apart — which they could while both were written out
+// by hand, and which nothing would have reported. Same move the barrel made:
+// no second list to keep in step with the first.
+const RESERVED = [
   // what the builder installs
-  | 'steps'
-  | 'step'
-  | 'extend'
+  'steps',
+  'step',
+  'extend',
   // a function's own properties
-  | 'name'
-  | 'length'
-  | 'prototype'
-  | 'caller'
-  | 'arguments'
+  'name',
+  'length',
+  'prototype',
+  'caller',
+  'arguments',
   // inherited from `Function.prototype`
-  | 'bind'
-  | 'call'
-  | 'apply'
-  | 'toString'
-  | 'constructor'
+  'bind',
+  'call',
+  'apply',
+  'toString',
+  'constructor',
   // inherited from `Object.prototype`
-  | 'valueOf'
-  | 'hasOwnProperty'
-  | 'isPrototypeOf'
-  | 'propertyIsEnumerable'
-  | 'toLocaleString'
-  | '__defineGetter__'
-  | '__defineSetter__'
-  | '__lookupGetter__'
-  | '__lookupSetter__'
+  'valueOf',
+  'hasOwnProperty',
+  'isPrototypeOf',
+  'propertyIsEnumerable',
+  'toLocaleString',
+  '__defineGetter__',
+  '__defineSetter__',
+  '__lookupGetter__',
+  '__lookupSetter__',
   // an inherited ACCESSOR, which neither throws nor shadows
-  | '__proto__'
+  '__proto__',
   // given meaning by the language itself
-  | 'then'
+  'then',
+] as const
 
-// TWO collisions, and they are different mistakes with different ways out, so
-// they get different messages. The first is with the scope's OWN surface, and
-// the extension must rename. The second is with a verb ANOTHER extension already
-// contributed — where the extension is fine and it is the composition that has
-// to choose, so the message says so rather than blaming the author of either.
-//
-// The second was missing, and its absence was as silent as the first would have
-// been. `Surface` intersects, so `A & B` over a shared verb name makes an
-// OVERLOAD LIST and TypeScript prefers the EARLIER signature for arguments it
-// accepts, while `.extend`'s runtime merge is `{ ...verbs, ...ext.methods }` and
-// prefers the LATER factory. Verified: with A declaring `tag(v: string)` and B
-// declaring `tag(v: number)`, `.extend(A).extend(B).tag('hello')` typechecks
-// against A and at runtime runs B's factory, which reads `'hello'` as a number.
-// Two plugins colliding on `log` or `cache` hit this with no diagnostic on
-// either side.
-//
-// `Taken` needs no `Exclude` against `ReservedVerb`: a reserved name cannot be
-// in `S['verbs']`, because the branch above refused it on the way in. Measured
-// at +1.5% instantiations across this package.
+type ReservedVerb = (typeof RESERVED)[number]
+
 type VerbGate<
   S extends State,
   M,
@@ -565,32 +553,10 @@ interface Built {
 // were not checked — a plugin loaded by name, a `methods` map built from data,
 // a caller in plain JS. It is a THROW and not a skip: a verb silently absent is
 // the same silent degrade the gate exists to close, one call later.
-const RESERVED_VERBS: ReadonlySet<string> = new Set([
-  'steps',
-  'step',
-  'extend',
-  'name',
-  'length',
-  'prototype',
-  'caller',
-  'arguments',
-  'bind',
-  'call',
-  'apply',
-  'toString',
-  'constructor',
-  'valueOf',
-  'hasOwnProperty',
-  'isPrototypeOf',
-  'propertyIsEnumerable',
-  'toLocaleString',
-  '__defineGetter__',
-  '__defineSetter__',
-  '__lookupGetter__',
-  '__lookupSetter__',
-  '__proto__',
-  'then',
-])
+//
+// Built FROM the array the type reads, so the two halves are the same list and
+// not two that agree.
+const RESERVED_VERBS: ReadonlySet<string> = new Set(RESERVED)
 
 // ── the fold ─────────────────────────────────────────────────────────────────
 // ONE ordered list, folded from the outside in. There are no categories, so
