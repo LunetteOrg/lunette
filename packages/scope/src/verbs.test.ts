@@ -162,6 +162,34 @@ describe('an extension enriches the builder, and nothing else', () => {
     expect(await h({}, {})).toBe('body [b=2] [a=1]')
   })
 
+  it('the surface is CLOSED — an undeclared name is not a key of it', () => {
+    // Asserted on the TYPE, not with `@ts-expect-error`, and the difference is
+    // the finding. A directive does not check WHICH error it caught: widening
+    // `Surface` with `Record<string, (...a: any[]) => any>` keeps the call below
+    // an error — `noUncheckedIndexedAccess` makes the property "possibly
+    // undefined" — so the directive stays used and the widening goes unnoticed.
+    // Measured: that mutation left all 81 tests green and zero type errors.
+    //
+    // Asking whether the name is a KEY has no such escape.
+    //
+    // Note which gate enforces this. `expectTypeOf` in a `*.test.ts` is checked
+    // by `pnpm typecheck` (tsc) and NOT by `pnpm test` — vitest typechecks only
+    // `*.test-d.ts`. So a mutation is confirmed against tsc; running the suite
+    // alone will show it green. Both gates are the project's, and this line
+    // needs the second one.
+    const s = scope<{}>()
+    // If the surface ever admits an arbitrary string key, `keyof` says so
+    // directly: it becomes `string` instead of the names actually on it.
+    type Open = string extends keyof typeof s ? true : false
+    expectTypeOf<Open>().toEqualTypeOf<false>()
+
+    // and the names that ARE there stay reachable
+    type Has<K extends string> = K extends keyof typeof s ? true : false
+    expectTypeOf<Has<'step'>>().toEqualTypeOf<true>()
+    expectTypeOf<Has<'extend'>>().toEqualTypeOf<true>()
+    expectTypeOf<Has<'steps'>>().toEqualTypeOf<true>()
+  })
+
   it('the verb is not there before the extension that declares it', () => {
     // Type-only, and NEVER CALLED: the expect-error directive silences the
     // COMPILER, not the runtime, so running the line below would really look up
