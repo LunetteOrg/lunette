@@ -109,3 +109,31 @@ export interface Code extends Word<{ readonly code: true }> {
 }
 
 export const code = (n: number): Code => ({ kind: 'code', intent: { n }, n })
+
+// ── two carriers written WRONG, on purpose ───────────────────────────────────
+// `ArgsOf` and `VocabularyOf` each have a fallback for a carrier that declares
+// something unusable, and both branches were dead in the suite — nothing ever
+// declared a non-object `__args` or a non-string vocabulary key, so nothing
+// checked that the fallbacks fail CLOSED rather than open.
+//
+// A carrier is a hand-written declaration, so these are not contrived: they are
+// what a typo produces.
+
+// `__args` that is not an object. `ArgsOf` falls back to `{}`, so a run brings
+// nothing rather than bringing whatever the carrier meant.
+export interface BadArgsCarrier {
+  readonly __args?: string
+  readonly __vocabulary?: { readonly refusal: true }
+}
+
+export const badArgs = {} as BadArgsCarrier
+
+// A vocabulary keyed by something that is not a string. Dropping the key would
+// leave `never`, which coins nothing and refuses every word — fail-closed, but
+// silently. The sentinel makes the refusal say why.
+export interface BadVocabCarrier {
+  readonly __args?: Params
+  readonly __vocabulary?: { readonly [k: symbol]: true }
+}
+
+export const badVocab = {} as BadVocabCarrier

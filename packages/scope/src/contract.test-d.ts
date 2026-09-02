@@ -1,6 +1,15 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { scope, type IntentsOf, type Next, type ResultOf } from './index.ts'
-import { elsewhere, fixture, refused, type Elsewhere, type Refusal } from './fixture/carrier.ts'
+import { scope, type IntentsOf, type Next, type ResultOf, type Word } from './index.ts'
+import {
+  badArgs,
+  badVocab,
+  elsewhere,
+  fixture,
+  refused,
+  refused as refusedWord,
+  type Elsewhere,
+  type Refusal,
+} from './fixture/carrier.ts'
 
 // THE TYPE CONTRACT, which is what a `*.test-d.ts` file is for in this repo:
 // the engine is guaranteed by the runtime tests, and the types guarantee the
@@ -239,5 +248,82 @@ describe('what the marker excludes', () => {
     // the whole point of the marker: this scope produces nothing of its own
     const base = scope(fixture).step(async (_app: {}, _ctx, next: Next<{ x: 1 }>) => next({ x: 1 }))
     expectTypeOf<ResultOf<typeof base>>().toEqualTypeOf<never>()
+  })
+})
+
+// ── the phantom's INVARIANCE, which nothing was attacking ────────────────────
+// `Word<I>` carries `__i?: (i: I) => I`, with `I` in both the parameter and the
+// return position, and the comment beside it says why: a contravariant phantom
+// would let a caller name the gate away by supplying `never`. That claim was
+// stated and never tested — a regression to `() => I` or to `(i: I) => void`
+// would have compiled clean and taken a lock off with it.
+//
+// Four directions, because variance in either direction opens exactly one of
+// them: measured by making the phantom co- and contravariant in turn, and each
+// change unlocks one line below and no more.
+describe('two words with different names are unrelated', () => {
+  type A = { readonly refusal: true }
+  type B = { readonly elsewhere: true }
+
+  it('neither stands in for the other, in either direction', () => {
+    const wa = null as unknown as Word<A>
+    const wb = null as unknown as Word<B>
+    // @ts-expect-error — a refusal is not an elsewhere
+    const _x: Word<B> = wa
+    // @ts-expect-error — nor the other way round
+    const _y: Word<A> = wb
+    void _x
+    void _y
+  })
+
+  it('and a word that names NOTHING cannot stand in for one that does', () => {
+    // The case the comment names. `Word<never>` is what a caller reaches for to
+    // make the gate stop asking; invariance is what makes it useless for that.
+    const wn = null as unknown as Word<never>
+    const wa = null as unknown as Word<A>
+    // @ts-expect-error — an undeclared word is not a declared one
+    const _z: Word<A> = wn
+    // @ts-expect-error — and a declared one is not undeclared
+    const _w: Word<never> = wa
+    void _z
+    void _w
+  })
+})
+
+// ── a carrier that declares something unusable fails CLOSED ──────────────────
+// Both fallbacks existed and neither was exercised. They matter because a
+// carrier is hand-written: these are what a typo produces, and the question is
+// whether the mistake shows up or spreads.
+describe('a carrier declared wrong', () => {
+  it('with a non-object `__args`, it is refused at `scope()` — the fallback is unreachable', () => {
+    // Better than the fallback firing: the CONSTRAINT catches it first.
+    // `Carrier` declares `__args?: object`, so a carrier that got this wrong
+    // never reaches `ArgsOf` at all, and the error names the property.
+    //
+    // Which makes `ArgsOf`'s `T extends object ? T : {}` unreachable through the
+    // public API — it can only be entered by a cast or an `any`. Pinned as the
+    // dead branch it is, rather than tested as if it were live.
+    const refusedCarrier = () => {
+      // @ts-expect-error — `__args` must be an object, and `string` is not
+      scope(badArgs)
+    }
+    void refusedCarrier
+  })
+
+  it('with a non-string vocabulary key, it coins nothing and every word is refused', () => {
+    // This one IS reachable — a symbol-keyed vocabulary satisfies `object` — and
+    // the branch was dead in the suite until now.
+    //
+    // What is pinned is FAIL-CLOSED: the carrier coins nothing, so every word is
+    // refused. What is NOT pinned is the sentinel itself — replacing
+    // `'__NON_STRING_DECLARED_KEY'` with `never` also refuses everything, and a
+    // `@ts-expect-error` cannot read the message to tell them apart. The
+    // sentinel earns its place by what the error SAYS, and that is not
+    // expressible here; measured by making the swap and watching nothing go red.
+    const refused = () => {
+      // @ts-expect-error ⛔ this scope does not coin the word: refusal
+      scope(badVocab).step(async (_app: {}, _ctx: {}) => refusedWord('no'))
+    }
+    void refused
   })
 })

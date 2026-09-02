@@ -448,3 +448,25 @@ describe('every name reachable on a scope is refused as a verb', () => {
     expect(() => unchecked('header')).not.toThrow()
   })
 })
+
+// ── a verb branches like `.step` does ────────────────────────────────────────
+// It pushes its step by a different route — the wrapper in `make`, not `.step`
+// — so the immutability that `fold.test.ts` pins for the primitive has to be
+// pinned here too. A base carrying verbs is exactly the thing meant to be
+// shared, and nothing checked that calling one twice from the same base did not
+// accumulate.
+describe('branching a base that carries verbs', () => {
+  it('leaves the base untouched, and each call independent', async () => {
+    const base = scope<{}>().extend(pins)
+    expect(base.steps).toHaveLength(0)
+
+    const one = base.pin(201).step(async (_app: {}, ctx: { readonly pinned: 201 }) => ctx.pinned)
+    const two = base.pin(404).step(async (_app: {}, ctx: { readonly pinned: 404 }) => ctx.pinned)
+
+    expect(base.steps).toHaveLength(0)
+    expect(one.steps).toHaveLength(2)
+    expect(two.steps).toHaveLength(2)
+    expect(await one({}, {})).toBe(201)
+    expect(await two({}, {})).toBe(404)
+  })
+})

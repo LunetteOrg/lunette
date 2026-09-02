@@ -120,3 +120,31 @@ describe('a scope with no leaf', () => {
     expect(await refusing({}, {})).toBe('refused-ish')
   })
 })
+
+// ── a builder is a value, not a mutable object ───────────────────────────────
+// `.step` is `make([...steps, s], verbs)` — a new array and a new closure — so a
+// base can be branched into two chains that do not know about each other. That
+// is what makes a shared `gated()` base safe to hand around, and it was pinned
+// by nothing: a regression to `steps.push(s)` would have kept every test green,
+// because no test ever built two continuations from one base.
+describe('branching a base', () => {
+  it('leaves the base untouched, and the branches independent', async () => {
+    const base = scope<{ readonly id: string }>().step(
+      async (_app: {}, ctx, next: Next<{ upper: string }>) => next({ upper: ctx.id.toUpperCase() }),
+    )
+    expect(base.steps).toHaveLength(1)
+
+    const a = base.step(async (_app: {}, ctx: { readonly upper: string }) => `a:${ctx.upper}`)
+    const b = base.step(async (_app: {}, ctx: { readonly upper: string }) => `b:${ctx.upper}`)
+
+    // the base did not grow
+    expect(base.steps).toHaveLength(1)
+    // and neither branch inherited the other's leaf
+    expect(a.steps).toHaveLength(2)
+    expect(b.steps).toHaveLength(2)
+
+    expect(await a({}, { id: 'x' })).toBe('a:X')
+    expect(await b({}, { id: 'x' })).toBe('b:X')
+  })
+
+})
