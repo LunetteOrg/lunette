@@ -600,6 +600,23 @@ export interface Carrier {
   readonly __vocabulary?: object
 }
 
+// ── gate: a carrier goes in the ARGUMENT, and there is no other slot ─────────
+// `scope<Args>()` declares what a run brings for a carrier-FREE scope, so the
+// type slot is taken — and `scope(http)` and `scope<HttpCarrier>()` are both
+// legal calls that mean different things. Written the second way, a carrier
+// lands in `args`: `ctx` becomes the declaration itself and the vocabulary
+// stays `never`, so the first word said fires `ReturnGate` asking whether it is
+// the right carrier — the wrong question about the right carrier, in another
+// step and another file.
+//
+// Refusing it costs the carrier-free form nothing: these two names are what a
+// CARRIER declares, and run parameters carrying either would be one.
+//
+// It is a CONSTRAINT and not one of the message-carrying gates above, because
+// there is nothing to intersect onto — the form has no argument. What it buys
+// instead is the position: the error lands on the call and names the property.
+type NotACarrier = { readonly __args?: never; readonly __vocabulary?: never }
+
 type ArgsOf<C> = C extends { readonly __args?: infer T } ? (T extends object ? T : {}) : {}
 // A non-string key is not dropped: dropping the only key leaves `never`, and a
 // scope declaring `never` coins nothing, so every word is refused. That is
@@ -756,7 +773,7 @@ type Empty<Args extends object, Vocab extends PropertyKey> = {
 // Start a scope. The base is carrier-agnostic: nothing to read, no words to say,
 // and it mounts everywhere by construction. `scope(carrier)` brings that
 // carrier's run parameters and the words it coins.
-export function scope<Args extends object = {}>(): Surface<Empty<Args, never>>
+export function scope<Args extends object & NotACarrier = {}>(): Surface<Empty<Args, never>>
 export function scope<C extends Carrier>(carrier: C): Surface<Empty<ArgsOf<C>, VocabularyOf<C>>>
 export function scope(_carrier?: Carrier): Surface<Empty<{}, never>> {
   // A carrier is PURE DECLARATION — it brings a vocabulary and the shape of a

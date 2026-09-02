@@ -21,6 +21,7 @@ import {
   refused as refusedWord,
   served,
   type Elsewhere,
+  type FixtureCarrier,
   type Refusal,
 } from './fixture/carrier.ts'
 
@@ -258,6 +259,30 @@ describe('a carrier declared wrong', () => {
       scope(badArgs)
     }
     void refusedCarrier
+  })
+
+  it('and a carrier passed in the TYPE slot is refused there, not later', () => {
+    // The slot is already taken: `scope<Args>()` declares what a run brings for
+    // a carrier-FREE scope, so `scope<HttpCarrier>()` — reached for by habit,
+    // and the shape half the ecosystem writes — is a legal call that means
+    // something else entirely. The carrier lands in `args`, `ctx` becomes the
+    // declaration itself, and the vocabulary stays `never`.
+    //
+    // It did not pass silently even before this: the first word said fired
+    // `ReturnGate`. What it said was `⛔ this scope does not coin the word:
+    // refusal — is it the right carrier?`, which is the WRONG question — the
+    // carrier is right, the position is not — asked in another step, in another
+    // file, with the two forms nowhere in sight.
+    //
+    // The constraint asks it here, and names the property that gives the
+    // mistake away. It costs the carrier-free form nothing: `__args` and
+    // `__vocabulary` are what a CARRIER declares, and run parameters carrying
+    // either would be a carrier.
+    const misplaced = () => {
+      // @ts-expect-error — a carrier goes in the ARGUMENT, not the type slot
+      scope<FixtureCarrier>()
+    }
+    void misplaced
   })
 
   it('with a non-string vocabulary key, it coins nothing and every word is refused', () => {
