@@ -378,3 +378,30 @@ describe('two steps populating the same ctx key', () => {
     expect(await h({}, { token: null, params: {} })).toBe('anonymous')
   })
 })
+
+// ── the runtime halves of what `contract.test-d.ts` states as types ──────────
+// They lived there as `expect(...)` calls, which never ran: a `*.test-d.ts` is
+// typechecked and never executed. The TYPE claims stay there, where they
+// belong; these are the halves that have to actually happen, because a type
+// says nothing about what the runtime does when it gets there.
+describe('what the type contract claims, happening', () => {
+  it('a base that REFUSES hands its word back, rather than reaching the no-leaf throw', async () => {
+    const base = scope(fixture).step(async (_app: {}, ctx, next: Next<{}>) =>
+      ctx.token === null ? refused('anonymous') : next({}),
+    )
+    const out = await base({}, { token: null, params: {} })
+    expect(isWord(out)).toBe(true)
+    expect(out).toMatchObject({ kind: 'refused', intent: { why: 'anonymous' } })
+  })
+
+  it('a leaf whose value has an index signature really hands that value back', async () => {
+    // The other half of the `Passed` weak-type regression: the type side pins
+    // that `ResultOf` is `Record<string, number>` and not `never`, and this
+    // pins that the value arrives — which is what made the old bug a lie rather
+    // than merely a wrong type.
+    const tally = scope(fixture).step(
+      async (_app: {}, _ctx: {}) => ({ hits: 1 }) as Record<string, number>,
+    )
+    expect(await tally({}, { token: null, params: {} })).toEqual({ hits: 1 })
+  })
+})

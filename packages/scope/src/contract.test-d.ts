@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from 'vitest'
+import { describe, expectTypeOf, it } from 'vitest'
 import { scope, type IntentsOf, type Next, type ResultOf } from './index.ts'
 import { elsewhere, fixture, refused, type Elsewhere, type Refusal } from './fixture/carrier.ts'
 
@@ -10,6 +10,13 @@ import { elsewhere, fixture, refused, type Elsewhere, type Refusal } from './fix
 // Everything is written with the ONE verb, because that is the claim under
 // test: the primitive says all five things a step has to say, and nothing else
 // is needed to say them.
+//
+// NO RUNTIME ASSERTIONS BELONG HERE, and that is a rule with teeth rather than
+// a preference: a `*.test-d.ts` file is TYPECHECKED and never RUN — the config
+// includes `src/**/*.test.ts` for tests and this pattern only for typecheck. An
+// `expect(...)` in this file is dead code that reads as coverage, and four of
+// them sat here unexecuted, one of them the only check that a scope with no
+// leaf THROWS. `suite.test.ts` now fails if any come back.
 
 interface Repos {
   readonly users: { readonly byId: (id: string) => { readonly name: string } | undefined }
@@ -109,18 +116,12 @@ describe('what a scope yields', () => {
   // a leaf has is `R = never`, and `never` has no inhabitant: there is nothing
   // to hand back, so running one throws rather than reporting a bug to its
   // caller as a value.
-  it('a scope whose steps all pass through yields `never`, and running it throws', async () => {
+  it('a scope whose steps all pass through yields `never`', async () => {
     const base = scope<{ readonly id: string }>().step(
       async (_app: {}, ctx, next: Next<{ upper: string }>) => next({ upper: ctx.id }),
     )
-    const thrown = await base({}, { id: 'u1' }).catch((e: unknown) => e)
-    expect(thrown).toBeInstanceOf(Error)
-
-    const typed = async () => {
-      const o = await base({}, { id: 'u1' })
-      expectTypeOf(o).toEqualTypeOf<never>()
-    }
-    expect(typeof typed).toBe('function')
+    const o = await base({}, { id: 'u1' })
+    expectTypeOf(o).toEqualTypeOf<never>()
   })
 
   // And a base that REFUSES is not that case at all: its word is a return like
@@ -134,7 +135,6 @@ describe('what a scope yields', () => {
     )
     const out = await base({}, { token: null, params: {} })
     expectTypeOf(out).toEqualTypeOf<Refusal>()
-    expect(out).toMatchObject({ kind: 'refused' })
   })
 
   // Still a builder, still callable — both at once, which is the whole point of
@@ -225,7 +225,7 @@ describe('what a scope accumulated, read from outside', () => {
 // consumer downstream compiled and got at runtime a value the types had called
 // impossible. Pinned here because nothing about it is visible at the call site.
 describe('what the marker excludes', () => {
-  it('does not eat a leaf whose value has an index signature', async () => {
+  it('does not eat a leaf whose value has an index signature', () => {
     const tally = scope(fixture).step(
       async (_app: {}, _ctx: {}) => ({ hits: 1 }) as Record<string, number>,
     )
@@ -233,9 +233,6 @@ describe('what the marker excludes', () => {
 
     const bag = scope(fixture).step(async (_app: {}, _ctx: {}) => ({}) as object)
     expectTypeOf<ResultOf<typeof bag>>().toEqualTypeOf<object>()
-
-    const out = await tally({}, { token: null, params: {} })
-    expect(out).toEqual({ hits: 1 })
   })
 
   it('still excludes what it is FOR — a step that only passes through', () => {

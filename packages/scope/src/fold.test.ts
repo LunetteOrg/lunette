@@ -95,3 +95,28 @@ describe('the step primitive, folded', () => {
     expect(await h(app, { id: 'nope' })).toBe('anonymous')
   })
 })
+
+// ── a scope with no leaf THROWS ──────────────────────────────────────────────
+// It lived in `contract.test-d.ts` as a runtime assertion, where nothing ever
+// ran it: a `*.test-d.ts` file is typechecked and never executed, so the only
+// check that this construction bug is reported rather than swallowed was dead.
+// Replacing the throw with `return undefined` kept the whole suite green.
+//
+// The type side stays there — `R` is `never` for such a scope — and this is the
+// half that has to actually run, because `never` says nothing about what the
+// runtime does when it gets there.
+describe('a scope with no leaf', () => {
+  it('throws rather than handing back a value it does not have', async () => {
+    const base = scope<{ readonly id: string }>().step(
+      async (_app: {}, ctx, next: Next<{ upper: string }>) => next({ upper: ctx.id }),
+    )
+    await expect(base({}, { id: 'u1' })).rejects.toThrow(/this scope has no leaf/)
+  })
+
+  it('and one whose only step REFUSES does not reach the throw', async () => {
+    // `never` means never: a base that says a word has that word as its `R`,
+    // so there is something to hand back and the throw is not the path taken.
+    const refusing = scope().step(async (_app: {}, _ctx: {}) => 'refused-ish' as const)
+    expect(await refusing({}, {})).toBe('refused-ish')
+  })
+})
