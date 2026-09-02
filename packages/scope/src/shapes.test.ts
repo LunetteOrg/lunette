@@ -1,17 +1,19 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import { scope } from './scope.ts'
-import { code, fixture, gone, other, refused } from './fixture/carrier.ts'
-import type { Next, Outcome } from './step.ts'
+import { scope, type Next, type Word } from './index.ts'
+import {
+  code, fixture, gone, isWord, other, refused, served,
+  type Refusal, type Served,
+} from './fixture/carrier.ts'
 
 // THE SHAPES A STEP TAKES — one per thing a step is for. There is no category
 // here and no phase: every one is the same primitive, and each runs where it
 // was written. What tells them apart is which of the five things it says, and
 // that is visible in the signature every time.
 //
-// Read them for what is NOT in them. No step builds an outcome, none casts, and
-// none mentions a brand: a step hands back the result of `next`, a WORD from
-// the carrier, or a plain domain value, and the fold normalises whichever
-// arrives. The words come from `fixture/carrier.ts`, exactly as a real scope
+// Read them for what is NOT in them. No step builds a result, none casts, and
+// none mentions a brand: a step hands back what `next` gave it, a WORD from the
+// carrier, or a plain domain value, and the fold hands back whichever arrived,
+// untouched. The words come from `fixture/carrier.ts`, exactly as a real scope
 // imports `unauthorized`/`redirect` from `@lntt/scope/http` — and the scope is
 // started with THAT carrier, `scope(fixture)`, which is what makes the words
 // legal here: a carrier is chosen exactly once, and coining is its job.
@@ -63,8 +65,9 @@ const authenticated = async (
 }
 
 // ── 3. REFINE ────────────────────────────────────────────────────────────────
-// Populate a key the ctx ALREADY has, narrower. This is what `validate` is, and
-// it is why `Ctx` is an override and not the intersection it looks like (§9):
+// Populate a key the ctx ALREADY has, narrower. It is what a carrier's
+// validation verb will do, and why `Ctx` is an override rather than the
+// intersection it looks like:
 // intersecting the old type with the new gives `never` in the ordinary case — a
 // field nobody can use, and no error anywhere.
 const refineToken = async (
@@ -77,7 +80,7 @@ const refineToken = async (
 // Let the rest run and act on what came BACK. A step wraps `next`, so it has an
 // after — where a span is closed, a metric flushed, a rolling session cookie
 // attached to whatever the leaf decided. A pre-hook plus a collector could not
-// express this (#55), and it is the shape that replaced sinks: with the
+// express this, and it is the shape that replaced sinks: with the
 // outbound side a RETURNED value, decorating it is ordinary code.
 const timed = (log: string[]) => async (_app: {}, _ctx: {}, next: Next<{}>) => {
   log.push('in')
@@ -91,7 +94,8 @@ const timed = (log: string[]) => async (_app: {}, _ctx: {}, next: Next<{}>) => {
 // makes it the leaf — no phase, no special casing.
 //
 // The leaf itself is ONLY a leaf: a value, or a word. That is the entire
-// convention (principle 4), the same one wire's leaves follow.
+// convention, the same one wire's leaves follow: a RETURNED error is domain, a
+// THROWN one is infrastructure.
 const readNote = async (deps: Pick<Repos, 'notes'>, ctx: { readonly session: Session }) => {
   const note = deps.notes.byId('n1')
   return note === undefined ? gone('note') : `${ctx.session.userId}:${note.text}`
@@ -116,7 +120,7 @@ describe('the five shapes, composed', () => {
   it('runs every shape in the order it was written', async () => {
     log.length = 0
     const out = await noteScope(app, { token: 'good', params: { page: '3' } })
-    expect(out.ok && out.value).toBe('u1:hello')
+    expect(out).toBe('u1:hello')
     // the WRAP shape's after runs last, because it wraps the rest
     expect(log).toEqual(['in', 'out'])
   })
@@ -124,25 +128,23 @@ describe('the five shapes, composed', () => {
   it('the guard stops the fold WITH ITS WORD, and the wrap still sees it come back', async () => {
     log.length = 0
     const out = await noteScope(app, { token: null, params: {} })
-    expect(out.ok).toBe(false)
-    expect(!out.ok && 'abort' in out && out.abort.intent).toEqual({
-      kind: 'refused',
-      why: 'no session',
-    })
+    expect(isWord(out)).toBe(true)
+    expect(out).toMatchObject({ kind: 'refused', intent: { why: 'no session' } })
     expect(log).toEqual(['in', 'out'])
   })
 
   it('a leaf returning a word stops on the word, not on a value', async () => {
     const empty: Repos = { ...app, notes: { byId: () => undefined } }
     const out = await noteScope(empty, { token: 'good', params: {} })
-    expect(out.ok).toBe(false)
-    expect(!out.ok && 'abort' in out && out.abort.intent).toEqual({ kind: 'gone', what: 'note' })
+    expect(out).toMatchObject({ kind: 'gone', intent: { what: 'note' } })
   })
 
   it('is the function that runs it AND still a builder', async () => {
     const out = await noteScope(app, { token: 'good', params: {} })
-    // the words contribute no value: what a run YIELDS is the domain side only
-    if (out.ok) expectTypeOf(out.value).toEqualTypeOf<string>()
+    // What a run yields is EVERY type its steps hand back, words included:
+    // with one channel there is nowhere else for them to be, and reading the
+    // union is how a caller learns what this scope can say (§42).
+    expectTypeOf(out).toEqualTypeOf<string | Refusal>()
     // and there is nothing to close, so more steps can still be added
     expectTypeOf(noteScope).toHaveProperty('step')
   })
@@ -154,7 +156,7 @@ describe('the five shapes, composed', () => {
       )
       .step(async (_app: {}, ctx: { readonly upper: string }) => ctx.upper)
 
-    expect(await h({}, { token: 'good', params: {} }).then((o) => o.ok && o.value)).toBe('GOOD')
+    expect(await h({}, { token: 'good', params: {} })).toBe('GOOD')
   })
 })
 
@@ -192,7 +194,7 @@ describe('what a scope may say, read off the steps', () => {
   })
 
   it('accepts two DIFFERENT words from one step — the union does not collapse', async () => {
-    // §1: inferring from inside a union constituent makes TypeScript pick the
+    // Inferring from inside a union constituent makes TypeScript pick the
     // first candidate and reject the rest, so this is the case that shape exists
     // for. Both words are the carrier's, so both are legal.
     const h = scope(fixture)
@@ -203,7 +205,203 @@ describe('what a scope may say, read off the steps', () => {
       })
       .step(async (_app: {}, _ctx: {}) => 'ok')
 
-    expect((await h({}, { token: null, params: {} })).ok).toBe(false)
-    expect((await h({}, { token: 'good', params: {} })).ok).toBe(true)
+    expect(isWord(await h({}, { token: null, params: {} }))).toBe(true)
+    expect(isWord(await h({}, { token: 'gone', params: {} }))).toBe(true)
+    expect(await h({}, { token: 'good', params: {} })).toBe('ok')
+  })
+})
+
+
+// ── the SUCCESS side of a word ───────────────────────────────────────────────
+// A leaf that succeeds AND has something to say about how the result should be
+// rendered — the half `response`/`json` will be built on. Worth its own block
+// because it is where the price of ONE channel is visible: a word carrying a
+// value appears in what the scope yields, so a caller goes through the carrier
+// to reach the domain value. The refusals cost the same, and it is the same
+// cost that makes every one of them legible in the scope's own type (§42).
+describe('a word on the success side', () => {
+  const served3 = scope(fixture).step(async (_app: {}, _ctx: {}) => served(3, 'cache'))
+
+  it('carries the intent while the VALUE stays the domain`s', async () => {
+    const out = await served3({}, { token: null, params: {} })
+    expect(out).toMatchObject({ kind: 'served', value: 3, intent: { at: 'cache' } })
+  })
+
+  it('DOES appear in what the scope yields — the price of one channel, in the open', () => {
+    // `Served<number>`, not `number`. With no second branch a word has nowhere
+    // to be but the value, so a caller reading the domain value goes through
+    // the carrier first. That is the cost §42 accepted, and it is the same cost
+    // that makes every refusal legible in the scope's own type.
+    const check = async () => {
+      const out = await served3({}, { token: null, params: {} })
+      expectTypeOf(out).toEqualTypeOf<Served<number>>()
+    }
+    expect(typeof check).toBe('function')
+  })
+
+  it('a plain value says nothing at all, which is the other case', async () => {
+    const plain = scope(fixture).step(async (_app: {}, _ctx: {}) => 3)
+    const out = await plain({}, { token: null, params: {} })
+    expect(out).toBe(3)
+    // Nothing was added on the way out — a plain value arrives as itself, so a
+    // carrier asking whether this is one of its words gets a straight no and
+    // the host's default applies.
+    expect(isWord(out)).toBe(false)
+  })
+})
+
+// ── forgetting to declare the name fails CLOSED ──────────────────────────────
+// A carrier declares a word by writing its TYPE, and the name lives in `Word`'s
+// parameter. Written WITHOUT it, `Word` means "an intent nobody declared": its
+// key is `__unknown_intent`, which no carrier coins, so the gate refuses it.
+// Left to the constraint instead the name would be `keyof object`, which is
+// `never` — a word declaring nothing and therefore admitted by every gate,
+// which is fail-OPEN.
+describe('a word whose name was never declared', () => {
+  const improvised = (): Word => ({ intent: { kind: 'improvised' } })
+  const declared = (): Word<{ readonly refusal: true }> => ({ intent: { kind: 'improvised' } })
+
+  it('is REFUSED by the carrier that does not coin it', () => {
+    const refuse = () => {
+      // @ts-expect-error ⛔ this scope does not coin the word: __unknown_intent
+      scope(fixture).step(async (_app: {}, _ctx: {}) => improvised())
+    }
+    expect(typeof refuse).toBe('function')
+  })
+
+  it('and the same word DECLARED passes, so the gate is reading the name', () => {
+    scope(fixture).step(async (_app: {}, _ctx: {}) => declared())
+    expect(true).toBe(true)
+  })
+})
+
+// ── a step that returns nothing ──────────────────────────────────────────────
+// The silent one: forgetting `return` lets the inner steps run and throws their
+// result away, and the run SUCCEEDS with `value: undefined`. Nothing is
+// branded, nothing is a word, so the terminal branch reads it as a domain value.
+describe('a step that hands back nothing', () => {
+  it('is REFUSED where it was written', () => {
+    const refuse = () => {
+      scope(fixture).step(
+        // @ts-expect-error ⛔ this step returns nothing — did you forget `return`?
+        async (_app: {}, _ctx: {}, next: Next<{ x: number }>) => {
+          next({ x: 1 })
+        },
+      )
+    }
+    expect(typeof refuse).toBe('function')
+  })
+
+  it('and the mistake it prevents is a SUCCESS, which is why it is worth a gate', async () => {
+    // the same step, forced past the gate the way plain JS would reach it
+    const forgot = (async (_app: {}, _ctx: {}, next: Next<{ x: number }>) => {
+      next({ x: 1 })
+    }) as unknown as (app: {}, ctx: {}, next: Next<{ x: number }>) => Promise<number>
+
+    const h = scope(fixture)
+      .step(forgot)
+      .step(async (_app: {}, ctx: { readonly x: number }) => `leaf saw ${ctx.x}`)
+
+    const out = await h({}, { token: null, params: {} })
+    // the leaf really ran and really produced a value — and it is gone
+    expect(out).toBeUndefined()
+  })
+
+  it('lets a leaf with nothing to hand back say so DELIBERATELY', async () => {
+    const h = scope(fixture).step(async (_app: {}, _ctx: {}) => undefined)
+    const out = await h({}, { token: null, params: {} })
+    expect(out).toBeUndefined()
+  })
+
+  it('and `null` is an ordinary domain value, not the mistake', async () => {
+    const h = scope(fixture).step(async (_app: {}, _ctx: {}) => null)
+    const out = await h({}, { token: null, params: {} })
+    expect(out).toBeNull()
+  })
+})
+
+// ── a step may not re-populate a ctx key ─────────────────────────────────────
+// The types intersected where the runtime overwrote, and `never` made the
+// disagreement silent: assignable to everything, so every later use compiled
+// while the run handed back the second step's value. Refused now, because the
+// difference between a refinement and a collision is intent and no type can
+// read it — and because under parallel steps last-writer-wins is not even
+// deterministic.
+describe('two steps populating the same ctx key', () => {
+  it('is REFUSED at the step that wrote the second, with the key named', () => {
+    const refused = () => {
+      scope(fixture)
+        .step(async (_a: {}, _c: {}, next: Next<{ user: string }>) => next({ user: 'ada' }))
+        // @ts-expect-error ⛔ this ctx key is already populated: user
+        .step(async (_a: {}, _c: {}, next: Next<{ user: number }>) => next({ user: 42 }))
+    }
+    expect(typeof refused).toBe('function')
+  })
+
+  it('refuses a NARROWING too, which is the case an extension exists for', () => {
+    // `{ id: string }` is a subtype of `unknown`, so this is a refinement and
+    // not a collision — but the primitive cannot tell, and guessing is what the
+    // gate refuses to do. The way to say it deliberately is a verb.
+    const refused = () => {
+      scope(fixture)
+        .step(async (_a: {}, _c: {}, next: Next<{ body: unknown }>) => next({ body: {} }))
+        // @ts-expect-error ⛔ this ctx key is already populated: body
+        .step(async (_a: {}, _c: {}, next: Next<{ body: { id: string } }>) =>
+          next({ body: { id: 'p1' } }),
+        )
+    }
+    expect(typeof refused).toBe('function')
+  })
+
+  it('refuses the SAME step added twice, because the gate reads names and not types', () => {
+    // The one case the gate refuses that was not broken: same key, same type,
+    // so the second write is harmless. Refused anyway — adding a populating
+    // step twice is a composition mistake either way (it runs for nothing), and
+    // admitting it would mean comparing TYPES as well as names, which is the
+    // more expensive machine this shape was chosen over.
+    const withPage = async (_a: {}, _c: {}, next: Next<{ page: number }>) => next({ page: 3 })
+    const refused = () => {
+      // @ts-expect-error ⛔ this ctx key is already populated: page
+      scope(fixture).step(withPage).step(withPage)
+    }
+    expect(typeof refused).toBe('function')
+  })
+
+  it('does NOT touch refining what the carrier brought, which `Ctx` already decides', async () => {
+    // `token` is an ARGS key, not an acc one, so the gate never sees it and the
+    // REFINE shape above is unaffected — pinned because it is the case that
+    // would break if the gate read the wrong axis.
+    const h = scope(fixture)
+      .step(refineToken)
+      .step(async (_a: {}, ctx: { readonly token: string }) => ctx.token)
+
+    expect(await h({}, { token: null, params: {} })).toBe('anonymous')
+  })
+})
+
+// ── the runtime halves of what `contract.test-d.ts` states as types ──────────
+// They lived there as `expect(...)` calls, which never ran: a `*.test-d.ts` is
+// typechecked and never executed. The TYPE claims stay there, where they
+// belong; these are the halves that have to actually happen, because a type
+// says nothing about what the runtime does when it gets there.
+describe('what the type contract claims, happening', () => {
+  it('a base that REFUSES hands its word back, rather than reaching the no-leaf throw', async () => {
+    const base = scope(fixture).step(async (_app: {}, ctx, next: Next<{}>) =>
+      ctx.token === null ? refused('anonymous') : next({}),
+    )
+    const out = await base({}, { token: null, params: {} })
+    expect(isWord(out)).toBe(true)
+    expect(out).toMatchObject({ kind: 'refused', intent: { why: 'anonymous' } })
+  })
+
+  it('a leaf whose value has an index signature really hands that value back', async () => {
+    // The other half of the `Passed` weak-type regression: the type side pins
+    // that `ResultOf` is `Record<string, number>` and not `never`, and this
+    // pins that the value arrives — which is what made the old bug a lie rather
+    // than merely a wrong type.
+    const tally = scope(fixture).step(
+      async (_app: {}, _ctx: {}) => ({ hits: 1 }) as Record<string, number>,
+    )
+    expect(await tally({}, { token: null, params: {} })).toEqual({ hits: 1 })
   })
 })

@@ -1,6 +1,13 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import { scope, type Scope, type State, type Surface } from './scope.ts'
-import type { AnyStep, Extension, Next } from './step.ts'
+import {
+  scope,
+  type AnyStep,
+  type Extension,
+  type Next,
+  type Scope,
+  type State,
+  type Surface,
+} from './index.ts'
 
 // AN EXTENSION enriches the BUILDER, and only the builder. That is the whole
 // split, and it is visible in the runtime: `.step` appends to the fold,
@@ -21,10 +28,13 @@ import type { AnyStep, Extension, Next } from './step.ts'
 const withHeader =
   (name: string, value: string) =>
   async (_app: {}, _ctx: {}, next: Next<{}>) => {
-    const out = await next({})
-    // Spreading keeps the fold's brand, so what comes back is still the fold's
-    // own outcome and not a look-alike.
-    return out.ok ? { ...out, value: `${String(out.value)} [${name}=${value}]` } : out
+    // A DECORATING wrap, which is the one shape that pays for the fold
+    // producing nothing of its own: `next` hands back a `Passed` that says
+    // nothing, so the step states what it expects. A real carrier does this
+    // once, in a helper, and every decorator it ships is written against the
+    // carrier's own type (§42).
+    const out = (await next({})) as unknown as string
+    return `${out} [${name}=${value}]`
   }
 
 // ── what the extension declares ──────────────────────────────────────────────
@@ -56,11 +66,10 @@ interface PinVerb {
     n: N,
   ): Surface<{
     need: S['need']
-    seed: S['seed']
+    args: S['args']
     acc: S['acc'] & { readonly pinned: N }
-    result: S['result']
-    intents: S['intents']
-    declares: S['declares']
+    returns: S['returns']
+    vocabulary: S['vocabulary']
     verbs: S['verbs']
   }>
 }
@@ -68,6 +77,60 @@ interface PinVerb {
 const pins: Extension<PinVerb> = {
   methods: { pin: withPin as unknown as (...a: never[]) => AnyStep },
 }
+
+// ── the way past the ctx gate, and the reason it may be closed at all ────────
+// `.step` refuses re-populating a key, because it cannot tell a refinement from
+// a collision. An extension CAN tell — it is the one saying so — and it does not
+// come through `.step`: `.extend`'s wrapper pushes the step directly, so a verb
+// declaring its own state transformation replaces an entry the primitive may
+// only add to. This is what makes the gate affordable rather than a wall, and it
+// is the shape a validation verb will have.
+const narrowBody = () =>
+  async (_app: {}, ctx: { readonly body: unknown }, next: Next<{ body: { id: string } }>) =>
+    next({ body: ctx.body as { id: string } })
+
+interface NarrowVerb {
+  narrow<S extends State>(
+    this: Scope<S>,
+  ): Surface<{
+    need: S['need']
+    args: S['args']
+    // REPLACES, where `Grown` would intersect — an `Omit`, exactly as `Ctx` does
+    // for the args axis, and legible here because the verb states it.
+    acc: Omit<S['acc'], 'body'> & { readonly body: { id: string } }
+    returns: S['returns']
+    vocabulary: S['vocabulary']
+    verbs: S['verbs']
+  }>
+}
+
+const narrows: Extension<NarrowVerb> = {
+  methods: { narrow: narrowBody as unknown as (...a: never[]) => AnyStep },
+}
+
+describe('an extension replaces a ctx entry where a step may not', () => {
+  it('narrows a key an earlier step populated, and the leaf reads the narrow type', async () => {
+    const h = scope<{}>()
+      .step(async (_app: {}, _ctx: {}, next: Next<{ body: unknown }>) => next({ body: { id: 'p1' } }))
+      .extend(narrows)
+      .narrow()
+      .step(async (_app: {}, ctx: { readonly body: { id: string } }) => ctx.body.id)
+
+    expect(await h({}, {})).toBe('p1')
+  })
+
+  it('and the same thing written as a STEP is refused, which is the whole point', () => {
+    const refused = () => {
+      scope<{}>()
+        .step(async (_a: {}, _c: {}, next: Next<{ body: unknown }>) => next({ body: {} }))
+        // @ts-expect-error ⛔ this ctx key is already populated: body
+        .step(async (_a: {}, _c: {}, next: Next<{ body: { id: string } }>) =>
+          next({ body: { id: 'p1' } }),
+        )
+    }
+    expect(typeof refused).toBe('function')
+  })
+})
 
 describe('an extension enriches the builder, and nothing else', () => {
   it('adds NO step — that is the difference from `.step`, and it is observable', () => {
@@ -86,7 +149,7 @@ describe('an extension enriches the builder, and nothing else', () => {
       .header('x-served-by', 'lntt')
       .step(async (_app: {}, _ctx: {}) => 'body')
 
-    expect(await h({}, {}).then((o) => o.ok && o.value)).toBe('body [x-served-by=lntt]')
+    expect(await h({}, {})).toBe('body [x-served-by=lntt]')
   })
 
   it('the verb`s step runs WHERE IT WAS CALLED, like every other step', async () => {
@@ -96,7 +159,35 @@ describe('an extension enriches the builder, and nothing else', () => {
       .header('b', '2')
       .step(async (_app: {}, _ctx: {}) => 'body')
 
-    expect(await h({}, {}).then((o) => o.ok && o.value)).toBe('body [b=2] [a=1]')
+    expect(await h({}, {})).toBe('body [b=2] [a=1]')
+  })
+
+  it('the surface is CLOSED — an undeclared name is not a key of it', () => {
+    // Asserted on the TYPE, not with `@ts-expect-error`, and the difference is
+    // the finding. A directive does not check WHICH error it caught: widening
+    // `Surface` with `Record<string, (...a: any[]) => any>` keeps the call below
+    // an error — `noUncheckedIndexedAccess` makes the property "possibly
+    // undefined" — so the directive stays used and the widening goes unnoticed.
+    // Measured: that mutation left all 81 tests green and zero type errors.
+    //
+    // Asking whether the name is a KEY has no such escape.
+    //
+    // Note which gate enforces this. `expectTypeOf` in a `*.test.ts` is checked
+    // by `pnpm typecheck` (tsc) and NOT by `pnpm test` — vitest typechecks only
+    // `*.test-d.ts`. So a mutation is confirmed against tsc; running the suite
+    // alone will show it green. Both gates are the project's, and this line
+    // needs the second one.
+    const s = scope<{}>()
+    // If the surface ever admits an arbitrary string key, `keyof` says so
+    // directly: it becomes `string` instead of the names actually on it.
+    type Open = string extends keyof typeof s ? true : false
+    expectTypeOf<Open>().toEqualTypeOf<false>()
+
+    // and the names that ARE there stay reachable
+    type Has<K extends string> = K extends keyof typeof s ? true : false
+    expectTypeOf<Has<'step'>>().toEqualTypeOf<true>()
+    expectTypeOf<Has<'extend'>>().toEqualTypeOf<true>()
+    expectTypeOf<Has<'steps'>>().toEqualTypeOf<true>()
   })
 
   it('the verb is not there before the extension that declares it', () => {
@@ -124,16 +215,16 @@ describe('a verb keeps its generics, which is why its signature is written out',
     })
 
     const out = await h.step(async (_app: {}, ctx: { readonly pinned: 201 }) => ctx.pinned)({}, {})
-    expect(out.ok && out.value).toBe(201)
+    expect(out).toBe(201)
   })
 
   it('grows the ctx for the steps after it, exactly as a step would', () => {
-    scope<{ readonly seed: string }>()
+    scope<{ readonly token: string }>()
       .extend(pins)
       .pin(404)
       .step(async (_app: {}, ctx, _next: Next<{}>) => {
         expectTypeOf(ctx.pinned).toEqualTypeOf<404>()
-        expectTypeOf(ctx.seed).toEqualTypeOf<string>()
+        expectTypeOf(ctx.token).toEqualTypeOf<string>()
         return ctx.pinned
       })
   })
@@ -166,6 +257,86 @@ describe('a verb cannot take a name the surface already owns', () => {
     expect(() => unchecked(shadowsStep)).toThrow(/cannot be named 'step'/)
   })
 
+  it('refuses one named `bind`, which assignment does NOT protect — it shadows silently', () => {
+    // `name` is an own, non-writable property, so that one at least threw.
+    // `bind` is inherited from `Function.prototype`: assigning over it succeeds,
+    // and `myScope.bind(null, app)` then hands back a step-pushing builder
+    // instead of a bound function, at whatever call site expected a function.
+    const shadowsBind = {
+      methods: { bind: () => (async () => 'x') as unknown as AnyStep },
+    }
+    expect(() => unchecked(shadowsBind)).toThrow(/cannot be named 'bind'/)
+  })
+
+  it('reports the RESERVED name first, in the order the type gate reports them', () => {
+    // The two halves have to agree on more than the verdict. `VerbGate` nests
+    // `Own` outside `Taken`, so a name that is both reserved and already
+    // contributed is reported as reserved; the runtime used to check `taken`
+    // in `.extend` and reach the reserved sweep only afterwards, so it said the
+    // opposite. The author fixes the name it named, re-runs, and only then
+    // meets the other one — which is the masking the `hasOwn`-not-`in` note
+    // above exists to prevent, arriving by a different door.
+    const both = {
+      methods: {
+        header: () => (async () => 'x') as unknown as AnyStep,
+        bind: () => (async () => 'x') as unknown as AnyStep,
+      },
+    }
+    const withHeaderTaken = scope<{}>().extend(headers)
+    expect(() => (withHeaderTaken as unknown as { extend: (e: object) => unknown }).extend(both))
+      .toThrow(/cannot be named 'bind'/)
+  })
+
+  it('refuses one named `toString`, which would otherwise break every interpolation', () => {
+    // Shadowing it with a verb makes `String(scope)` throw `Cannot convert
+    // object to primitive value` — from the template literal, never from here.
+    const shadowsToString = {
+      methods: { toString: () => (async () => 'x') as unknown as AnyStep },
+    }
+    expect(() => unchecked(shadowsToString)).toThrow(/cannot be named 'toString'/)
+  })
+
+  it('refuses one named `then`, which would otherwise make every scope a THENABLE', () => {
+    // The worst of the three categories, and the only one that stops rather
+    // than degrades. `await` on an object carrying `then` calls it with
+    // `(resolve, reject)`; the verb wrapper reads those as the verb's own
+    // arguments, pushes a step and hands back a builder, resolving nothing.
+    const shadowsThen = {
+      methods: { then: () => (async () => 'x') as unknown as AnyStep },
+    }
+    expect(() => unchecked(shadowsThen)).toThrow(/cannot be named 'then'/)
+  })
+
+  it('refuses one named `__proto__`, which would REPLACE the scope`s prototype', () => {
+    // The third way a name can fail, and the reason the list is grouped by
+    // failure rather than by origin. `__proto__` is an inherited ACCESSOR:
+    // assigning to it runs the setter, so the wrapper becomes the scope's
+    // [[Prototype]] and no property is installed. The verb silently does not
+    // exist, and the scope keeps working in every visible way, because what it
+    // now inherits from is itself a function.
+    //
+    // Only reachable as an OWN key — an object literal's `__proto__` sets the
+    // prototype instead of making one — so this is built the way a `methods`
+    // map from data would be, which is what the runtime half is for.
+    const methods: Record<string, unknown> = {}
+    Object.defineProperty(methods, '__proto__', {
+      value: () => (async () => 'x') as unknown as AnyStep,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    })
+    expect(() => unchecked({ methods })).toThrow(/cannot be named '__proto__'/)
+  })
+
+  it('refuses one named `valueOf`, from the half of the prototype chain that is not a function`s', () => {
+    // `Object.prototype`, which the list had missed while claiming to be
+    // closed over "what every function carries".
+    const shadowsValueOf = {
+      methods: { valueOf: () => (async () => 'x') as unknown as AnyStep },
+    }
+    expect(() => unchecked(shadowsValueOf)).toThrow(/cannot be named 'valueOf'/)
+  })
+
   it('refuses one named `name`, which would otherwise throw from inside the core', () => {
     // A function's `name` is not writable, so this used to surface as
     // `TypeError: Cannot assign to read only property 'name' of function` —
@@ -174,5 +345,175 @@ describe('a verb cannot take a name the surface already owns', () => {
       methods: { name: () => (async () => 'x') as unknown as AnyStep },
     }
     expect(() => unchecked(shadowsName)).toThrow(/cannot be named 'name'/)
+  })
+})
+
+// ── a scope is not a thenable ────────────────────────────────────────────────
+// What guards the VERB case is the refusal above; this pins the INVARIANT that
+// refusal exists to protect, and would catch it being broken from the other
+// direction — the builder itself growing a `then`, for whatever reason seemed
+// good at the time.
+//
+// It races against a timeout on purpose. The failure mode here is not an
+// assertion going red but a promise that never settles, which a runner reports
+// as a timeout minutes later or not at all; 200ms turns that into a red line
+// that says which case hung.
+describe('awaiting a scope', () => {
+  const settles = (v: unknown) =>
+    Promise.race([
+      Promise.resolve(v).then(() => 'settled' as const),
+      new Promise<'hung'>((r) => setTimeout(() => r('hung'), 200)),
+    ])
+
+  it('settles — a scope carries no `then`, so it is not a thenable', async () => {
+    expect(await settles(scope<{}>())).toBe('settled')
+    expect(await settles(scope<{}>().extend(headers))).toBe('settled')
+    expect(await settles(scope<{}>().step(async (_a: {}, _c: {}) => 'v'))).toBe('settled')
+  })
+
+  it('and an `async` function may return one, which is how the hang would reach a caller', async () => {
+    const build = async () => scope<{}>().extend(headers).header('x', '1')
+    expect(await settles(build())).toBe('settled')
+  })
+})
+
+// ── two extensions cannot both own a verb name ───────────────────────────────
+// The two halves used to disagree and neither said so. `Surface` intersects, so
+// a shared name becomes an OVERLOAD LIST where TypeScript prefers the EARLIER
+// signature for arguments it accepts; `.extend`'s merge is `{ ...verbs,
+// ...ext.methods }` and keeps the LATER factory. So the call site was checked
+// against one extension and served by the other.
+interface TagString {
+  tag<S extends State>(this: Scope<S>, v: string): Surface<S>
+}
+interface TagNumber {
+  tag<S extends State>(this: Scope<S>, v: number): Surface<S>
+}
+
+const ran: string[] = []
+const tagFactory = (which: string) => (v: unknown) =>
+  (async (_a: {}, _c: {}, next: Next<{}>) => {
+    ran.push(`${which}:${typeof v}`)
+    return next({})
+  }) as unknown as AnyStep
+
+const tagsA: Extension<TagString> = { methods: { tag: tagFactory('A') as (...a: never[]) => AnyStep } }
+const tagsB: Extension<TagNumber> = { methods: { tag: tagFactory('B') as (...a: never[]) => AnyStep } }
+
+describe('a verb name already contributed by another extension', () => {
+  it('is REFUSED at the second `.extend`, naming it', () => {
+    const refused = () => {
+      // @ts-expect-error ⛔ a verb under this name is already contributed: tag
+      scope<{}>().extend(tagsA).extend(tagsB)
+    }
+    expect(typeof refused).toBe('function')
+  })
+
+  it('and refused at RUNTIME too, the way an extension loaded by name reaches it', () => {
+    const unchecked = (ext: object) =>
+      scope<{}>().extend(tagsA).extend(ext as unknown as Extension<{}>)
+    expect(() => unchecked(tagsB)).toThrow(/already contributed: tag/)
+  })
+
+  it('the same extension twice is refused as well — it is the same collision', () => {
+    const refused = () => {
+      // @ts-expect-error ⛔ a verb under this name is already contributed: header
+      scope<{}>().extend(headers).extend(headers)
+    }
+    expect(typeof refused).toBe('function')
+  })
+
+  it('two extensions with DIFFERENT names compose, which is the case that must not break', async () => {
+    const h = scope<{}>()
+      .extend(headers)
+      .extend(pins)
+      .header('x', '1')
+      .pin(201)
+      .step(async (_app: {}, ctx: { readonly pinned: 201 }) => String(ctx.pinned))
+
+    expect(await h({}, {})).toBe('201 [x=1]')
+  })
+})
+
+// ── the alphabet is closed, and this is what proves it ───────────────────────
+// It has declared closure three times and been short three times — first
+// `Function.prototype`, then the protocol names, then the accessors — and each
+// miss was a CATEGORY, never a single name. Three reviews found them one at a
+// time.
+//
+// So this does not compare the list against another list written by hand. It
+// derives the QUESTION from the runtime — every name actually reachable on a
+// scope, walked off the real prototype chain — and asks the gate to answer.
+// A category that nobody thought of is still on that chain, so it is still
+// asked about.
+//
+// If a future runtime adds a member to `Function.prototype`, this goes red.
+// That is not a false alarm: the alphabet would really be short again.
+//
+// WHAT IT DOES NOT COVER, and the limit is worth stating rather than implying
+// closure it cannot give: a name the LANGUAGE gives meaning to is not on any
+// prototype, so `then` is absent from the walk and would be absent from a
+// successor's. Three of the four categories are enumerable from the runtime and
+// are closed here; the fourth stays a judgement, and its one member is pinned
+// by name above. Verified by deleting each category in turn — the sweep goes
+// red naming what went missing, except that one.
+describe('every name reachable on a scope is refused as a verb', () => {
+  const unchecked = (name: string) =>
+    scope<{}>().extend({
+      methods: { [name]: () => (async () => 'x') as unknown as AnyStep },
+    } as unknown as Extension<{}>)
+
+  // What a scope IS: a function, with everything a function inherits.
+  const reachable = [
+    ...Object.getOwnPropertyNames(function named() {}),
+    ...Object.getOwnPropertyNames(Function.prototype),
+    ...Object.getOwnPropertyNames(Object.prototype),
+  ].filter((n) => n !== 'caller' && n !== 'arguments')
+  // `caller`/`arguments` are own properties of `Function.prototype` in sloppy
+  // mode only and are poisoned accessors in strict mode; they are IN the list
+  // and cannot be probed by assignment, so they are checked by name below.
+
+  it('refuses every one of them, so no category can be missing', () => {
+    const accepted = reachable.filter((name) => {
+      try {
+        unchecked(name)
+        return true
+      } catch {
+        return false
+      }
+    })
+    expect(accepted).toEqual([])
+  })
+
+  it('and the two names that cannot be probed are on the list anyway', () => {
+    for (const name of ['caller', 'arguments']) {
+      expect(() => unchecked(name)).toThrow(new RegExp(`cannot be named '${name}'`))
+    }
+  })
+
+  it('the sweep is not vacuous — an ordinary name still passes', () => {
+    expect(() => unchecked('header')).not.toThrow()
+  })
+})
+
+// ── a verb branches like `.step` does ────────────────────────────────────────
+// It pushes its step by a different route — the wrapper in `make`, not `.step`
+// — so the immutability that `fold.test.ts` pins for the primitive has to be
+// pinned here too. A base carrying verbs is exactly the thing meant to be
+// shared, and nothing checked that calling one twice from the same base did not
+// accumulate.
+describe('branching a base that carries verbs', () => {
+  it('leaves the base untouched, and each call independent', async () => {
+    const base = scope<{}>().extend(pins)
+    expect(base.steps).toHaveLength(0)
+
+    const one = base.pin(201).step(async (_app: {}, ctx: { readonly pinned: 201 }) => ctx.pinned)
+    const two = base.pin(404).step(async (_app: {}, ctx: { readonly pinned: 404 }) => ctx.pinned)
+
+    expect(base.steps).toHaveLength(0)
+    expect(one.steps).toHaveLength(2)
+    expect(two.steps).toHaveLength(2)
+    expect(await one({}, {})).toBe(201)
+    expect(await two({}, {})).toBe(404)
   })
 })

@@ -1,19 +1,18 @@
-import { ABORT, type Abort } from '../abort.ts'
+import type { Passed, Word } from '../index.ts'
 
-// A CARRIER, as a FIXTURE — this directory holds nothing that ships. Not a real
-// carrier — `@lntt/scope/http` and
-// `@lntt/scope/trpc` are those — but the same shape, so the examples read like
-// real code instead of minting a word inline where it would be mistaken for
-// something the core provides.
+// A CARRIER, as a FIXTURE — this directory ships nothing. Not a real carrier,
+// but the same shape, so the tests read like real code instead of minting a
+// word inline where it would be mistaken for something the core provides.
 //
-// What a carrier IS, in three parts, and the core owns none of them (§40):
+// What a carrier IS, in three parts, none of them the core's:
 //
-//   what a run BRINGS       — `Params` below, the second argument of the call
-//   the WORDS it coins      — `refused`, `gone`: values a guard or leaf returns
-//   what it DECLARES        — the intents those words carry, read by the gate
+//   what a run BRINGS      — `Params`, the call's second argument
+//   the WORDS it coins     — types of its own, and the values that build them
+//   its VOCABULARY         — the intents those words carry, read by the gate
 //
-// The core owns the BRAND (`ABORT`) and nothing else: what `refused` MEANS is
-// this carrier's business, and the fold never reads it.
+// Note what is NOT imported: no constructor, no brand, no predicate. The core
+// contributes one TYPE, and types vanish — so at runtime a word here is a plain
+// object this file wrote (§42).
 
 // What a run of a scope on this carrier brings with it.
 export interface Params {
@@ -22,49 +21,147 @@ export interface Params {
 }
 
 // ── the words ────────────────────────────────────────────────────────────────
-// Each carries its own NAME in its return type. That is the whole mechanism:
-// nothing is declared by hand — the declaration IS what a guard or leaf
-// returned, which is why it cannot drift from the code beside it.
-const word = <I extends object>(intent: object): Abort<I> =>
-  ({ [ABORT]: true, intent }) as unknown as Abort<I>
+// Each carries its own NAME in its type. Nothing is declared by hand — the
+// declaration IS what a step returned, so it cannot drift from the code beside
+// it.
 
-// The caller may not have this. Two words, ONE intent name: what a host has to
-// know how to render is "a refusal", and `refused`/`gone` differ in the reason
-// they carry, not in what rendering them takes.
-export const refused = (why: string): Abort<{ readonly refusal: true }> =>
-  word({ kind: 'refused', why })
+// Two words, ONE intent name: what a host must know how to render is "a
+// refusal", and these differ in the reason they carry, not in what rendering
+// them takes. The shared name is why they share a type here.
+export interface Refusal extends Word<{ readonly refusal: true }> {
+  readonly kind: 'refused' | 'gone'
+  readonly intent: unknown
+}
 
-export const gone = (what: string): Abort<{ readonly refusal: true }> =>
-  word({ kind: 'gone', what })
+export const refused = (why: string): Refusal => ({ kind: 'refused', intent: { why } })
+
+export const gone = (what: string): Refusal => ({ kind: 'gone', intent: { what } })
 
 // A word with NO equivalent elsewhere — the reason a vocabulary belongs to a
 // carrier rather than being shared. A host with nowhere to send the caller
-// cannot render this one, and it must therefore be its OWN name: sharing
-// `refusal`'s would let such a host silently accept it.
-export const elsewhere = (location: string): Abort<{ readonly elsewhere: true }> =>
-  word({ kind: 'elsewhere', location })
-
-// ── what the carrier declares ────────────────────────────────────────────────
-// The set the definition-side gate reads a returned word against. A word this
-// carrier does not coin is a compile error where the guard is WRITTEN, not
-// where the scope is mounted.
-export interface FixtureCarrier {
-  readonly __seed?: Params
-  readonly __declares?: { readonly refusal: true; readonly elsewhere: true }
+// cannot render it, so it must be its OWN name: sharing `refusal`'s would let
+// such a host accept it silently.
+export interface Elsewhere extends Word<{ readonly elsewhere: true }> {
+  readonly kind: 'elsewhere'
+  readonly intent: unknown
+  readonly location: string
 }
 
-// A carrier is PURE DECLARATION here — no runtime value at all, exactly like
-// the shipped `trpc` and `react-router`. It is chosen once, in `scope()`, and
-// is never a step.
+export const elsewhere = (location: string): Elsewhere => ({
+  kind: 'elsewhere',
+  intent: { location },
+  location,
+})
+
+// A word on the SUCCESS side. Its name is its own and does not share the abort
+// side's: a host may render a refusal and have nowhere to put a success
+// annotation, and a shared name would let it accept one silently.
+//
+// It carries the domain value, because with one channel there is nowhere else
+// to put it — which is the price of the collapse, paid here in the open.
+export interface Served<V> extends Word<{ readonly 'ok-served': true }> {
+  readonly kind: 'served'
+  readonly intent: unknown
+  readonly value: V
+}
+
+export const served = <V>(value: V, at: string): Served<V> => ({
+  kind: 'served',
+  intent: { at },
+  value,
+})
+
+// ── reaching what came back ──────────────────────────────────────────────────
+// `next` hands back a `Passed`, which says nothing on purpose: when a step is
+// written, the steps it will wrap do not exist yet. A step that DECORATES has
+// to read it anyway, and the reading is the CARRIER's — it knows which words
+// can be in there and the core does not. One assertion, written here, never at
+// each step.
+//
+// It hands back a READ-ONLY view, and that is this carrier doing on the way out
+// what `Ctx` does on the way in. The core cannot do it: where `next` is typed
+// there is no type yet to make read-only. Here there is one.
+//
+// It does not COPY, and must not. Cloning what comes back loses a class's
+// prototype, and THROWS on a response or a stream — and by the error convention
+// a throw is infrastructure, so a defensive clone would turn a successful run
+// into a retry. The view is a statement about who may write, not a wall: what
+// is in there is often the APP's object, alive as long as the process, and a
+// decorator writing through it edits the app's own state. Nothing at runtime
+// stops that, here or anywhere, which is why it is said in a type.
+// `Served<Readonly<V>>` and not `Served<V>`: the outer `Readonly` reaches
+// `value` and stops, and `value` is where a SUCCESS carries the domain object —
+// the app's own, by the comment on `Served` itself. Wrapping only the bare
+// branch protected the case where the leaf returned a plain value and left the
+// case where it returned the carrier's success word, which is the one a real
+// run takes. Found by writing the write and watching it compile.
+export type Answered<V> = Readonly<Refusal | Elsewhere | Served<Readonly<V>> | V>
+
+export const answered = <V>(passed: Passed): Answered<V> => passed as unknown as Answered<V>
+
+// The carrier's own predicate. The core ships none — it knows nothing about
+// what a word looks like here — so telling a word from a domain value is the
+// carrier's job, and one line.
+export const isWord = (x: unknown): x is Refusal | Elsewhere | Served<unknown> =>
+  typeof x === 'object' && x !== null && 'intent' in x && 'kind' in x
+
+// ── the carrier's VOCABULARY ─────────────────────────────────────────────────
+// What the gate reads a returned word against. A word this carrier does not
+// coin is an error where the step is WRITTEN, not where the scope is mounted.
+export interface FixtureCarrier {
+  readonly __args?: Params
+  readonly __vocabulary?: {
+    readonly refusal: true
+    readonly elsewhere: true
+    readonly 'ok-served': true
+  }
+}
+
+// PURE DECLARATION — no runtime value at all. Chosen once, in `scope()`, and
+// never a step.
 export const fixture = {} as FixtureCarrier
 
-// A SECOND carrier, coining a different vocabulary, so the definition-side gate
-// has something to refuse. It admits the same runs and none of the same words.
+// A SECOND carrier, coining a different vocabulary, so the gate has something
+// to refuse. Same runs, none of the same words.
 export interface OtherCarrier {
-  readonly __seed?: Params
-  readonly __declares?: { readonly code: true }
+  readonly __args?: Params
+  readonly __vocabulary?: { readonly code: true }
 }
 
 export const other = {} as OtherCarrier
 
-export const code = (n: number): Abort<{ readonly code: true }> => word({ kind: 'code', n })
+export interface Code extends Word<{ readonly code: true }> {
+  readonly kind: 'code'
+  readonly intent: unknown
+  readonly n: number
+}
+
+export const code = (n: number): Code => ({ kind: 'code', intent: { n }, n })
+
+// ── two carriers written WRONG, on purpose ───────────────────────────────────
+// `ArgsOf` and `VocabularyOf` each have a fallback for a carrier that declares
+// something unusable, and both branches were dead in the suite — nothing ever
+// declared a non-object `__args` or a non-string vocabulary key, so nothing
+// checked that the fallbacks fail CLOSED rather than open.
+//
+// A carrier is a hand-written declaration, so these are not contrived: they are
+// what a typo produces.
+
+// `__args` that is not an object. `ArgsOf` falls back to `{}`, so a run brings
+// nothing rather than bringing whatever the carrier meant.
+export interface BadArgsCarrier {
+  readonly __args?: string
+  readonly __vocabulary?: { readonly refusal: true }
+}
+
+export const badArgs = {} as BadArgsCarrier
+
+// A vocabulary keyed by something that is not a string. Dropping the key would
+// leave `never`, which coins nothing and refuses every word — fail-closed, but
+// silently. The sentinel makes the refusal say why.
+export interface BadVocabCarrier {
+  readonly __args?: Params
+  readonly __vocabulary?: { readonly [k: symbol]: true }
+}
+
+export const badVocab = {} as BadVocabCarrier

@@ -1,10 +1,11 @@
 # The scope API
 
 The target surface, settled by spike and measurement rather than argument.
-Decision 40 in `docs/decisions.md` records WHY a carrier owns its vocabulary;
-decision 41 records why the input side became one verb over an open set of
-declared ctx entries. This records the WHAT, plus the traps that cost a
-measurement each.
+Decision 40 in `docs/decisions.md` records WHY a carrier owns its vocabulary,
+and decision 41 why validation belongs to the carrier too — which retires the
+core's `invalid` branch and, with it, the sections below that still describe a
+generic `.validate` over an open set of ctx entries. This records the WHAT, plus
+the traps that cost a measurement each.
 
 ## The lexicon
 
@@ -27,7 +28,9 @@ two are named as such.
 | **transport feature** | what an extension needs (`body`, `query`, `request-headers`). One alphabet, read twice: against the carrier at `.extend`, against the host at the call. All three are READS — the outbound side needs none, it rides a carrier's word |
 | **intent** | a word a carrier coins (`redirect`, `code`, `rr7-data`) |
 | **registry** | the opaque map steps write and mounts read. The core never looks inside |
-| **outcome** | the three-branch result: `ok`, `abort`, `invalid`. BRANDED, so a step handing one back is told apart from one handing back a domain value. What the fold PRODUCES, never what an author writes |
+| **~~outcome~~** | RETIRED with §42. The fold produces nothing of its own: what a scope hands back is what its leaf returned, and whether that went well is the carrier's statement, not the core's |
+| **word** | a value a step returns instead of a domain value, to SAY something. `Word<I>` is all the core knows of one — it carries an `intent` and declares its name — and a carrier writes the rest |
+| **passed** | what `next` hands back: an opaque marker standing for "the rest of the fold answered, whatever it said". At runtime the inner answer comes back whole; the TYPE declines, because when a step is written the steps after it do not exist yet |
 | **response envelope** | what a carrier's outbound word carries: status, content type, headers, cookies. `json`/`html`/`text` are `response(…)` with a content type filled in |
 
 ## The shape
@@ -41,7 +44,7 @@ const postScope = scope(carrier)   // a carrier brings what a run carries, and i
 
 // A SCOPE IS THE FUNCTION THAT RUNS IT — from the first line, with nothing to
 // close. This is a SCOPE EXECUTION.
-const outcome = await postScope(app, { request, params })
+const result = await postScope(app, { request, params })
 ```
 
 **One verb.** `.step()` is the primitive and, in the base, the whole surface:
@@ -52,11 +55,15 @@ back, and in what shape, is decided when the carriers and extensions are ported
 onto this base, because that is where each one shows what it needs.
 
 > **Reading the rest of this document.** The sections below still write
-> `.extend(query)` and `.validate('params', schema)`. Those name SUGARS that are
-> not settled — today both are `.step(…)`, and whether either comes back is
-> decided in the port. Read them for WHAT they do, which stands: an extension
-> populates an entry, `validate` refines one. The verb is the open part, not the
-> behaviour.
+> `.extend(query)` and `.validate('params', schema)`. Neither is shipped. The
+> read extensions are #62 and today are `.step(…)`; VALIDATION left the core
+> altogether with §41 — a carrier-free `validate` had nothing to fail with, so
+> the core carried an `invalid` branch to give it somewhere to land, and both
+> are gone. It comes back per carrier, each failing in its own words (#64).
+>
+> Read them for WHAT they do, which stands: an extension populates an entry, and
+> a validation verb refines one. What changed is WHO owns the verb and the word
+> it fails with.
 
 Two arguments, split by LIFETIME. The first is the built chain — the
 DEPENDENCIES, alive as long as the process (§33 tier 1). The second is the
@@ -120,19 +127,20 @@ infers the bare constraint and declares nothing. Annotating the parameter IS the
 declaration, and it sits on the parameter it describes rather than in a phantom
 beside it.
 
-**A step returns one of three things, and never builds an outcome.** The
-outcome `next` gave it, a WORD from the carrier's vocabulary, or a plain domain
-value; the fold normalises whichever arrives, on the way back out. Telling them
-apart needs no heuristic: the fold's outcome is BRANDED, so "did this come from
-`next`?" is a symbol check and not a guess about a shape a domain value could
-happen to have (principle 7).
+**A step returns one of three things, and the fold touches none of them.** What
+`next` gave it, a WORD from the carrier's vocabulary, or a plain domain value —
+and whichever arrives is what the caller gets (§42). There is nothing to
+normalise and nothing to tell apart, because the core no longer needs to know
+which it was: that question belongs to the carrier, which coined the words and
+also writes the mount that reads them.
 
-That shape is what closes the intent fail-open rather than documenting it. While
-a step had to hand back a pre-built `Outcome`, a real word was cast down to
-`Abort<never>` and its intent was gone before the builder could read it — so the
-same refusal contributed `status` through the sugar and `never` through a raw
-step. Returning the word keeps its TYPE, and the builder distributes over the
-whole return (trap 1) to collect every word the step can say.
+Returning the WORD rather than a pre-built result is what closes the intent
+fail-open rather than documenting it. While a step had to hand back a built
+outcome, a real word was cast down to an intent-less one and its name was gone
+before the builder could read it — so the same refusal contributed `status`
+through the sugar and `never` through a raw step. Returning the word keeps its
+TYPE, and the builder distributes over the whole return (trap 1) to collect
+every word the step can say.
 
 ### Two verbs, two axes
 
@@ -198,12 +206,13 @@ follow that the intersection form could not express:
   appears in what the scope produces, where before only the closing step did.
 - **A base with no leaf has `R = never`**, which is the honest statement that it
   produces nothing. Running one THROWS: `never` has no inhabitant, so there is
-  no `ok` outcome to return, and a function whose return type is `never` is
-  exactly one that does not return normally. The error convention agrees
-  (principle 3) — a scope with no leaf, run, is a construction bug, and
-  `{ ok: true, value: undefined }` would render a bug to its caller as success.
-  Note `Outcome<never>` is NOT empty: `abort` and `invalid` stay inhabited, so a
-  base that REFUSES has a perfectly good outcome and never reaches the throw.
+  nothing to hand back, and a function whose return type is `never` is exactly
+  one that does not return normally. The error convention agrees (principle 3) —
+  a scope with no leaf, run, is a construction bug, and handing back `undefined`
+  would render a bug to its caller as a value. §42 removed the caveat this used
+  to need: while the outcome had two branches, `Outcome<never>` was NOT empty
+  because `abort` stayed inhabited, so a base that refuses was a separate case.
+  With one channel a refusing base has `R` = its word, and `never` means never.
 
 `research/terminal-step` asked whether a step COULD close the builder and
 answered yes, with a number. The question that mattered was whether the builder
@@ -246,7 +255,15 @@ stream the request body into the Web `Request`?" is a claim about MACHINERY, not
 a type — Express supplies the same `Request` type whether or not `toWebRequest`
 filled it. So `Capability`/`CarrierGuard` survive for the mount, with §34's
 asymmetry intact: demand open, supply a written-out set.
-## Extensions populate the ctx; `validate` refines it
+
+## Extensions populate the ctx; a validation verb refines it
+
+> **§41 moved the verb.** This section was written when `validate` was a
+> carrier-FREE extension in the core, and the paragraph below still argues for
+> that. It is superseded: a carrier-free verb has no word to fail with, which is
+> why the core had to carry an `invalid` branch for it to land on. Both are gone
+> (#64). What still stands is everything about the ENTRIES — who populates them,
+> which are validatable, and why the registry is opaque.
 
 A carrier or an extension POPULATES ctx entries, always, by being extended.
 Extending IS reaching: `.extend(query)` means `ctx.query` is there, typed as
@@ -265,18 +282,23 @@ This keeps the capability axis exactly as §34 built it — the claim is made by
 `.extend`, because extending is what reaches the machinery. There is no
 per-call declaration to forget and no second place to look.
 
-`validate` is a CHANNEL, `@lntt/scope/standard-schema`, and a carrier-free one
-(`__needs: {}`): running a schema over a value asks nothing of the
-transport, so it composes on a bare `scope()` and on every carrier. That keeps
-the same split the rest of the design makes — the core owns the MECHANISM and
-never the ALPHABET. It owns the `ABORT`/`OK` brands and coins no intent (§40),
-the capability gate and no capability (§34), and now runs no schema and names no
-engine: a codebase validating with something else ships its own extension with its
-own `validate`.
+~~`validate` is a CHANNEL, and a carrier-free one: running a schema over a value
+asks nothing of the transport, so it composes on a bare `scope()` and on every
+carrier.~~ **Reversed by §41.** Running the schema asks nothing of the
+transport, but REFUSING does: a rejection has to be said, and every way of
+saying it is a word from some carrier's vocabulary. The carrier-free version had
+none, so the core grew a branch to hold the answer — the core owning a piece of
+the alphabet after all, which is the thing this split exists to prevent. The
+verb belongs to the carrier, and fails in its words (#64).
 
-What the core DOES keep is `Validatable` — what a scope HAS is what the carrier
-and the extensions populated, and only the core knows that set. The extension
-knows how to run a schema over one of them, and nothing more.
+What the core keeps either way is the MECHANISM and never the ALPHABET: the
+`ABORT`/`OK` brands with no intent of its own (§40), the capability gate with no
+capability (§34), and no schema engine — Standard Schema is a spec, and whoever
+passed the schema owns what runs.
+
+`Validatable` stays a core concern in shape: what a scope HAS is what the
+carrier and the extensions populated, and only the builder knows that set. The
+verb knows how to run a schema over one of them, and nothing more.
 
 **A guard's enrichment is validatable too**, and excluding it was arbitrary: a
 guard that calls an external service returns data as untrusted as a request
@@ -300,7 +322,7 @@ it did not before.
 The name is CONSTRAINED, not gated: the parameter's type is the union of the
 entries this scope has, so an editor completes it and a typo is told what it
 could have written (`"wrong"` is not assignable to `"params" | "query"`). The
-gate idiom (`DeclGate`, §40) is the wrong tool here — it types the parameter
+gate idiom (`ReturnGate`, §40) is the wrong tool here — it types the parameter
 `string` and loses completion. The one case a union cannot express is the EMPTY
 one, where it degrades to `never` and names nothing, so the alias substitutes a
 sentence there:
@@ -390,8 +412,11 @@ redirect('/', { cookies: [dropped] })
 ```
 
 **Nothing is written through a sink.** A step that wants to decorate what comes
-back wraps `next` and modifies the outcome — which is the middleware shape the
-primitive already has, and the case that once justified sinks:
+back wraps `next` and modifies what it was handed — which is the middleware
+shape the primitive already has, and the case that once justified sinks. It is
+also the ONE shape that pays for §42: `next` returns a `Passed` that says
+nothing, so a decorating step states what it expects, and a carrier does that
+once in a helper its decorators are written against:
 
 ```ts
 .step(async (app, ctx, next) => {
@@ -438,8 +463,9 @@ be API with no caller (principle 5).
 **And `set-cookie` stops being a capability.** Cookies can only ride a
 carrier's outbound word, and those words are exported from the CARRIER's own
 subpath — `@lntt/scope/trpc` has no `response`, so on an RPC carrier the verb
-does not exist. Import http's into a tRPC scope and `DeclGate` refuses it at the
-definition (it coins `status`/`redirect`/`ok-status`; tRPC declares `code`), and
+does not exist. Import http's into a tRPC scope and `ReturnGate` refuses it at the
+definition (it coins `status`/`redirect`/`ok-status`; tRPC's vocabulary is
+`code`), and
 an http scope cannot mount on tRPC anyway — `IntentGuard` refuses it for the
 same intents. The capability was the net under that case; the intent axis holds
 it, on both sides, and holds it better.
@@ -502,7 +528,7 @@ on `ctx.request` and a guard can parse it by hand.
 So the gate on `query` is ADVISORY, not enforcement, and that distinction is
 worth keeping straight — conflating the two is the "false safety" #38 warns
 about. It declines to offer a typed convenience for a case that does not exist,
-and points at `.validate('input', …)`, which is the declared way in.
+and points at validating `input`, which is the declared way in (#64).
 
 What is actually missing there is not a permission but an EXTENSION. tRPC
 exposes its own structured surface per request — `type`, `isBatchCall`, each
@@ -530,7 +556,7 @@ that holds one exposes it; there is no shared `request` extension.
 
 | extension | contributes | what its step ANNOTATES |
 |---|---|---|
-| `@lntt/scope/standard-schema` | `.validate(name, schema)`, and the registry entry a mount reads | the entry it refines |
+| validation — per CARRIER, not an extension (§41, #64) | a verb that refines an entry, failing in the carrier's own word | the entry it refines |
 | `@lntt/scope/body` — `body('json' \| 'form')` | `ctx.body`, parsed | a request whose body can be read |
 | `@lntt/scope/query` | `ctx.query` | `{ request: RequestHead }` — `url` is enough |
 | `@lntt/scope/cookies` | `ctx.cookies` | `{ request: RequestHead }` — `headers` is enough |
@@ -656,10 +682,10 @@ Each cost a measurement. A fresh implementation should inherit them, not
 rediscover them.
 
 1. **The intent cannot be inferred from inside a union constituent.**
-   `g: (ctx) => E | Abort<I>` makes TypeScript pick the first abort candidate
+   `g: (ctx) => E | Word<I>` makes TypeScript pick the first word candidate
    and REJECT the rest, so a guard returning two different intents stops
    compiling. Variance does not help — invariant, covariant and contravariant
-   phantoms behave identically — and inferring the whole abort union collapses
+   phantoms behave identically — and inferring the whole word union collapses
    to the constraint (§39's negative). Infer the whole RETURN type and
    distribute afterwards.
 2. **The gate goes on the ARGUMENT, not in the return type.** The return-type
@@ -683,12 +709,12 @@ rediscover them.
    `[BRAND]?: never` reduces `Scope & Http & Cookies` to `never` on the
    conflicting property — and carrier-plus-extension is the ordinary case. Brand
    one side only.
-6. **The success side needs its own word.** `json(v, 201)` sharing the abort
-   side's `status` lets a host that declares it renders status aborts silently
+6. **The success side needs its own word.** `json(v, 201)` sharing the refusal
+   side's `status` lets a host that declares it renders status refusals silently
    accept a success status it cannot express.
-7. **A bare `Abort` must fail closed**, and the consequence reaches every call
-   site: annotating a guard `Promise<{ post } | Abort>` ERASES the intent the
-   constructor declared. Drop such annotations and let the return type infer —
+7. **A bare `Word` must fail closed**, and the consequence reaches every call
+   site: annotating a guard `Promise<{ post } | Word>` ERASES the intent the
+   word's type declared. Drop such annotations and let the return type infer —
    an alias to annotate with reintroduces the promise-to-keep-aligned this
    design removes.
 8. **Defaulted type parameters used as let-bindings must live on a type ALIAS**,
@@ -750,10 +776,10 @@ rediscover them.
 18. **Reading and parsing an entry fail for opposite reasons.** The I/O
     (`req.arrayBuffer()`) rejects when the stream dies — a reset socket, an
     aborted upload — and that THROW is infrastructure, left to propagate.
-    Parsing the bytes in hand is the client's mistake and collapses to the
-    `Invalid` branch (§40). A single `catch` over both told the client its
-    payload was malformed when the connection had broken, hiding a 5xx behind a
-    4xx.
+    Parsing the bytes in hand is the client's mistake, and is a WORD the carrier
+    coins (§41 — it was the core's `Invalid` branch when this was measured). A
+    single `catch` over both told the client its payload was malformed when the
+    connection had broken, hiding a 5xx behind a 4xx.
 
 ## Measured
 
@@ -785,6 +811,78 @@ rediscover them.
   every `.step` against a phantom intersected once. It is the intersection that
   is expensive: `Self` gains a member per verb and every later read walks all of
   them, while a parameterised read is one indexed access.
+- **Where the builder's cost actually is**, on a 21-step chain with a carrier and
+  words (24,349 instantiations), removing one piece at a time:
+
+  | piece | share |
+  |---|---|
+  | `Ctx` = `Omit<args, keyof acc> & acc`, recomputed per step | **16%** |
+  | `Surface` = `Scope<S> & S['verbs']`, per step | **15%** |
+  | the word check in `ReturnGate` | 11% |
+  | the `result` accumulation | 6% |
+  | one whole member of `State` | **1.3%** |
+  | `DepGuard` | ~0 — it rides the call, not each step |
+
+  So the seven state members are ~9% together and two DERIVED types are 31%.
+  The members are not the cost, which also means a new axis is affordable when
+  one is needed. Neither derived type is reducible: `Ctx`'s `Omit` is what makes
+  refinement expressible at all, and the obvious `Surface` shortcut — skip the
+  intersection when `verbs` is empty — breaks the inference of `S` through
+  `this`, so every verb sees `Scope<State>`.
+
+- **DRYing `Grown`'s seven-line rebuild** with `With<S, P> = Omit<S, keyof P> & P`
+  so it lists only the members it changes: 24,349 → **35,769 (+47%)**, types
+  +28%. The repetition IS the optimisation, and this is the same intersection
+  cost measured above from the other direction.
+
+- **`result` and `intents` as two projections against one raw union.** Storing
+  what the steps RETURN and projecting at the two readers: 24,349 → 24,057, a
+  wash — the raw union GROWS where the extracted one did not, since a
+  pass-through step used to contribute `never`. Kept for legibility, and for one
+  thing that was not expected: the eager extraction is LOSSY, so a WRAP step
+  replacing `value` was dropped from what the scope reports. The raw form keeps
+  the material to narrow that.
+
+- **The check for a step that returns nothing**: +9.1% as a gate of its own,
+  **+7.1% merged into the word check** — the two ask about the same type, so
+  `ReturnGate` holds both — sharing the `Awaited<Ret>` is worth 2%. What it
+  buys: forgetting `return` in front of `next(…)` otherwise hands back the
+  wrapper's `undefined`, discarding work the inner steps really did. It surfaces
+  without the gate as `string | void` at whoever consumes the result, in another
+  file, and not at all in a test that only checks the happy value.
+
+### At runtime
+
+Node, ns per run, warmed. Absolute values drift between processes, so only
+comparisons within one run are meaningful.
+
+  | | 5 steps | 20 steps | |
+  |---|---|---|---|
+  | continuation passing (shipped) | 749 | 4,670 | |
+  | composed once, memoised on first call | 700 | 4,522 | −6.5% / −3.2% |
+  | | | | |
+  | ctx merged by spread (shipped) | 1,251 | 6,213 | |
+  | ctx as a prototype chain | 3,193 | 12,336 | **+155%** |
+  | steps synchronous, no `await` per level | 649 | 3,580 | −48% |
+  | | | | |
+  | continuation passing | 810 | 4,626 | |
+  | generators + an interpreter | 2,210 | 10,637 | **+173%** |
+
+  Three findings. **The whole fold is 1–6 µs**, against an HTTP request of
+  hundreds of µs to milliseconds — under 1%, so pre-composing its closures buys
+  3-6% of something that is not where the time goes. **A prototype-chain ctx is
+  2.5x SLOWER**, not faster: the chain deepens per step and every read walks it,
+  so principle 7 costs nothing here and earns something. **Generators are 2.7x**,
+  with a simplified interpreter; a real effect runtime does more.
+
+- **Effect systems do not discover parallelism either.** `Effect.all([a, b])` is
+  the same authored claim `.parallel(a, b)` would be, and a program written in
+  sequence stays sequential. What owning a scheduler buys is what happens on
+  FAILURE: `Promise.all` rejects while the losing branch runs to completion, its
+  errors unhandled and its resources unreleased; an interpreter interrupts it and
+  runs its finalizers. The axis is the quality of the concurrency once asked
+  for, never its discovery.
+
 - **A verb's signature declared against computed**, on an identical workload
   that uses NO verb at all: 6,637 → 5,056 instantiations (**−23.8%**), types
   −19.8%. The computed machinery — a conditional plus four extraction types,
@@ -839,25 +937,54 @@ per slice, deliberately — the branch that produced this document also produced
 
 ### Built and green
 
-`@lntt/scope`: `src/{index,scope,step,abort}.ts`, plus
-`@lntt/scope/standard-schema` — the first real extension and the shape of the
-rest. `src/fixture/` holds what does not ship. Every negative is
+`@lntt/scope`: `src/index.ts`, and nothing else — one file, no extension ships,
+and the package has ZERO dependencies. `src/fixture/` holds
+what does not ship. Every negative is
 mutation-tested. `research/parameterised-builder` and `research/terminal-step`
 carry the two measurements the builder's form was settled on.
 
 ### In order
 
-| | |
-|---|---|
-| **#60** | port the carriers — `http`, `trpc`, `react-router`. `RequestHead` comes back with them, and it is what makes the body lock work. Blocks the rest |
-| **#61** | the outbound side as a returned value: `response(v, init)`, with `json`/`html`/`text` as its sugar. Adds the envelope; the effects axis it replaces is already gone |
-| **#62** | port the read extensions: `body`, `query`, `cookies`, `headers` — none of which needs the retired transport-feature alphabet |
-| **#63** | decide which sugars come back — `guard`, `handle`, or neither. Both have already lost the reasons they were going to exist, so the failure mode is silence, not a wrong answer |
-| **#58** | bring `@lntt/integration` back, with its route/intent/capability gates |
-| **#59** | rewrite `examples/` — LAST, and the real proof: an API that cannot be written naturally in an example is not settled, whatever the type tests say |
+**The order lives in the [project](https://github.com/orgs/LunetteOrg/projects/1),
+not here**, and the reason is that this file lives on a BRANCH. A table here is
+right only for whoever is standing on the branch that last edited it — which,
+while several slices are in flight, is nobody.
 
-Untouched and orthogonal: **#51**, two steps populating the same ctx key are
-still silent.
+What carries the sequence instead is the issues' own `blocked by` relations, so
+"this before that" is a claim on the issue rather than a position in a list, and
+it is the same claim from every branch. The graph as it stands:
+
+```
+#60 carriers ──┬──→ #66 translating step   needs a vocabulary to translate INTO
+               ├──→ #64 validation         needs a word to refuse WITH
+               ├──→ #61 outbound           the words belong to a carrier
+               ├──→ #62 read extensions    needs `RequestHead`
+               └──→ #67 composable scopes  needs ≥2 vocabularies to be agnostic across
+
+#51 ctx collisions ──→ #67                 splicing intersects `acc`
+
+#60, #61, #62 ───────→ #58 integration     mounts render words and read entries
+
+#58, #63, #64, #66, #67 ──→ #59 examples   LAST, and the real proof
+```
+
+Two orderings are deliberately NOT edges, because they are preferences and not
+blocks: #61 before #62, and #63 before #67. A partial order is honest where a
+total one would be invented.
+
+Parked, and deliberately unscheduled — neither has a case in hand, which is the
+discipline that removed `validate` from the core:
+
+- a **`.parallel(a, b)`** verb. The shape is settled: children take no `next`, so
+  wrapping is inexpressible; both read `Ctx<S>`, so cross-dependency is refused
+  by contravariance. Two of the three safety conditions come free from the
+  signature, and the third is #51. What is missing is a real pair of independent
+  guards slow enough to be worth it.
+- a **`@lntt/scope/effect`** dialect — an extension, never a core change, whose
+  verb runs an `Effect` and maps its error channel onto a carrier's words. The
+  interesting part is the bridge from `ctx.request.signal` to the runtime's
+  interruption, which is where cancellation stops being cooperative. Measured
+  cost of making the FOLD itself effectful: +173%, so this stays a dialect.
 
 ### The reference implementation
 

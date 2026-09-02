@@ -79,7 +79,7 @@ describe('With/bind (types)', () => {
     const report = async ({ db: h }: { db: DbHandle }, period: string) =>
       `${h.mode}:${period}`
 
-    const { report: monthly } = bind({ report }).by((tenant: string) =>
+    const { report: monthly } = bind({ report }).by((_tenant: string) =>
       window(db.transaction, (tx: DbHandle) => ({ db: tx })),
     )
 

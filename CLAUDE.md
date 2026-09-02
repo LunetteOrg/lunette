@@ -13,8 +13,9 @@ the `errore` library (errors as values) applied to DI.
   packages/scope        @lntt/scope  the host-agnostic scope runtime — ONE
                         primitive (a step wrapping the rest of the fold) and a
                         scope IS the function that runs it, from the first line.
-                        BEING REBUILT (#30): the core is `primitive.ts` +
-                        `base.ts` and nothing else ships yet. The carriers, the
+                        BEING REBUILT (#30): the core is ONE file, `index.ts`
+                        — where `export` means public, since there is nowhere
+                        else for a name to live — and nothing else ships yet. The carriers, the
                         extensions, the host mounts and the examples land on it
                         in that order. The contract is docs/design/scope-api.md
                         — READ IT FIRST; its "Where this goes next" is the work
@@ -92,20 +93,35 @@ the tracker when relevant — never from here.
   and, for the scope runtime, a lexicon of its own, settled in
   `docs/design/scope-api.md`: scope (`scope()` agnostic, `scope(carrier)`
   chooses one) · scope execution (one run: `postScope(app, params)`) · scope
-  execution parameters (the second argument — what belongs to THIS run; NOT
-  `seed`, which is wire's build-once, the other lifetime) · carrier (chosen
+  execution parameters (the second argument — what belongs to THIS run; carried
+  as `State['args']` and declared by a carrier's `__args`. NOT `seed`, which is
+  wire's build-once, the other lifetime, and not `params`, which is the name of
+  an entry a carrier puts INSIDE them) · carrier (chosen
   once, pure declaration — no runtime value — never a step) · extension (a STEP
   that populates an entry, and sometimes contributes a verb; added like any
   other step) · step (the primitive — distinct from wire's LAYER, a different
   mechanism, §33) · verb (a method a step contributes to the BUILDER — not a
   WORD, which is a value a step returns) · leaf (the innermost step, the one
-  that does not call `next`) · entry (a ctx key `validate` may name: either arrives in
-  the execution parameters or is derived by an extension) · enrichment (what a
-  guard returns) · transport feature (RETIRED at the definition site — what a
+  that does not call `next`) · entry (a ctx key a validation verb may name:
+  either arrives in the execution parameters or is derived by an extension) ·
+  enrichment (what a guard returns) · transport feature (RETIRED at the definition site — what a
   step needs of the transport is the ctx it ANNOTATES, checked by contravariance;
   the name survives only at the MOUNT) ·
-  intent (a word a carrier coins) · registry (opaque: steps write, mounts
-  read) · effects · outcome (`ok`/`abort`/`invalid`) · capability (an OPEN
+  intent (a word a carrier coins) · vocabulary (`State['vocabulary']`, a
+  carrier's `__vocabulary`: every word a scope MAY say — the supply side
+  `ReturnGate` reads a step's return against) · intents (`IntentsOf`: the words
+  the steps written so far actually SAY — the demand side, and what a MOUNT asks
+  about. NOT a state member: it is COMPUTED from `State['returns']`, since the
+  state carries what steps return and nothing projected from it) · registry (opaque: steps write, mounts
+  read) · effects · outcome (RETIRED with §42 — the fold produces nothing of its
+  own, so there is no `ok`/`abort` and no branch: a scope hands back what its
+  leaf RETURNED, and whether that went well is the carrier's statement. What was
+  a third branch left with §41, and the other two with §42) · `Word<I>` (all the
+  core knows of a word: it carries an `intent` and DECLARES its name. No brand,
+  no constructor, no predicate — a carrier writes its own types) · `Passed`
+  (what `next` hands back: an opaque marker for "the rest of the fold answered,
+  whatever it said". A step that only observes passes it on; one that DECORATES
+  states what it expects, which is §42's one cost) · capability (an OPEN
   alphabet — the core enumerates none; demand is open, supply is a written-out
   set, so an unclaimed one mounts nowhere, and widening a host's set is a claim
   about machinery, §34) · dialect.
@@ -149,6 +165,14 @@ carrying its full reasoning — priorities, status and the lead item live
 THERE, never in this file. Start from
 <https://github.com/LunetteOrg/lunette/issues>. Extended pattern
 documentation lives in **`docs/`**.
+
+Order and status live in the **project**
+(<https://github.com/orgs/LunetteOrg/projects/1>), never in a file: a
+file lives on a branch, so a written-down order is right only for whoever
+stands on the branch that last edited it. Sequence is carried by the
+issues' own `blocked by` relations — a claim on the issue, the same from
+every branch — and `docs/design/scope-api.md` records the shape of that
+graph and what is deliberately unscheduled, not the positions.
 
 The decision record (discarded alternatives and why) is
 **`docs/decisions.md`** — consult it BEFORE proposing API changes: many

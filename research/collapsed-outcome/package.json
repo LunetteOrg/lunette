@@ -1,0 +1,16 @@
+{
+  "name": "@lntt/research-collapsed-outcome",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Research prototype, NOT a product: can the outcome's two branches (`ok`/`abort`) collapse into ONE word, and if they do, does `R` carry the word's PAYLOAD or the WORD? Prior art for the scope runtime's outcome (#30, reopening §40/§41).",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.0"
+  }
+}
