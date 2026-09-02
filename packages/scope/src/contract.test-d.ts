@@ -12,14 +12,17 @@ import {
   type Word,
 } from './index.ts'
 import {
+  answered,
   badArgs,
   badVocab,
   elsewhere,
   fixture,
   refused,
   refused as refusedWord,
+  served,
   type Elsewhere,
   type Refusal,
+  type Served,
 } from './fixture/carrier.ts'
 
 // THE TYPE CONTRACT, which is what a `*.test-d.ts` file is for in this repo:
@@ -464,5 +467,46 @@ describe('the ctx a step reads, and what may be written to it', () => {
         },
       )
     void allowed
+  })
+})
+
+// ── the way back is the CARRIER's to protect ────────────────────────────────
+// `Ctx` is read-only because the core builds it and therefore knows its type.
+// What comes back it does not: `next` returns `Passed`, opaque by construction,
+// because when a step is written the steps it wraps do not exist yet. So the
+// core has nothing to make read-only, and the guarantee moves to the one place
+// where the type IS known — the carrier's single assertion.
+//
+// The asymmetry is the point, and it is not a gap that was left: what is in
+// there is usually the APP's object, alive as long as the process, so a
+// decorator writing through it edits the app's own state. A runtime defence was
+// weighed and refused — see `answered` and `index.ts` beside `Passed`.
+describe('what a decorating step reads on the way out', () => {
+  it('is read-only on the DOMAIN value, which the words already were on their own', () => {
+    // The branch the wrapper is FOR. A carrier's words declare their own
+    // members `readonly` — `Served` does, three lines of the fixture — so they
+    // were covered before `answered` existed. The domain value is nobody's to
+    // declare: it is whatever the leaf produced, and it is usually the APP's
+    // object. That is the one this closes, and the one the hazard is about.
+    const refused = () =>
+      scope(fixture).step(async (_app: {}, _ctx: {}, next: Next<{}>) => {
+        const out = answered<{ name: string }>(await next({}))
+        if (typeof out === 'object' && out !== null && 'name' in out) {
+          // @ts-expect-error ⛔ Cannot assign to 'name' because it is a read-only property
+          out.name = 'rewritten'
+        }
+        return out
+      })
+    void refused
+  })
+
+  it('reads as the carrier`s words BESIDE the domain value, which is what one channel means', () => {
+    const check = () =>
+      scope(fixture).step(async (_app: {}, _ctx: {}, next: Next<{}>) => {
+        const out = answered<number>(await next({}))
+        expectTypeOf(out).toEqualTypeOf<Readonly<Refusal | Elsewhere | Served<number> | number>>()
+        return served(1, 'here')
+      })
+    void check
   })
 })

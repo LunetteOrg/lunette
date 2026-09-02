@@ -96,6 +96,22 @@ export interface Word<I extends object = UnknownIntent> {
 // reading it means going through the carrier whose words are in there — one
 // assertion, written once per carrier, never at each step (measured against a
 // carrier of realistic size, §42).
+//
+// Which is also where the way OUT gets its guarantee, since it cannot get one
+// here. `Ctx` is read-only because the fold builds it and so knows its type; at
+// this line there is no type yet — that is the whole reason `Passed` exists —
+// so there is nothing to make read-only. The carrier's one assertion has the
+// type, and read-only is what it should hand back.
+//
+// A runtime defence was weighed and refused. Cloning what comes back loses a
+// class's prototype and THROWS on a response or a stream, and by the error
+// convention a throw is infrastructure — so a defensive clone would turn
+// successful runs into retries and rollbacks. Freezing is worse still: what is
+// in there is often the APP's object, alive as long as the process, and
+// freezing it reaches far outside the run. So nothing happens on the way out,
+// here as everywhere, and the hazard is named rather than machined against:
+// a decorator writing through what came back edits the app's own state
+// (pinned in `fold.test.ts`).
 declare const PASSED: unique symbol
 
 // The member is REQUIRED, and that is load-bearing rather than tidy. Optional,

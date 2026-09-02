@@ -1,4 +1,4 @@
-import type { Word } from '../index.ts'
+import type { Passed, Word } from '../index.ts'
 
 // A CARRIER, as a FIXTURE — this directory ships nothing. Not a real carrier,
 // but the same shape, so the tests read like real code instead of minting a
@@ -70,6 +70,27 @@ export const served = <V>(value: V, at: string): Served<V> => ({
   intent: { at },
   value,
 })
+
+// ── reaching what came back ──────────────────────────────────────────────────
+// `next` hands back a `Passed`, which says nothing on purpose: when a step is
+// written, the steps it will wrap do not exist yet. A step that DECORATES has
+// to read it anyway, and the reading is the CARRIER's — it knows which words
+// can be in there and the core does not. One assertion, written here, never at
+// each step.
+//
+// It hands back a READ-ONLY view, and that is this carrier doing on the way out
+// what `Ctx` does on the way in. The core cannot do it: where `next` is typed
+// there is no type yet to make read-only. Here there is one.
+//
+// It does not COPY, and must not. Cloning what comes back loses a class's
+// prototype, and THROWS on a response or a stream — and by the error convention
+// a throw is infrastructure, so a defensive clone would turn a successful run
+// into a retry. The view is a statement about who may write, not a wall: what
+// is in there is often the APP's object, alive as long as the process, and a
+// decorator writing through it edits the app's own state. Nothing at runtime
+// stops that, here or anywhere, which is why it is said in a type.
+export const answered = <V>(passed: Passed): Readonly<Refusal | Elsewhere | Served<V> | V> =>
+  passed as unknown as Readonly<Refusal | Elsewhere | Served<V> | V>
 
 // The carrier's own predicate. The core ships none — it knows nothing about
 // what a word looks like here — so telling a word from a domain value is the

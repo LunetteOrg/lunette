@@ -163,6 +163,37 @@ describe('the step primitive, folded', () => {
     expect(await h(app, { tag: 'original' })).toBe('before')
     expect(seen).toEqual(['before'])
   })
+
+  it('and NOTHING guards the way out — what a decorator writes there reaches the app', async () => {
+    // The counterpart, and the asymmetry is deliberate. On the way in the fold
+    // builds the ctx, so it can hand out its own object and `Ctx` can be
+    // read-only for free. On the way out it builds nothing (§42): the value is
+    // the step's, and `next` returns a `Passed` that names no type, so there is
+    // nothing here to protect.
+    //
+    // Which matters more than the ctx case, not less: what comes back is often
+    // the APP's object — a repo handing out its cache — and it is alive as long
+    // as the process, not as long as the run.
+    //
+    // A defensive clone was weighed and refused: it loses a class's prototype
+    // and THROWS on a response or a stream, and by the error convention a throw
+    // is infrastructure, so it would turn successful runs into retries. The
+    // guarantee lives where the type is known instead — the carrier's own
+    // assertion, `answered` in the fixture.
+    const cached = { name: 'Ada' }
+    const repo = { users: { byId: () => cached } }
+
+    const h = scope<{}>()
+      .step(async (_app: {}, _ctx: {}, next: Next<{}>) => {
+        const out = (await next({})) as unknown as { name: string }
+        out.name = 'written on the way out'
+        return out
+      })
+      .step(async (deps: typeof repo, _ctx: {}) => deps.users.byId())
+
+    expect(await h(repo, {})).toBe(cached)
+    expect(cached.name).toBe('written on the way out')
+  })
 })
 
 // ── a scope with no leaf THROWS ──────────────────────────────────────────────
