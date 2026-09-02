@@ -598,6 +598,18 @@ interface Built {
 // not two that agree.
 const RESERVED_VERBS: ReadonlySet<string> = new Set(RESERVED)
 
+// One message, raised from the two places that ask the question, so the two
+// cannot drift into saying it differently.
+const refuseReserved = (names: readonly string[]): void => {
+  const own = names.filter((k) => RESERVED_VERBS.has(k))
+  if (own.length > 0) {
+    throw new TypeError(
+      `a verb cannot be named '${own[0]}': the scope's own surface owns it. ` +
+        `Reserved: ${[...RESERVED_VERBS].join(', ')}.`,
+    )
+  }
+}
+
 // ── the fold ─────────────────────────────────────────────────────────────────
 // ONE ordered list, folded from the outside in. There are no categories, so
 // nothing decides which runs first: every step runs where it was written.
@@ -655,6 +667,14 @@ function make(steps: readonly AnyStep[], verbs: Verbs): Built {
       // `Object.prototype` — `toString`, `valueOf` — would report as already
       // contributed and mask the reserved-name error, which is the one that
       // tells the author what is actually wrong.
+      // RESERVED FIRST, because `VerbGate` nests `Own` outside `Taken` and a
+      // name that is both has to get the same verdict from both halves.
+      // Checking `taken` first hides the reserved name behind it: the author
+      // fixes what was named, re-runs, and only then meets the other one — the
+      // same masking the `hasOwn` note below is about, arriving by a different
+      // door. `make`'s sweep stays as the backstop for verbs that arrive by
+      // some other route than this one.
+      refuseReserved(Object.keys(ext.methods))
       const taken = Object.keys(ext.methods).filter((k) => Object.hasOwn(verbs, k))
       if (taken.length > 0) {
         throw new TypeError(
@@ -666,13 +686,8 @@ function make(steps: readonly AnyStep[], verbs: Verbs): Built {
     },
   })
   // Every contributed verb, wired the same way: call it, get a step, push it.
+  refuseReserved(Object.keys(verbs))
   for (const [name, factory] of Object.entries(verbs)) {
-    if (RESERVED_VERBS.has(name)) {
-      throw new TypeError(
-        `a verb cannot be named '${name}': the scope's own surface owns it. ` +
-          `Reserved: ${[...RESERVED_VERBS].join(', ')}.`,
-      )
-    }
     ;(self as unknown as Record<string, unknown>)[name] = (...args: never[]) =>
       make([...steps, factory(...args)], verbs)
   }

@@ -268,6 +268,25 @@ describe('a verb cannot take a name the surface already owns', () => {
     expect(() => unchecked(shadowsBind)).toThrow(/cannot be named 'bind'/)
   })
 
+  it('reports the RESERVED name first, in the order the type gate reports them', () => {
+    // The two halves have to agree on more than the verdict. `VerbGate` nests
+    // `Own` outside `Taken`, so a name that is both reserved and already
+    // contributed is reported as reserved; the runtime used to check `taken`
+    // in `.extend` and reach the reserved sweep only afterwards, so it said the
+    // opposite. The author fixes the name it named, re-runs, and only then
+    // meets the other one — which is the masking the `hasOwn`-not-`in` note
+    // above exists to prevent, arriving by a different door.
+    const both = {
+      methods: {
+        header: () => (async () => 'x') as unknown as AnyStep,
+        bind: () => (async () => 'x') as unknown as AnyStep,
+      },
+    }
+    const withHeaderTaken = scope<{}>().extend(headers)
+    expect(() => (withHeaderTaken as unknown as { extend: (e: object) => unknown }).extend(both))
+      .toThrow(/cannot be named 'bind'/)
+  })
+
   it('refuses one named `toString`, which would otherwise break every interpolation', () => {
     // Shadowing it with a verb makes `String(scope)` throw `Cannot convert
     // object to primitive value` — from the template literal, never from here.
