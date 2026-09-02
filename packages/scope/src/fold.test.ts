@@ -140,6 +140,30 @@ describe('the step primitive, folded', () => {
     expect(inner.page).toBe('written')
   })
 
+  it('leaves what the parameters CARRY untouched, methods and all', async () => {
+    // The other side of the copy being one level, and what makes the constraint
+    // on the outermost object cheap: a value nested in the params arrives as
+    // itself, prototype and methods intact, at every step. So a request, a
+    // stream or a class instance rides INSIDE the params — the mount builds the
+    // container, and the container is the only thing spread.
+    class Session {
+      constructor(readonly id: string) {}
+      label(): string {
+        return `session:${this.id}`
+      }
+    }
+    const session = new Session('s1')
+
+    const h = scope<{ readonly session: Session }>()
+      .step(async (_app: {}, ctx, next: Next<{}>) => {
+        expect(ctx.session).toBeInstanceOf(Session)
+        return next({})
+      })
+      .step(async (_app: {}, ctx: { readonly session: Session }) => ctx.session.label())
+
+    expect(await h(app, { session })).toBe('session:s1')
+  })
+
   it('a write to the ctx reaches the steps BELOW, and no step above', async () => {
     // Which is why `next(delta)` is the channel and mutation is not. The spread
     // happens when `next` is CALLED, so a write before it is carried down and

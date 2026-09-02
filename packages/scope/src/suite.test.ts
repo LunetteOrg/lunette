@@ -26,15 +26,27 @@ import { describe, expect, it } from 'vitest'
 // files, and the shapes below are what those contain. What it does NOT do is
 // decide cleverly — an accusation it cannot rule out is left standing, which
 // costs a visible failure and never a silent pass.
+// A block comment is BLANKED, not skipped by the look of its first characters.
+// Skipping the line was the wrong shape and traded one mistake for a worse one:
+// `/* note */ expect(x)` and an assertion written after a `*/` both start with
+// a comment and both carry live code, so the check went silent on exactly the
+// class it exists to catch. Blanking the comment's own characters and keeping
+// the newlines leaves whatever was around it on the line where it was written,
+// so the line numbers still point at the file.
+//
+// Where it is still a heuristic and not a parser: a `/*` inside a string
+// literal opens a block that is not one. That direction blanks real code and so
+// can pass silently — the one silent path left, named rather than implied,
+// and no `.test-d.ts` here writes such a string.
+const withoutBlockComments = (source: string): string =>
+  source.replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
+
 const runtimeAssertionsIn = (source: string): readonly (readonly [number, string])[] =>
-  source
+  withoutBlockComments(source)
     .split('\n')
     .map((line, i) => [i + 1, line] as const)
-    // `//` is the line comment; `*` and `/*` are the inside and the opening of
-    // a block one. These files are mostly prose ABOUT `expect`, so a JSDoc
-    // continuation naming it is not a hypothetical — and without this the check
-    // fails on a file where nothing executable is written at all.
-    .filter(([, line]) => !/^(\/\/|\/\*|\*)/.test(line.trimStart()))
+    // What is left of a comment is the line kind, which no blanking reaches.
+    .filter(([, line]) => !line.trimStart().startsWith('//'))
     // `expectTypeOf(` needs no exemption and never did: it does not CONTAIN
     // `expect(` — the character after `expect` is `T` — so it never reaches
     // here. The exemption that used to sit below said `!/expectTypeOf\(/` on a
@@ -57,6 +69,21 @@ describe('the rule that finds them', () => {
 
   it('leaves a line comment alone', () => {
     expect(runtimeAssertionsIn('  // expect(x).toBe(1) would be dead here')).toEqual([])
+  })
+
+  it('CATCHES an assertion beside a closed block comment, which skipping the line hid', () => {
+    // The regression this shape exists to undo: a filter reading the line's
+    // first characters called both of these comments and saw neither
+    // assertion.
+    expect(runtimeAssertionsIn('/* note */ expect(x).toBe(1)')).toEqual([
+      [1, '           expect(x).toBe(1)'],
+    ])
+    expect(runtimeAssertionsIn('*/ expect(x).toBe(1)')).toEqual([[1, '*/ expect(x).toBe(1)']])
+  })
+
+  it('keeps the line NUMBERS right across a blanked block, so the report still points', () => {
+    const source = ['/* one', ' * two', ' */', 'expect(x).toBe(1)'].join('\n')
+    expect(runtimeAssertionsIn(source)).toEqual([[4, 'expect(x).toBe(1)']])
   })
 
   it('leaves a BLOCK comment alone, where these files do most of their talking', () => {

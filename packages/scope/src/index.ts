@@ -679,6 +679,17 @@ async function runSteps(steps: readonly AnyStep[], app: object, args: object): P
   // params object a host may well reuse for the next one. Position-dependent is
   // what makes that worth a spread: the same step one place later is harmless.
   //
+  // A SPREAD, and so the params object itself must be a plain container of its
+  // own data: a spread copies own enumerable keys, which drops a prototype and
+  // forces a getter. Preserving both here — `Object.create` with the
+  // descriptors — was considered and refused, because the levels below spread
+  // too: step 0 would see a class instance and step 1 a flat object, which is
+  // the position-dependence this line exists to remove, reintroduced one turn
+  // later. Anything with BEHAVIOUR belongs in the app, which is passed by
+  // reference and untouched; anything nested inside the params is untouched
+  // too, since the copy is one level. What is constrained is only the outermost
+  // object, which the mount builds.
+  //
   // ONE LEVEL, at every level: the spread copies the map and not the values, so
   // what the parameters CONTAIN stays the caller's, and a write through a
   // nested object still leaves the run. Deepening it is the wrong answer rather

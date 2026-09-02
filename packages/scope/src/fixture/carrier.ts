@@ -89,8 +89,15 @@ export const served = <V>(value: V, at: string): Served<V> => ({
 // is in there is often the APP's object, alive as long as the process, and a
 // decorator writing through it edits the app's own state. Nothing at runtime
 // stops that, here or anywhere, which is why it is said in a type.
-export const answered = <V>(passed: Passed): Readonly<Refusal | Elsewhere | Served<V> | V> =>
-  passed as unknown as Readonly<Refusal | Elsewhere | Served<V> | V>
+// `Served<Readonly<V>>` and not `Served<V>`: the outer `Readonly` reaches
+// `value` and stops, and `value` is where a SUCCESS carries the domain object —
+// the app's own, by the comment on `Served` itself. Wrapping only the bare
+// branch protected the case where the leaf returned a plain value and left the
+// case where it returned the carrier's success word, which is the one a real
+// run takes. Found by writing the write and watching it compile.
+export type Answered<V> = Readonly<Refusal | Elsewhere | Served<Readonly<V>> | V>
+
+export const answered = <V>(passed: Passed): Answered<V> => passed as unknown as Answered<V>
 
 // The carrier's own predicate. The core ships none — it knows nothing about
 // what a word looks like here — so telling a word from a domain value is the

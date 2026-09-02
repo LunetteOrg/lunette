@@ -22,7 +22,6 @@ import {
   served,
   type Elsewhere,
   type Refusal,
-  type Served,
 } from './fixture/carrier.ts'
 
 // THE TYPE CONTRACT, which is what a `*.test-d.ts` file is for in this repo:
@@ -500,12 +499,43 @@ describe('what a decorating step reads on the way out', () => {
     void refused
   })
 
-  it('reads as the carrier`s words BESIDE the domain value, which is what one channel means', () => {
+  it('is read-only where a SUCCESS carries the domain object, which is `value`', () => {
+    // The branch the first version of this test missed. A carrier's words
+    // declare their own members `readonly`, so `out.value = …` was refused
+    // before `answered` existed and proved nothing about it; the object INSIDE
+    // `value` is the app's, and is what a real success hands back.
+    const refused = () =>
+      scope(fixture).step(async (_app: {}, _ctx: {}, next: Next<{}>) => {
+        const out = answered<{ name: string }>(await next({}))
+        if (typeof out === 'object' && out !== null && 'value' in out) {
+          // @ts-expect-error ⛔ Cannot assign to 'name' because it is a read-only property
+          out.value.name = 'rewritten'
+        }
+        return out
+      })
+    void refused
+  })
+
+  it('narrows to each branch, so read-only did not cost the reading', () => {
+    // Asserting the annotation back at itself is a tautology — both sides move
+    // together and the line can never go red — and this branch has already paid
+    // for one test that looked like coverage and was not. So the claim is
+    // structural: every member is still REACHABLE, and each keeps its own type.
     const check = () =>
       scope(fixture).step(async (_app: {}, _ctx: {}, next: Next<{}>) => {
-        const out = answered<number>(await next({}))
-        expectTypeOf(out).toEqualTypeOf<Readonly<Refusal | Elsewhere | Served<number> | number>>()
-        return served(1, 'here')
+        const out = answered<{ name: string }>(await next({}))
+        // Narrowed by the KEYS each branch has, since the domain value has no
+        // `kind` to switch on — which is itself the shape of one channel.
+        if ('location' in out) {
+          expectTypeOf(out).toEqualTypeOf<Readonly<Elsewhere>>()
+        } else if ('value' in out) {
+          expectTypeOf(out.value).toEqualTypeOf<Readonly<{ name: string }>>()
+        } else if ('kind' in out) {
+          expectTypeOf(out).toEqualTypeOf<Readonly<Refusal>>()
+        } else {
+          expectTypeOf(out).toEqualTypeOf<Readonly<{ name: string }>>()
+        }
+        return served({ name: 'x' }, 'here')
       })
     void check
   })
