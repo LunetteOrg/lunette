@@ -427,3 +427,42 @@ describe('a verb declares the words it says, because nothing computes them', () 
     expectTypeOf<ResultOf<typeof s>>().toEqualTypeOf<string>()
   })
 })
+
+// ── the ctx a step reads is READ-ONLY, whatever the carrier declared ─────────
+// `Ctx<S>` used to carry exactly the modifiers the carrier wrote, so a carrier
+// that forgot `readonly` handed its steps a mutable ctx and nothing said a
+// word. That is the wrong side of the split this repo is built on: the engine
+// is guaranteed by tests, the types guarantee the USER's world, and a guarantee
+// the user has to remember to ask for is not one.
+//
+// The runtime half of the same question is in `fold.test.ts`, and the two do
+// different work: the fold's copy decides what a write REACHES, this decides
+// whether it can be written at all.
+describe('the ctx a step reads, and what may be written to it', () => {
+  it('refuses a write, on a carrier that declared no modifiers of its own', () => {
+    const refused = () =>
+      scope<{ token: string }>().step(async (_app: {}, ctx, next: Next<{ n: number }>) => {
+        // @ts-expect-error ⛔ Cannot assign to 'token' because it is a read-only property
+        ctx.token = 'x'
+        return next({ n: 1 })
+      })
+    void refused
+  })
+
+  it('and an ANNOTATED mutable shape is not refused, which is the limit', () => {
+    // TypeScript does not read `readonly` when it checks assignability, so a
+    // step that writes the shape out mutable gets a mutable one. Measured, and
+    // pinned as the limit it is rather than left to be discovered: this is a
+    // barrier for a step written the ordinary way — with the ctx inferred — and
+    // never a wall against one written around it, which is what every other
+    // gate in this file is too.
+    const allowed = () =>
+      scope<{ token: string }>().step(
+        async (_app: {}, ctx: { token: string }, next: Next<{ n: number }>) => {
+          ctx.token = 'x'
+          return next({ n: 1 })
+        },
+      )
+    void allowed
+  })
+})

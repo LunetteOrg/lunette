@@ -277,7 +277,23 @@ type ReturnGate<
 // replace, and re-populating a key is what a REFINEMENT is: narrowing
 // `Record<string, string | string[]>` to `{ page: number }` would intersect to
 // `never` — a field nobody can use, with no error anywhere. `Omit` first.
-export type Ctx<S extends State> = Omit<S['args'], keyof S['acc']> & S['acc']
+//
+// `Readonly` is the CORE's, not the carrier's. Carrying only the modifiers a
+// carrier wrote made the guarantee something the user had to remember to ask
+// for, and a carrier that forgot handed its steps a mutable ctx with nothing
+// saying a word — the wrong side of the split this library is built on. Wrapped
+// here it costs nothing at runtime and holds for every carrier.
+//
+// SHALLOW, and that is the boundary rather than a shortcut: a step legitimately
+// calls methods on a request and reads a stream, so depth would be hostile —
+// and depth is the carrier's to declare, on its own `__args`.
+//
+// A step ANNOTATING a mutable shape is not refused: TypeScript does not read
+// `readonly` when it checks assignability. So this is a barrier for a step
+// written the ordinary way, with the ctx inferred, and never a wall against one
+// written around it — which is what the gates above are too. Pinned both ways
+// in `contract.test-d.ts`.
+export type Ctx<S extends State> = Readonly<Omit<S['args'], keyof S['acc']> & S['acc']>
 
 // What a scope IS to whoever holds one: the callable builder, plus the verbs its
 // extensions declared. The verbs are a plain record with no call signature of
@@ -646,6 +662,13 @@ async function runSteps(steps: readonly AnyStep[], app: object, args: object): P
   // position 0 — and only from position 0 — reach back out of the run, into a
   // params object a host may well reuse for the next one. Position-dependent is
   // what makes that worth a spread: the same step one place later is harmless.
+  //
+  // ONE LEVEL, at every level: the spread copies the map and not the values, so
+  // what the parameters CONTAIN stays the caller's, and a write through a
+  // nested object still leaves the run. Deepening it is the wrong answer rather
+  // than a missing one — an abort signal, a request, a stream handle do not
+  // clone — so the fold's job stops at not handing out the object it was given,
+  // and `Ctx` being read-only is what says the rest.
   return at(0, { ...args })
 }
 

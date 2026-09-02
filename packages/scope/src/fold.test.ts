@@ -115,6 +115,54 @@ describe('the step primitive, folded', () => {
     expect(await h(app, params)).toBe('u1')
     expect(same).toBe(false)
   })
+
+  it('and the copy is ONE LEVEL deep, so what the parameters contain is shared', async () => {
+    // The other half of the same sentence, and the reason the one above is not
+    // a defensive barrier. `{ ...seen, ...delta }` copies the map and not the
+    // values, at every level including the first, so a nested object is the
+    // caller's at every step — and a write through one leaves the run.
+    //
+    // Deepening the copy is the wrong answer, not a missing one: a carrier's
+    // parameters carry things that do not clone — an abort signal, a request, a
+    // stream handle — and cloning them either breaks them or makes them
+    // useless. Depth is the CARRIER's to declare, and `readonly` is how; the
+    // fold's job stops at not handing out its caller's own object.
+    const inner = { page: '1' }
+    const params = { inner }
+    const h = scope<{ readonly inner: { page: string } }>()
+      .step(async (_app: {}, ctx, next: Next<{}>) => {
+        ctx.inner.page = 'written'
+        return next({})
+      })
+      .step(async (_app: {}, ctx: { readonly inner: { page: string } }) => ctx.inner.page)
+
+    expect(await h(app, params)).toBe('written')
+    expect(inner.page).toBe('written')
+  })
+
+  it('a write to the ctx reaches the steps BELOW, and no step above', async () => {
+    // Which is why `next(delta)` is the channel and mutation is not. The spread
+    // happens when `next` is CALLED, so a write before it is carried down and
+    // one after it is carried nowhere — the same line, moved two rows, changing
+    // who sees it. Nothing in a type says this, so it is said here.
+    const seen: string[] = []
+    const h = scope<{ readonly tag: string }>()
+      .step(async (_app: {}, ctx, next: Next<{}>) => {
+        // the cast is the point: the ctx is read-only, and writing to it takes
+        // saying so out loud (`contract.test-d.ts` pins that half)
+        ;(ctx as { tag: string }).tag = 'before'
+        const out = await next({})
+        ;(ctx as { tag: string }).tag = 'after'
+        return out
+      })
+      .step(async (_app: {}, ctx: { readonly tag: string }) => {
+        seen.push(ctx.tag)
+        return ctx.tag
+      })
+
+    expect(await h(app, { tag: 'original' })).toBe('before')
+    expect(seen).toEqual(['before'])
+  })
 })
 
 // ── a scope with no leaf THROWS ──────────────────────────────────────────────
