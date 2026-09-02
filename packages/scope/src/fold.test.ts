@@ -94,6 +94,27 @@ describe('the step primitive, folded', () => {
     expect(await h(app, { id: 'u1' })).toBe('Ada')
     expect(await h(app, { id: 'nope' })).toBe('anonymous')
   })
+
+  it('hands the first step a ctx of its own, not the object the caller passed', async () => {
+    // Every level but the first builds `{ ...seen, ...delta }`, so it gets a
+    // fresh object for free. The first has nothing to merge, and passing the
+    // caller's object straight through would make a write from position 0 —
+    // and ONLY from position 0 — reach back out of the run: into the caller's
+    // object, and so into the next run of a host that reuses one. A bug that
+    // appears and disappears when a step is reordered is the reason this costs
+    // a spread rather than a rule nobody can see.
+    const params = { id: 'u1' }
+    let same: boolean | undefined
+    const h = scope<{ readonly id: string }>()
+      .step(async (_app: {}, ctx, next: Next<{}>) => {
+        same = (ctx as object) === (params as object)
+        return next({})
+      })
+      .step(async (_app: {}, ctx: { id: string }) => ctx.id)
+
+    expect(await h(app, params)).toBe('u1')
+    expect(same).toBe(false)
+  })
 })
 
 // ── a scope with no leaf THROWS ──────────────────────────────────────────────

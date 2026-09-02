@@ -614,7 +614,13 @@ async function runSteps(steps: readonly AnyStep[], app: object, args: object): P
     const next = ((delta: object) => at(i + 1, { ...seen, ...delta })) as unknown as Next<object>
     return step(app, seen, next)
   }
-  return at(0, args)
+  // A COPY, and only here: every level below builds `{ ...seen, ...delta }` and
+  // so is already the run's own object. The first has nothing to merge, and
+  // handing the caller's object straight through would let a write from
+  // position 0 — and only from position 0 — reach back out of the run, into a
+  // params object a host may well reuse for the next one. Position-dependent is
+  // what makes that worth a spread: the same step one place later is harmless.
+  return at(0, { ...args })
 }
 
 function make(steps: readonly AnyStep[], verbs: Verbs): Built {
