@@ -33,12 +33,19 @@ import {
 // test: the primitive says all five things a step has to say, and nothing else
 // is needed to say them.
 //
-// NO RUNTIME ASSERTIONS BELONG HERE, and that is a rule with teeth rather than
-// a preference: a `*.test-d.ts` file is TYPECHECKED and never RUN — the config
-// includes `src/**/*.test.ts` for tests and this pattern only for typecheck. An
-// `expect(...)` in this file is dead code that reads as coverage, and four of
-// them sat here unexecuted, one of them the only check that a scope with no
-// leaf THROWS. `suite.test.ts` now fails if any come back.
+// NOTHING HERE RUNS, and the file is split so that this is a property of what
+// it CONTAINS rather than a rule to remember. A `*.test-d.ts` is typechecked and
+// never executed — the config runs `src/**/*.test.ts` and typechecks this
+// pattern — so anything written here that reads as execution is not execution.
+// Four `expect(...)` calls sat here unexecuted once, reading as coverage, one of
+// them the only check that a scope with no leaf THROWS.
+//
+// The claims that needed a RUN moved to `contract.test.ts`, where they run: they
+// were the ones building a scope and awaiting it to name the type of what came
+// back, and the await was doing nothing. What is left is type-level throughout —
+// conditional types read directly, and refusals under `@ts-expect-error` inside
+// functions nobody calls, which is also what keeps a directive from silencing a
+// line that would really throw.
 
 interface Repos {
   readonly users: { readonly byId: (id: string) => { readonly name: string } | undefined }
@@ -96,76 +103,6 @@ describe('what a step populates', () => {
         ctx.ghost
         return next({})
       })
-  })
-})
-
-describe('what a scope yields', () => {
-  // `R` is READ off the steps, with nothing to declare and nothing to keep
-  // aligned. Two of the three things a step can return contribute no value —
-  // the outcome `next` gave it, and a WORD — so what is left is the domain
-  // value, and it accumulates as a UNION.
-  it('accumulates every domain value its steps can return, not just the last', async () => {
-    const h = scope(fixture)
-      .step(async (app: Repos, ctx, next: Next<{ name: string }>) => {
-        const user = app.users.byId(ctx.token ?? '')
-        if (!user) return 'anonymous' as const
-        return next({ name: user.name })
-      })
-      .step(async (_app: {}, ctx: { readonly name: string }) => ctx.name.length)
-
-    const out = await h({ users: { byId: () => undefined } }, { token: null, params: {} })
-    // The guard's own value is here. Reading only the closing step missed it —
-    // which is what the intersection form could not express at all, since `A &
-    // B` over a type that is not a key collapses.
-    expectTypeOf(out).toEqualTypeOf<'anonymous' | number>()
-  })
-
-  it('a step that says a WORD contributes it, like any other return', async () => {
-    const h = scope(fixture)
-      .step(async (_app: {}, ctx, next: Next<{ name: string }>) =>
-        ctx.token === null ? refused('anonymous') : next({ name: ctx.token }),
-      )
-      .step(async (_app: {}, ctx: { readonly name: string }) => ctx.name.length)
-
-    const out = await h({}, { token: 'good', params: {} })
-    // The word is in the union beside the domain value. Passing through is what
-    // contributes nothing — `Passed` is excluded — and that is the only thing
-    // that does (§42).
-    expectTypeOf(out).toEqualTypeOf<number | Refusal>()
-  })
-
-  // A scope is ALWAYS callable — there is nothing to close. What a base without
-  // a leaf has is `R = never`, and `never` has no inhabitant: there is nothing
-  // to hand back, so running one throws rather than reporting a bug to its
-  // caller as a value.
-  it('a scope whose steps all pass through yields `never`', async () => {
-    const base = scope<{ readonly id: string }>().step(
-      async (_app: {}, ctx, next: Next<{ upper: string }>) => next({ upper: ctx.id }),
-    )
-    const o = await base({}, { id: 'u1' })
-    expectTypeOf(o).toEqualTypeOf<never>()
-  })
-
-  // And a base that REFUSES is not that case at all: its word is a return like
-  // any other, so `R` is the word's type and not `never`. The two-branch shape
-  // needed a caveat here — `Outcome<never>` was not empty, because the abort
-  // branch stayed inhabited — and with one channel the caveat is gone: `never`
-  // means never (§42).
-  it('a base that refuses has `R` = its word, so it never reaches the throw', async () => {
-    const base = scope(fixture).step(async (_app: {}, ctx, next: Next<{}>) =>
-      ctx.token === null ? refused('anonymous') : next({}),
-    )
-    const out = await base({}, { token: null, params: {} })
-    expectTypeOf(out).toEqualTypeOf<Refusal>()
-  })
-
-  // Still a builder, still callable — both at once, which is the whole point of
-  // carrying the state in a parameter.
-  it('is a builder and the function that runs it at the same time', async () => {
-    const s = scope(fixture).step(async (_app: {}, _ctx: {}) => 'v' as const)
-    expectTypeOf(s).toHaveProperty('step')
-    const out = await s({}, { token: null, params: {} })
-    expectTypeOf(out).toEqualTypeOf<'v'>()
   })
 })
 
