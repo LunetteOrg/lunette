@@ -7,14 +7,25 @@ authorization, resource prefetch, and the use case itself — without an onion, 
 AsyncLocalStorage, or a framework.
 
 Framework-free by construction, and dependency-free: the core has none at all,
-not even types-only. The host adapters are set aside while the core is rebuilt,
-and land as `@lntt/integration` once it settles.
+not even types-only. A carrier ships as a SUBPATH of this package, carrying its
+host's mount with it — there is no separate adapter package, because a carrier
+that hands back its host's own mount helpers leaves one nothing to be (§43).
+The four that ship take their frameworks as OPTIONAL peer dependencies, so the
+core stays dependency-free for anyone importing it:
+
+| subpath | what `carrier(deps)` hands back |
+|---|---|
+| `@lntt/scope/express` | `{ route, mw }` |
+| `@lntt/scope/hono` | `{ route, mw }` |
+| `@lntt/scope/trpc` | `{ procedure }` — a procedure is the only mount tRPC has |
+| `@lntt/scope/react-router` | `{ loader, action }` — two shapes, never a middleware |
 
 > **This README describes the pre-#30 surface** (`.input`, `.guard`, `.handle`,
 > `runScope`) and is being rewritten with the carriers. The shipped API today is
-> `scope()`, `.step()` and `.extend()` — and nothing else: no carrier and no
-> extension ship yet, so the Standard Schema validation described below is not
-> there. It comes back per carrier (§41, #64).
+> `scope()`, `.step()`, `.extend()` and the four carriers above — each of them
+> `__args` alone, with no vocabulary and nothing coined (§43), so the words and
+> the Standard Schema validation described below are not there. Validation comes
+> back as a step factory, per entry rather than per carrier (#64).
 
 ## The model
 
