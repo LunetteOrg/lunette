@@ -37,49 +37,10 @@
 // The annotation IS the declaration, and it sits on the parameter it describes
 // rather than in a phantom beside it.
 
-// ── the WORDS a carrier coins ────────────────────────────────────────────────
-// What a step returns when it has something to SAY beyond a domain value:
-// `unauthorized()`, `redirect('/')`, `json(v, 201)`. Each is a value of the
-// CARRIER's own type, and the core builds none of them — no constructor, no
-// brand, no predicate. What it knows is the one shape below, read off a type.
-//
-// So a carrier shapes its words however its host needs, and the core stays out
-// of it: a scope is a COMPOSER, not an error handler (§42). Read this asking
-// "what does it know about HTTP?" The answer is nothing.
-
-// Written without its parameter, `Word` means "an intent nobody declared" and
-// fails CLOSED — refused wherever a gate checks it — rather than collapsing to
-// `never` and mounting anywhere: a word that declares nothing is admitted by
-// every gate, which is fail-OPEN.
-//
-// NOT exported, and in one file that is simply true rather than something a
-// barrel had to explain. No carrier writes it, and the gate reports the KEY
-// (`__unknown_intent`) rather than this name, so it never reaches an error
-// message either. It goes public the day a case needs it.
-interface UnknownIntent {
-  readonly __unknown_intent: true
-}
-
-// `intent` is REQUIRED, and that requirement is what makes the declaration
-// readable without a brand. A phantom alone would not do: an all-optional shape
-// is matched by nearly every type, so the gate would fire `infer` on plain
-// domain values too and read their intent as `UnknownIntent`. Hanging the
-// declaration on a member a word carries ANYWAY separates the two for free —
-// and the core still never reads what an intent MEANS, only whether it is there
-// and what it is called.
-//
-// `__i` is phantom and INVARIANT: a contravariant one would let a caller name
-// the gate away by supplying `never`.
-export interface Word<I extends object = UnknownIntent> {
-  readonly intent: unknown
-  readonly __i?: (i: I) => I
-}
-
 // ── what `next` hands back ───────────────────────────────────────────────────
 // The fold produces NOTHING of its own. A step returns something and the fold
 // hands it back untouched — no branches, no `ok`, no normalising pass — so what
-// a scope yields is what its leaf returned, and what that MEANS belongs to the
-// carrier (§42).
+// a scope yields is what its leaf returned.
 //
 // Which leaves one thing to name: what a step sees when it continues inward.
 // When step 2 is written the builder cannot know what step 5 returns — step 5
@@ -93,9 +54,8 @@ export interface Word<I extends object = UnknownIntent> {
 // back whole; the TYPE declines to say what it is, because at that point in the
 // chain nothing truthful can be said. A step that only observes hands it
 // straight on and never has to know. A step that DECORATES has to read it, and
-// reading it means going through the carrier whose words are in there — one
-// assertion, written once per carrier, never at each step (measured against a
-// carrier of realistic size, §42).
+// reading it means asserting the domain type onto it — one assertion, written
+// once per carrier, never at each step.
 //
 // Which is also where the way OUT gets its guarantee, since it cannot get one
 // here. `Ctx` is read-only because the fold builds it and so knows its type; at
@@ -133,13 +93,8 @@ export interface Passed {
 export type Next<Add extends object> = (delta: Add) => Promise<Passed>
 
 // A step, as the author writes it — the formula, named. `R` is deliberately
-// unconstrained: the three things a step may return have nothing in common but
-// being values.
-//
-// `R` is also where the words live. A step returning `unauthorized()` has that
-// word in its return TYPE, so the builder reads it by distributing over the
-// whole return — never from inside a union constituent, where TypeScript picks
-// the first candidate and rejects the rest.
+// unconstrained: what a step may return — what `next` handed back, or a plain
+// domain value — has nothing in common but being a value.
 //
 // Nothing in the core is annotated with this — `.step` infers all four from the
 // function it is given, which is the point. It is here to be READ, and to be
@@ -208,16 +163,9 @@ export interface State {
   readonly args: object
   // What the steps have populated so far.
   readonly acc: object
-  // What the scope can YIELD: the union of everything its steps return, words
-  // included — with one channel there is nowhere else for them to be (§42).
+  // What the scope can YIELD: the union of everything its steps return,
+  // accumulated at every `.step`.
   readonly returns: unknown
-  // The two sides `ReturnGate` compares, and they are supply and demand.
-  // `vocabulary` is what the carrier COINS — every word this scope may say,
-  // whether or not anything says it. `intents` is what the steps written so far
-  // actually SAY, accumulated at every `.step`. What you MAY say, against what
-  // you HAVE said: the first gates a step as it is written, the second is what
-  // a mount asks about, to know whether it can render them all.
-  readonly vocabulary: PropertyKey
   // The verbs its extensions declared, as the BUILDER offers them — full
   // signatures, not the runtime factories. Constraining this to the factory map
   // reads as harmless and is not: a concrete state then fails its own
@@ -228,62 +176,30 @@ export interface State {
 
 // ── reading what a step handed back ──────────────────────────────────────────
 // The fold hands back what the leaf returned, so what a scope YIELDS is the
-// union its steps accumulated — words included, since a word is a value like
-// any other and the core has no branch to put it on. The one thing taken out is
-// the marker `next` returns: that is machinery, and no consumer should see it.
-//
-// One projection, therefore, where the two-branch shape needed two. "What does
-// this scope produce" and "what can it hand back at all" stopped being
-// different questions when the branch went (§42).
+// union its steps accumulated. The one thing taken out is the marker `next`
+// returns: that is machinery, and no consumer should see it.
 type ValueOf<R> = Exclude<R, Passed>
 
-// The load-bearing shape on the intent axis. Inferring from INSIDE a union
-// constituent (`(ctx) => E | Refusal`) makes TypeScript pick the first
-// candidate and reject the rest, so a step that can return two different words
-// stops compiling. Infer the WHOLE return type and distribute afterwards.
-type IntentKeysOf<R> = R extends Word<infer I> ? keyof I : never
-
 // ── gate: what the step HANDS BACK ───────────────────────────────────────────
-// Two things are checked about one type, so they share the `Awaited` — measured
-// at 2% of the pair's cost, and the pair is 7% of a chain's total.
-//
-// FIRST, a step that returns nothing. Forgetting `return` in front of `next(…)`
-// is silent and plausible: the inner steps run, the leaf computes its value,
-// and the fold hands back the wrapper's `undefined` instead — which is an
-// ordinary domain value, so nothing downstream notices. A function with no
-// `return` at all infers `void`, while `return undefined` infers `undefined`,
-// and the two are distinct here — so a leaf that really has nothing to hand
-// back says so and passes, and `null` is a domain value that never reaches the
-// check. The gap: a step returning on one path and falling off the other infers
-// `T | undefined`, not `void`, and passes. Catching that would refuse every
+// A step that returns nothing. Forgetting `return` in front of `next(…)` is
+// silent and plausible: the inner steps run, the leaf computes its value, and
+// the fold hands back the wrapper's `undefined` instead — which is an ordinary
+// domain value, so nothing downstream notices. A function with no `return` at
+// all infers `void`, while `return undefined` infers `undefined`, and the two
+// are distinct here — so a leaf that really has nothing to hand back says so
+// and passes, and `null` is a domain value that never reaches the check. The
+// gap: a step returning on one path and falling off the other infers `T |
+// undefined`, not `void`, and passes. Catching that would refuse every
 // legitimate result that can be absent.
 //
 // Without this the mistake still surfaces, but as `string | void` at whoever
 // consumes the result — in another file, pointing at a step its author never
 // wrote, and not at all in a test that only checks the happy value.
-//
-// SECOND, a word the scope does not coin.
-// It rides the ARGUMENT, not the return type. The return-type form is cheaper
-// but only fires when the NEXT call touches the poisoned type, so a BASE — a
-// carrier and some steps with no leaf, the shape a shared `gated()` has —
-// swallows the mistake and surfaces it in whichever file finally uses the
-// scope, pointing at a step its author never wrote.
-//
-// `A` and `U` are let-bindings computed once. They sit on the ALIAS, never on
-// the method: a defaulted parameter in a method's own list is caller-
-// overridable, and naming it `never` walks straight through the gate.
-type ReturnGate<
-  S extends State,
-  Ret,
-  A = Awaited<Ret>,
-  U = Exclude<IntentKeysOf<A>, S['vocabulary']>,
-> = [A] extends [void]
+type ReturnGate<Ret, A = Awaited<Ret>> = [A] extends [void]
   ? [A] extends [undefined]
     ? unknown
     : '⛔ this step returns nothing — did you forget `return` in front of `next(…)`?'
-  : [U] extends [never]
-    ? unknown
-    : `⛔ this scope does not coin the word: ${U & string} — is it the right carrier?`
+  : unknown
 
 // ── the ctx a step reads ─────────────────────────────────────────────────────
 // The arguments the run was given, plus everything the steps before it
@@ -421,12 +337,11 @@ type VerbGate<
   : `⛔ a verb cannot be named: ${Own & string} — the scope's own surface owns it`
 
 // How anything OUTSIDE the builder reads what a scope accumulated — a mount
-// asking which words it can say, a test asking what it yields. With the state in
-// a parameter, one conditional reads all of it; the per-axis phantoms this
+// asking what it can render, a test asking what it yields. With the state in a
+// parameter, one conditional reads all of it; the per-axis phantoms this
 // replaced were not merely redundant, an INVARIANT one blocked the inference of
 // `S` from a verb's `this` altogether.
 export type StateOf<Sc> = Sc extends Scope<infer S> ? S : never
-export type IntentsOf<Sc> = IntentKeysOf<StateOf<Sc>['returns']>
 export type ResultOf<Sc> = ValueOf<StateOf<Sc>['returns']>
 
 // What `.step` grows. An extension writes its own transformation instead —
@@ -487,7 +402,6 @@ type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Sur
   args: S['args']
   acc: S['acc'] & Add
   returns: S['returns'] | Awaited<Ret>
-  vocabulary: S['vocabulary']
   verbs: S['verbs']
 }>
 
@@ -512,20 +426,20 @@ type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Sur
 // no verb declares — is an error here.
 type Verbs = Readonly<Record<string, (...args: never[]) => AnyStep>>
 
-// A verb SAYS its own words. `.step` states a return twice — `ReturnGate`
-// refuses one the carrier does not coin, `Grown` unions it into `returns`, and
-// `IntentsOf` reads that — and a verb goes through neither: the factories below
-// are typed to `AnyStep`, so the step's return type is erased here, before
-// anything could compare it against a declaration. The bypass is the same one
-// that lets a verb REPLACE a ctx entry, and on this axis it costs a rule the
-// core cannot enforce:
+// A verb SAYS what its own step returns; nothing computes it. `.step` states a
+// return once — `Grown` unions `Awaited<Ret>` into `returns`, which is what
+// `ResultOf` reads — and a verb goes through neither: `Extension`'s factories
+// are typed `(...args: never[]) => AnyStep`, so the step's return type is
+// erased here, before anything could read it. The bypass is the same one that
+// lets a verb REPLACE a ctx entry, and on this axis it costs a rule the core
+// cannot enforce:
 //
-//   returns: S['returns'] | TheWord     a verb whose step returns a word
-//   returns: S['returns']               a verb that only passes through
+//   returns: S['returns'] | TheValue   a verb whose step can stop with a value
+//   returns: S['returns']              a verb that only passes through
 //
-// Get it wrong in the second direction and the scope really does hand the word
-// back while every reader says it says nothing — so a host that cannot render
-// it mounts clean. Pinned both ways in `contract.test-d.ts`.
+// Get it wrong in the second direction and the scope really does hand a value
+// back while `ResultOf` says it never does — invisible to whoever reads it from
+// outside, though it still arrives at runtime. Pinned in `contract.test-d.ts`.
 export interface Extension<M extends object> {
   // One factory per declared verb, keyed alike. A factory never receives the
   // builder or a callback to rebuild it: pushing the step is the core's job.
@@ -566,13 +480,13 @@ export interface Scope<S extends State> {
   // shape becomes writable and the lock is simply gone. Measured against a
   // relaxed tsconfig: three of four survive, this is the one that does not.
   //
-  // `Ret` is unconstrained on purpose: the three things a step may return have
-  // nothing in common but being values, and the fold touches none of them —
-  // what it hands back is what the step returned (§42). Which of the three it
-  // was is a question for the carrier, and the core never asks it.
+  // `Ret` is unconstrained on purpose: what a step may return — what `next`
+  // handed back, or a plain domain value — has nothing in common but being a
+  // value, and the fold touches none of it. What it hands back is what the
+  // step returned.
   step<Need2 extends object, Add extends object, Ret>(
     s: ((app: Need2, ctx: Ctx<S>, next: Next<Add>) => Ret | Promise<Ret>) &
-      ReturnGate<S, Ret> &
+      ReturnGate<Ret> &
       CtxGate<S, Add>,
   ): Grown<S, Need2, Add, Ret>
 
@@ -586,7 +500,6 @@ export interface Scope<S extends State> {
     args: S['args']
     acc: S['acc']
     returns: S['returns']
-    vocabulary: S['vocabulary']
     verbs: S['verbs'] & M
   }>
 }
@@ -597,18 +510,9 @@ export interface Scope<S extends State> {
 // expressible and failed only later, at the mount, by accident.
 export interface Carrier {
   readonly __args?: object
-  readonly __vocabulary?: object
 }
 
 type ArgsOf<C> = C extends { readonly __args?: infer T } ? (T extends object ? T : {}) : {}
-// A non-string key is not dropped: dropping the only key leaves `never`, and a
-// scope declaring `never` coins nothing, so every word is refused. That is
-// fail-CLOSED and visible in the error.
-type VocabularyOf<C> = C extends { readonly __vocabulary?: infer M }
-  ? [keyof M] extends [string]
-    ? keyof M
-    : '__NON_STRING_DECLARED_KEY'
-  : never
 
 // ── runtime ──────────────────────────────────────────────────────────────────
 // The runtime knows nothing of any of this: it holds an ordered list of steps
@@ -744,23 +648,22 @@ function make(steps: readonly AnyStep[], verbs: Verbs): Built {
   return self
 }
 
-type Empty<Args extends object, Vocab extends PropertyKey> = {
+type Empty<Args extends object> = {
   need: {}
   args: Args
   acc: {}
   returns: never
-  vocabulary: Vocab
   verbs: {}
 }
 
-// Start a scope. The base is carrier-agnostic: nothing to read, no words to say,
-// and it mounts everywhere by construction. `scope(carrier)` brings that
-// carrier's run parameters and the words it coins.
-export function scope<Args extends object = {}>(): Surface<Empty<Args, never>>
-export function scope<C extends Carrier>(carrier: C): Surface<Empty<ArgsOf<C>, VocabularyOf<C>>>
-export function scope(_carrier?: Carrier): Surface<Empty<{}, never>> {
-  // A carrier is PURE DECLARATION — it brings a vocabulary and the shape of a
-  // run, and contributes no fold work at all. So there is nothing to inject
-  // here, and the argument is read entirely at the type level.
-  return make([], {}) as unknown as Surface<Empty<{}, never>>
+// Start a scope. The base is carrier-agnostic: nothing to read, and it composes
+// with anything. `scope(carrier)` brings that carrier's run parameters — the
+// shape of a run's second argument.
+export function scope<Args extends object = {}>(): Surface<Empty<Args>>
+export function scope<C extends Carrier>(carrier: C): Surface<Empty<ArgsOf<C>>>
+export function scope(_carrier?: Carrier): Surface<Empty<{}>> {
+  // A carrier is PURE DECLARATION — it brings the shape of a run and
+  // contributes no fold work at all. So there is nothing to inject here, and
+  // the argument is read entirely at the type level.
+  return make([], {}) as unknown as Surface<Empty<{}>>
 }

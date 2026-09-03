@@ -69,7 +69,6 @@ interface PinVerb {
     args: S['args']
     acc: S['acc'] & { readonly pinned: N }
     returns: S['returns']
-    vocabulary: S['vocabulary']
     verbs: S['verbs']
   }>
 }
@@ -99,7 +98,6 @@ interface NarrowVerb {
     // for the args axis, and legible here because the verb states it.
     acc: Omit<S['acc'], 'body'> & { readonly body: { id: string } }
     returns: S['returns']
-    vocabulary: S['vocabulary']
     verbs: S['verbs']
   }>
 }
