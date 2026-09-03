@@ -34,6 +34,9 @@ importers:
       hono:
         specifier: 4.13.5
         version: 4.13.5
+      react-router:
+        specifier: 7.18.3
+        version: 7.18.3(react@19.2.8)
       supertest:
         specifier: ^7.2.2
         version: 7.2.2
