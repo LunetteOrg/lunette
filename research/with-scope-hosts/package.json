@@ -2,7 +2,7 @@
   "name": "@lntt/research-with-scope-hosts",
   "version": "0.0.0",
   "private": true,
-  "description": "Research prototype, NOT a product: the same routes as research/no-scope-hosts, this time composed with @lntt/scope's step primitive and NO carrier — args typed by an explicit generic. Measures what composition alone buys once vocabulary is off the table.",
+  "description": "Research prototype, NOT a product: the same routes as research/no-scope-hosts, this time composed with @lntt/scope's step primitive on the stripped-down (vocabulary-free) core — a carrier is __args alone. Measures what composition alone buys, per host, once vocabulary is off the table.",
   "type": "module",
   "scripts": {
     "test": "vitest run",
@@ -11,7 +11,10 @@
   "dependencies": {
     "@lntt/scope": "workspace:*",
     "@lntt/wire": "workspace:*",
+    "@trpc/server": "11.18.0",
     "express": "5.2.1",
+    "hono": "4.13.5",
+    "react-router": "7.18.3",
     "zod": "^4.5.4"
   },
   "devDependencies": {
