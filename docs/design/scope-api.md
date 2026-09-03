@@ -1,11 +1,28 @@
 # The scope API
 
 The target surface, settled by spike and measurement rather than argument.
-Decision 40 in `docs/decisions.md` records WHY a carrier owns its vocabulary,
-and decision 41 why validation belongs to the carrier too — which retires the
+
+> **This document is mid-revision.** Decision 43 (`docs/decisions.md`)
+> supersedes decisions 40 and 41's premise: a carrier needs no vocabulary at
+> all — no words, no `__vocabulary`, no `ReturnGate` word check — measured by
+> composing the same routes on four real hosts (`research/no-scope-hosts`,
+> `research/with-scope-hosts`) with a carrier that is `__args` alone
+> (`packages/scope/src/index.ts`, shipped). Most of what follows — the
+> lexicon's `intent`/`word`/`registry` entries, **Carriers**, **Extensions**,
+> **The outbound side is a RETURNED value**, and the intent-related rows of
+> **The gates** — describes the vocabulary design that was tried and retired,
+> kept as the engineering record of what it cost and why it was dropped
+> (decision 43), not as the current contract. What stands UNCHANGED: the step
+> primitive, `.step()`/`.extend()`, `Ctx`'s contravariant narrowing, the
+> route-pattern bridges, and the traps not specifically about a word or an
+> intent. **"Where this goes next"** at the end carries the current issue graph.
+
+Decision 40 in `docs/decisions.md` records WHY a carrier owned its vocabulary,
+and decision 41 why validation belonged to the carrier too — which retired the
 core's `invalid` branch and, with it, the sections below that still describe a
 generic `.validate` over an open set of ctx entries. This records the WHAT, plus
-the traps that cost a measurement each.
+the traps that cost a measurement each — most of them orthogonal to the
+vocabulary question and still true regardless of it.
 
 ## The lexicon
 
@@ -258,12 +275,16 @@ asymmetry intact: demand open, supply a written-out set.
 
 ## Extensions populate the ctx; a validation verb refines it
 
-> **§41 moved the verb.** This section was written when `validate` was a
-> carrier-FREE extension in the core, and the paragraph below still argues for
-> that. It is superseded: a carrier-free verb has no word to fail with, which is
-> why the core had to carry an `invalid` branch for it to land on. Both are gone
-> (#64). What still stands is everything about the ENTRIES — who populates them,
-> which are validatable, and why the registry is opaque.
+> **§41 moved the verb; §43 removed what it moved to.** This section was
+> written when `validate` was a carrier-FREE extension in the core, and the
+> paragraph below still argues for that. It is superseded twice over: a
+> carrier-free verb has no word to fail with, which is why the core had to
+> carry an `invalid` branch for it to land on — both gone. And the carrier it
+> moved TO no longer has words either (decision 43): a validation step writes
+> its host's own native shape directly, generalised further as one factory
+> parameterised by which entry it validates, not only by schema (#64). What
+> still stands is everything about the ENTRIES — who populates them, which are
+> validatable, and why the registry is opaque.
 
 A carrier or an extension POPULATES ctx entries, always, by being extended.
 Extending IS reaching: `.extend(query)` means `ctx.query` is there, typed as
@@ -401,6 +422,14 @@ than the read, and it is ambient magic (principle 7).
 
 ## The outbound side is a RETURNED value
 
+> **The envelope below never shipped — closed as WONTFIX (#61, decision 43).**
+> "Nothing is written through a sink, a step returns a value" stands, verified
+> on four real hosts. `response(v, init)` as a shared carrier WORD does not: each
+> host writes its own native response value (`c.json(v, status)`,
+> `data(v, {status})`, a thrown `TRPCError`) with no envelope between them. Read
+> for the sink-versus-return argument, which is still right; not for the
+> vocabulary it was going to ride on.
+
 `response(body, init)` is the general word, and `json`/`html`/`text` are sugar
 over it — particular content types, nothing more. The same envelope rides an
 abort, because a logout drops a cookie AND redirects:
@@ -502,6 +531,13 @@ collision the design was creating for itself rather than closing it.
 
 ## Carriers
 
+> **The table below never shipped this way (decision 43).** A shipped carrier
+> is `__args` alone — no "words it coins" column, because no carrier coins any.
+> What DOES survive per host: the ctx shape (`request`/`params`, `input`, …) and
+> which reads a host admits — see `research/with-scope-hosts` for the actual
+> shipped-shape carriers (`ExpressCarrier`, `HonoCarrier`, `TrpcCarrier`,
+> `ReactRouterCarrier`), soon to be packaged by #60.
+
 | carrier | ctx | validatable | words it coins | it admits |
 |---|---|---|---|---|
 | `@lntt/scope/http` | `request: RequestHead`, `params` | `params` | `notFound` `forbidden` `unauthorized` `httpError` `redirect`; `response(v, init)` and its sugar `json` `html` `text` | `body` `query` `request-headers` |
@@ -553,6 +589,13 @@ body stays unreachable except through a declared extension (§34). Every carrier
 that holds one exposes it; there is no shared `request` extension.
 
 ## Extensions
+
+> **"failing in the carrier's own word" (row below) is decision 43's target,
+> not its current shape.** #64 generalises the validation factory to any entry
+> (body, header, query, an RPC input), each host writing its own native
+> response — no word. The `@lntt/scope/body`/`query`/`cookies`/`headers` names
+> below as CAPABILITY-GATED subpaths never shipped either; #62 found the raw
+> read is mostly a plain step per host, not a shared subpath.
 
 | extension | contributes | what its step ANNOTATES |
 |---|---|---|
@@ -614,6 +657,12 @@ belong in a host's set as well — a host that speaks HTTP does have a URL and
 request headers — and the extension stops declaring the same name twice.
 
 ## The gates, and where each error lands
+
+> Two rows below — "a word the carrier does not coin" and "a host that cannot
+> render what the scope produces" — describe the intent gate, gone with the
+> vocabulary (decision 43). The others are unchanged: the carrier/extension
+> category gate, `CtxGate`'s narrowing, and the mount-side capability gate (§34)
+> are still exactly this.
 
 Every one names the thing that is wrong, and lands on the line that contains it.
 
@@ -679,7 +728,11 @@ The gate must survive that spread — it is the only form anyone writes.
 ## Traps already paid for
 
 Each cost a measurement. A fresh implementation should inherit them, not
-rediscover them.
+rediscover them. Traps 1, 6, 7 and 13 are specifically about the intent/word
+mechanism (decision 43) — dead code today, worth keeping only if that mechanism
+is ever rebuilt. The rest (contravariance, vacuous truth, phantom variance,
+`this` binding, generic inference, gate placement) are general TypeScript
+lessons this codebase paid for and still applies.
 
 1. **The intent cannot be inferred from inside a union constituent.**
    `g: (ctx) => E | Word<I>` makes TypeScript pick the first word candidate
@@ -952,25 +1005,29 @@ while several slices are in flight, is nobody.
 
 What carries the sequence instead is the issues' own `blocked by` relations, so
 "this before that" is a claim on the issue rather than a position in a list, and
-it is the same claim from every branch. The graph as it stands:
+it is the same claim from every branch. **Rewritten after #76** (decision 43):
+#58, #61, #66 closed (absorbed or WONTFIX, each with the reason on the issue);
+PR #75 (the draft that would have closed #60 on the vocabulary premise) closed
+for the same reason. The graph as it stands:
 
 ```
-#60 carriers ──┬──→ #66 translating step   needs a vocabulary to translate INTO
-               ├──→ #64 validation         needs a word to refuse WITH
-               ├──→ #61 outbound           the words belong to a carrier
-               ├──→ #62 read extensions    needs `RequestHead`
-               └──→ #67 composable scopes  needs ≥2 vocabularies to be agnostic across
+#60 carriers ──┬──→ #64 validation         one factory, per-host native shape — no word to refuse WITH any more
+               ├──→ #62 read extensions    the raw-read half only; validation itself is #64's
+               └──→ #67 composable scopes  the DERIVING half of a guard is shareable; the STOPPING half is per host
 
-#51 ctx collisions ──→ #67                 splicing intersects `acc`
-
-#60, #61, #62 ───────→ #58 integration     mounts render words and read entries
-
-#58, #63, #64, #66, #67 ──→ #59 examples   LAST, and the real proof
+#60, #63, #64, #67 ──→ #59 examples        LAST, and the real proof
 ```
 
-Two orderings are deliberately NOT edges, because they are preferences and not
-blocks: #61 before #62, and #63 before #67. A partial order is honest where a
-total one would be invented.
+`#60` now covers what `#58` tracked: a carrier ships its own mount helper
+(`research/with-scope-hosts/src/*/carrier.ts`), so there is no separate
+`@lntt/integration` package left to port. `#66`'s translating step and `#61`'s
+outbound envelope both needed a vocabulary to translate into or to belong to;
+neither exists, and neither answered a failure composition alone did not
+already close (decision 43).
+
+One ordering is deliberately NOT an edge, because it is a preference and not a
+block: #63 before #67. A partial order is honest where a total one would be
+invented.
 
 Parked, and deliberately unscheduled — neither has a case in hand, which is the
 discipline that removed `validate` from the core:
@@ -988,7 +1045,11 @@ discipline that removed `validate` from the core:
 
 ### The reference implementation
 
-`origin/story-30/scope-impl` is the branch to read while doing all of the above.
+**For the carrier port (#60) specifically, read `research/with-scope-hosts`
+first** — four real carriers on the shipped, vocabulary-free core, the form #60
+extracts into packages. `origin/story-30/scope-impl` below is the branch to
+read for everything else that is still relevant: it is the branch to read while
+doing all of the above.
 It carries the previous core's carriers and extensions (35 files under
 `packages/scope/src`), `@lntt/integration` complete (27 files, the route, intent
 and capability gate tests among them), and `examples/` (191 files). Its API is

@@ -22,9 +22,9 @@ interface Repos {
 
 describe('what a scope yields', () => {
   // `R` is READ off the steps, with nothing to declare and nothing to keep
-  // aligned. Two of the three things a step can return contribute no value —
-  // the outcome `next` gave it, and a WORD — so what is left is the domain
-  // value, and it accumulates as a UNION.
+  // aligned. What `next` gave a step contributes no value — that is machinery
+  // — so what is left is every domain value a step returned, and it
+  // accumulates as a UNION.
   it('accumulates every domain value its steps can return, not just the last', async () => {
     const h = scope(fixture)
       .step(async (app: Repos, ctx, next: Next<{ name: string }>) => {
@@ -42,7 +42,7 @@ describe('what a scope yields', () => {
     expectTypeOf(out).toEqualTypeOf<'anonymous' | number>()
   })
 
-  it('a step that says a WORD contributes it, like any other return', async () => {
+  it('a step that stops early contributes its own value, like any other return', async () => {
     const h = scope(fixture)
       .step(async (_app: {}, ctx, next: Next<{ name: string }>) =>
         ctx.token === null ? refused('anonymous') : next({ name: ctx.token }),
@@ -51,9 +51,9 @@ describe('what a scope yields', () => {
 
     const out = await h({}, { token: 'good', params: {} })
     expect(out).toBe(4)
-    // The word is in the union beside the domain value. Passing through is what
-    // contributes nothing — `Passed` is excluded — and that is the only thing
-    // that does (§42).
+    // The early value sits in the union beside the domain value. Passing
+    // through is what contributes nothing — `Passed` is excluded — and that
+    // is the only thing that does.
     expectTypeOf(out).toEqualTypeOf<number | Refusal>()
   })
 
@@ -73,17 +73,16 @@ describe('what a scope yields', () => {
     expectTypeOf(await ({} as ReturnType<typeof run>)).toEqualTypeOf<never>()
   })
 
-  // And a base that REFUSES is not that case at all: its word is a return like
-  // any other, so `R` is the word's type and not `never`. The two-branch shape
-  // needed a caveat here — `Outcome<never>` was not empty, because the abort
-  // branch stayed inhabited — and with one channel the caveat is gone: `never`
-  // means never (§42).
-  it('a base that refuses has `R` = its word, so it never reaches the throw', async () => {
+  // And a base that stops early is not that case at all: its value is a
+  // return like any other, so `R` is that value's type and not `never`.
+  // `never` means never — a base with a leaf, of any shape, always has a
+  // value to hand back.
+  it('a base that stops early has `R` = its value, so it never reaches the throw', async () => {
     const base = scope(fixture).step(async (_app: {}, ctx, next: Next<{}>) =>
       ctx.token === null ? refused('anonymous') : next({}),
     )
     const out = await base({}, { token: null, params: {} })
-    expect(out).toMatchObject({ kind: 'refused', intent: { why: 'anonymous' } })
+    expect(out).toMatchObject({ kind: 'refused', why: 'anonymous' })
     expectTypeOf(out).toEqualTypeOf<Refusal>()
   })
 
