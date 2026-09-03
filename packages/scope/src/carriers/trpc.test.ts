@@ -48,6 +48,9 @@ describe('telling a word from a domain value', () => {
     expect(isWord(conflict())).toBe(true)
     expect(isWord({ title: 'a row' })).toBe(false)
     expect(isWord({ intent: 'analytics' })).toBe(false)
+    // Both names by coincidence is still a domain object — only the `kind` this
+    // carrier coins makes a word.
+    expect(isWord({ kind: 'callout', intent: 'warning' })).toBe(false)
     expect(isWord(null)).toBe(false)
   })
 })

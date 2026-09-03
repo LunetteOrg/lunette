@@ -132,8 +132,21 @@ export const answered = <V>(passed: Passed): Answered<V> => passed as unknown as
 // This carrier's own predicate. The core ships none — it knows nothing about
 // what a word looks like here — so telling a word from a domain value is the
 // carrier's job.
+//
+// `kind` is read against this carrier's CLOSED set, not merely checked for
+// presence. Both names occur in the wild together — a CMS block is
+// `{ kind: 'callout', intent: 'warning' }` — and presence alone would claim one
+// as a word: the mount would then find no branch for its `kind` and throw, on a
+// run that went perfectly well, turning a success into infrastructure (§14).
+const kinds: ReadonlySet<string> = new Set(['status', 'redirect', 'response'])
+
 export const isWord = (x: unknown): x is HttpStatus | Redirect | HttpResponse<unknown> =>
-  typeof x === 'object' && x !== null && 'intent' in x && 'kind' in x
+  typeof x === 'object' &&
+  x !== null &&
+  'intent' in x &&
+  'kind' in x &&
+  typeof x.kind === 'string' &&
+  kinds.has(x.kind)
 
 // ── the carrier's VOCABULARY ─────────────────────────────────────────────────
 // What the gate reads a returned word against. A word this carrier does not

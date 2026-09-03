@@ -74,10 +74,20 @@ export type Answered<V> = Readonly<
 
 export const answered = <V>(passed: Passed): Answered<V> => passed as unknown as Answered<V>
 
+// `kind` is read against the closed set — http's three plus this carrier's own —
+// for the reason spelled out in `http.ts`: presence of both names is a shape
+// domain objects have too, and claiming one leaves the mount with no branch.
+const kinds: ReadonlySet<string> = new Set(['status', 'redirect', 'response', 'rr-data'])
+
 export const isWord = (
   x: unknown,
 ): x is HttpStatus | Redirect | HttpResponse<unknown> | RouterData<unknown> =>
-  typeof x === 'object' && x !== null && 'intent' in x && 'kind' in x
+  typeof x === 'object' &&
+  x !== null &&
+  'intent' in x &&
+  'kind' in x &&
+  typeof x.kind === 'string' &&
+  kinds.has(x.kind)
 
 // ── the carrier's VOCABULARY ─────────────────────────────────────────────────
 export interface ReactRouterCarrier {

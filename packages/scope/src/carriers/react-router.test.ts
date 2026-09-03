@@ -67,6 +67,9 @@ describe('telling a word from a domain value', () => {
   it('and takes nothing else for one', () => {
     expect(isWord({ title: 'a post' })).toBe(false)
     expect(isWord({ intent: 'analytics' })).toBe(false)
+    // Both names by coincidence is still a domain object — only a `kind` from
+    // the closed set makes a word.
+    expect(isWord({ kind: 'callout', intent: 'warning' })).toBe(false)
     expect(isWord(null)).toBe(false)
   })
 })

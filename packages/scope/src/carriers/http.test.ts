@@ -103,6 +103,10 @@ describe('telling a word from a domain value', () => {
     // names by coincidence is still a domain object.
     expect(isWord({ intent: 'analytics' })).toBe(false)
     expect(isWord({ kind: 'post' })).toBe(false)
+    // And carrying BOTH by coincidence is still a domain object: `kind` and
+    // `intent` are ordinary words a CMS block or an analytics record uses. Only
+    // a `kind` this carrier actually coins makes a word.
+    expect(isWord({ kind: 'callout', intent: 'warning' })).toBe(false)
   })
 })
 

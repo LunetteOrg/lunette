@@ -64,8 +64,15 @@ export type Answered<V> = Readonly<RpcAbort | V>
 
 export const answered = <V>(passed: Passed): Answered<V> => passed as unknown as Answered<V>
 
+// `kind` is read against the one name this carrier coins, not merely checked for
+// presence: a domain object carrying both names by coincidence would otherwise
+// be claimed as a word and thrown at the mount as a `TRPCError` (§14).
 export const isWord = (x: unknown): x is RpcAbort =>
-  typeof x === 'object' && x !== null && 'intent' in x && 'kind' in x
+  typeof x === 'object' &&
+  x !== null &&
+  'intent' in x &&
+  'kind' in x &&
+  x.kind === 'code'
 
 // ── the carrier's VOCABULARY ─────────────────────────────────────────────────
 export interface RpcCarrier {
