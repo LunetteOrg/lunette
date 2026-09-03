@@ -50,46 +50,6 @@ importers:
         specifier: ^4.1.0
         version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
 
-  research/no-scope-hosts:
-    dependencies:
-      '@lntt/wire':
-        specifier: workspace:*
-        version: link:../../packages/wire
-      '@trpc/server':
-        specifier: 11.18.0
-        version: 11.18.0(typescript@5.9.3)
-      express:
-        specifier: 5.2.1
-        version: 5.2.1
-      hono:
-        specifier: 4.13.5
-        version: 4.13.5
-      react-router:
-        specifier: 7.18.3
-        version: 7.18.3(react@19.2.8)
-      zod:
-        specifier: ^4.5.4
-        version: 4.5.4
-    devDependencies:
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
-      '@types/node':
-        specifier: ^24.13.2
-        version: 24.13.2
-      '@types/supertest':
-        specifier: ^7.2.1
-        version: 7.2.1
-      supertest:
-        specifier: ^7.2.2
-        version: 7.2.2
-      typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
-      vitest:
-        specifier: ^4.1.0
-        version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
-
   research/order-free-layers:
     devDependencies:
       '@types/node':
