@@ -28,6 +28,9 @@ importers:
       express:
         specifier: 5.2.1
         version: 5.2.1
+      hono:
+        specifier: 4.13.5
+        version: 4.13.5
       supertest:
         specifier: ^7.2.2
         version: 7.2.2

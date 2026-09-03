@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./express": "./src/express/index.ts"
+    "./express": "./src/express/index.ts",
+    "./hono": "./src/hono/index.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -17,15 +18,20 @@
     "@types/node": "^24.13.2",
     "@types/supertest": "^7.2.1",
     "express": "5.2.1",
+    "hono": "4.13.5",
     "supertest": "^7.2.2",
     "typescript": "^5.9.2",
     "vitest": "^4.1.0"
   },
   "peerDependencies": {
-    "express": ">=5"
+    "express": ">=5",
+    "hono": ">=4"
   },
   "peerDependenciesMeta": {
     "express": {
+      "optional": true
+    },
+    "hono": {
       "optional": true
     }
   }
