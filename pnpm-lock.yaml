@@ -16,6 +16,9 @@ importers:
 
   packages/scope:
     devDependencies:
+      '@trpc/server':
+        specifier: 11.18.0
+        version: 11.18.0(typescript@5.9.3)
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6

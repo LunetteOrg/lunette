@@ -7,13 +7,15 @@
   "exports": {
     ".": "./src/index.ts",
     "./express": "./src/express/index.ts",
-    "./hono": "./src/hono/index.ts"
+    "./hono": "./src/hono/index.ts",
+    "./trpc": "./src/trpc/index.ts"
   },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@trpc/server": "11.18.0",
     "@types/express": "^5.0.6",
     "@types/node": "^24.13.2",
     "@types/supertest": "^7.2.1",
@@ -24,10 +26,14 @@
     "vitest": "^4.1.0"
   },
   "peerDependencies": {
+    "@trpc/server": ">=11",
     "express": ">=5",
     "hono": ">=4"
   },
   "peerDependenciesMeta": {
+    "@trpc/server": {
+      "optional": true
+    },
     "express": {
       "optional": true
     },

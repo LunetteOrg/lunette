@@ -1,0 +1,100 @@
+import { describe, expect, it } from 'vitest'
+import { initTRPC, TRPCError } from '@trpc/server'
+import { scope, type Next } from '../index.ts'
+import { trpc, trpcCarrier } from './index.ts'
+
+// The application's own context — the carrier is generic over it, so this
+// shape is named once here and the scope reads it typed.
+type Context = { readonly actorId: string | undefined }
+
+const t = initTRPC.context<Context>().create()
+
+// A guard, written here rather than imported: what a guard IS belongs to no
+// carrier (§43). It stops the way tRPC stops — a thrown `TRPCError`, its one
+// door.
+const requireActor = async (
+  _app: {},
+  { ctx }: { readonly ctx: Context },
+  next: Next<{ actor: string }>,
+) => {
+  if (ctx.actorId === undefined) throw new TRPCError({ code: 'UNAUTHORIZED' })
+  return next({ actor: ctx.actorId })
+}
+
+const greeter = { greet: (who: string) => `hello ${who}` }
+
+describe('the tRPC carrier: what a run brings', () => {
+  const { procedure } = trpc<typeof greeter, Context>(greeter)
+
+  const router = t.router({
+    greet: t.procedure.input((v) => v as { readonly who: string }).query(
+      procedure(
+        scope(trpcCarrier<Context>()).step(
+          async ({ greet }: typeof greeter, { input, ctx }) => ({
+            said: greet((input as { readonly who: string }).who),
+            by: ctx.actorId ?? 'anonymous',
+          }),
+        ),
+      ),
+    ),
+
+    whoami: t.procedure.query(
+      procedure(
+        scope(trpcCarrier<Context>())
+          .step(requireActor)
+          .step(async (_app: {}, { actor }: { readonly actor: string }) => ({ actor })),
+      ),
+    ),
+  })
+
+  const caller = (ctx: Context) => router.createCaller(ctx)
+
+  it('hands the step `input` and the transport-made `ctx`, and the app its deps', async () => {
+    const result = await caller({ actorId: 'u1' }).greet({ who: 'ada' })
+    expect(result).toEqual({ said: 'hello ada', by: 'u1' })
+  })
+
+  it('the context is TYPED, not `unknown`: a step reads it without a cast', async () => {
+    const result = await caller({ actorId: undefined }).greet({ who: 'ada' })
+    expect(result).toEqual({ said: 'hello ada', by: 'anonymous' })
+  })
+
+  it('a step that stops throws tRPC\'s own error, and the leaf never runs', async () => {
+    await expect(caller({ actorId: undefined }).whoami()).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+  })
+
+  it('what the leaf returned is what the procedure resolves with', async () => {
+    expect(await caller({ actorId: 'u1' }).whoami()).toEqual({ actor: 'u1' })
+  })
+})
+
+describe('the tRPC carrier: `.input()` is still the read AND the check', () => {
+  it('an invalid input is refused before the scope runs at all', async () => {
+    let ran = false
+    const { procedure } = trpc<{}, Context>({})
+
+    const router = t.router({
+      strict: t.procedure
+        .input((v: unknown) => {
+          const { who } = v as { readonly who?: string }
+          if (typeof who !== 'string' || who === '') throw new Error('invalid')
+          return { who }
+        })
+        .query(
+          procedure(
+            scope(trpcCarrier<Context>()).step(async (_app: {}, { input }) => {
+              ran = true
+              return input
+            }),
+          ),
+        ),
+    })
+
+    await expect(router.createCaller({ actorId: undefined }).strict({ who: '' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+    expect(ran).toBe(false)
+  })
+})
