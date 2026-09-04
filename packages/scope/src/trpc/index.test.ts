@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { initTRPC, TRPCError } from '@trpc/server'
 import { scope, type Next } from '../index.ts'
-import { trpc, trpcCarrier } from './index.ts'
+import { trpc } from './index.ts'
 
-// The application's own context — the carrier is generic over it, so this
-// shape is named once here and the scope reads it typed.
+// The application's own context. It is named HERE, where tRPC's builder is
+// made, and nowhere else: the carrier reads it back off `t`.
 type Context = { readonly actorId: string | undefined }
 
 const t = initTRPC.context<Context>().create()
@@ -24,12 +24,12 @@ const requireActor = async (
 const greeter = { greet: (who: string) => `hello ${who}` }
 
 describe('the tRPC carrier: what a run brings', () => {
-  const { procedure } = trpc<typeof greeter, Context>(greeter)
+  const { carrier, procedure } = trpc(t, greeter)
 
   const router = t.router({
     greet: t.procedure.input((v) => v as { readonly who: string }).query(
       procedure(
-        scope(trpcCarrier<Context>()).step(
+        scope(carrier).step(
           async ({ greet }: typeof greeter, { input, ctx }) => ({
             said: greet((input as { readonly who: string }).who),
             by: ctx.actorId ?? 'anonymous',
@@ -40,7 +40,7 @@ describe('the tRPC carrier: what a run brings', () => {
 
     whoami: t.procedure.query(
       procedure(
-        scope(trpcCarrier<Context>())
+        scope(carrier)
           .step(requireActor)
           .step(async (_app: {}, { actor }: { readonly actor: string }) => ({ actor })),
       ),
@@ -54,7 +54,7 @@ describe('the tRPC carrier: what a run brings', () => {
     expect(result).toEqual({ said: 'hello ada', by: 'u1' })
   })
 
-  it('the context is TYPED, not `unknown`: a step reads it without a cast', async () => {
+  it('the context is TYPED — inferred off `t`, with no type argument written', async () => {
     const result = await caller({ actorId: undefined }).greet({ who: 'ada' })
     expect(result).toEqual({ said: 'hello ada', by: 'anonymous' })
   })
@@ -73,7 +73,7 @@ describe('the tRPC carrier: what a run brings', () => {
 describe('the tRPC carrier: `.input()` is still the read AND the check', () => {
   it('an invalid input is refused before the scope runs at all', async () => {
     let ran = false
-    const { procedure } = trpc<{}, Context>({})
+    const { carrier, procedure } = trpc(t, {})
 
     const router = t.router({
       strict: t.procedure
@@ -84,7 +84,7 @@ describe('the tRPC carrier: `.input()` is still the read AND the check', () => {
         })
         .query(
           procedure(
-            scope(trpcCarrier<Context>()).step(async (_app: {}, { input }) => {
+            scope(carrier).step(async (_app: {}, { input }) => {
               ran = true
               return input
             }),

@@ -13,12 +13,17 @@ that hands back its host's own mount helpers leaves one nothing to be (§43).
 The four that ship take their frameworks as OPTIONAL peer dependencies, so the
 core stays dependency-free for anyone importing it:
 
-| subpath | what `carrier(deps)` hands back |
-|---|---|
-| `@lntt/scope/express` | `{ route, mw }` |
-| `@lntt/scope/hono` | `{ route, mw }` |
-| `@lntt/scope/trpc` | `{ procedure }` — a procedure is the only mount tRPC has |
-| `@lntt/scope/react-router` | `{ loader, action }` — two shapes, never a middleware |
+| subpath | the mount factory | it hands back |
+|---|---|---|
+| `@lntt/scope/express` | `express(deps)` | `{ route, mw }` |
+| `@lntt/scope/hono` | `hono(deps)` | `{ route, mw }` |
+| `@lntt/scope/trpc` | `trpc(t, deps)` | `{ carrier, procedure }` — a procedure is the only mount tRPC has |
+| `@lntt/scope/react-router` | `reactRouter(deps)` | `{ loader, action }` — two shapes, never a middleware |
+
+Three of them import their carrier beside the factory (`expressCarrier`,
+`honoCarrier`, `reactRouterCarrier`). tRPC's comes OUT of the factory instead,
+because its context is the APPLICATION's type and `t` already holds it: pass the
+builder and the context is inferred, written nowhere.
 
 > **This README describes the pre-#30 surface** (`.input`, `.guard`, `.handle`,
 > `runScope`) and is being rewritten with the carriers. The shipped API today is
