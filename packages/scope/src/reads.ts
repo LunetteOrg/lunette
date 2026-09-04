@@ -117,17 +117,36 @@ export type Read = { readonly value: unknown } | { readonly issues: readonly Sta
 // `application/json` throws — and the answer is the same. Where a parser ran
 // before us there is nothing left to fail, so the claim has to be checked
 // against the only evidence left, which is the header the client sent.
+export const mediaTypeOf = (contentType: string | undefined): string =>
+  (contentType ?? '').split(';')[0]?.trim().toLowerCase() ?? ''
+
 export const encodingMatches = (contentType: string | undefined, encoding: Encoding): boolean => {
-  const type = (contentType ?? '').split(';')[0]?.trim().toLowerCase() ?? ''
+  const type = mediaTypeOf(contentType)
   return encoding === 'json'
     ? type === 'application/json' || type.endsWith('+json')
     : type === 'application/x-www-form-urlencoded' || type === 'multipart/form-data'
 }
 
+// MULTIPART IS THE ONE ENCODING A PRE-PARSED BODY CANNOT CARRY WHOLE. The
+// middleware that parsed it — multer is the usual one — puts the FIELDS on
+// `req.body` and the FILES somewhere of its own (`req.file`, `req.files`), so
+// the object left behind is half the payload while `BodyOf<'form'>` promises
+// `string | File`. Half a body handed over as a whole one is the silent kind of
+// wrong, so it is refused instead.
+export const isMultipart = (contentType: string | undefined): boolean =>
+  mediaTypeOf(contentType) === 'multipart/form-data'
+
 export const readBody = async (request: Request, encoding: Encoding): Promise<Read> => {
   const bytes = await request.arrayBuffer()
 
   if (encoding === 'json') {
+    // UTF-8, and any `charset` on the request is deliberately ignored: RFC 8259
+    // requires JSON exchanged between systems to be encoded in UTF-8, so a
+    // payload in anything else is malformed at the protocol level and "not valid
+    // JSON" is the truthful answer rather than a false one. Decoding whatever a
+    // client claims would be implementing a violation. The `form` branch needs
+    // none of this — it hands the bytes back to the platform's own reader with
+    // the original content-type, charset included.
     const text = new TextDecoder().decode(bytes)
     try {
       return { value: JSON.parse(text) }

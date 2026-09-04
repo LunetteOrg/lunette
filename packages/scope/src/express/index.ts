@@ -18,6 +18,7 @@ import {
   cookiesFrom,
   encodingMatches,
   headersFrom,
+  isMultipart,
   queryFrom,
   readBody,
   type BodyOf,
@@ -462,12 +463,29 @@ export const body =
       // `body('form')` would hand a JSON payload on as form fields — no error,
       // no `onError`, wrong data. The header the client sent is the only
       // evidence left once the stream is gone, so it is what gets checked.
-      if (!encodingMatches(ctx.req.headers['content-type'], encoding)) {
+      const sent = ctx.req.headers['content-type']
+
+      if (!encodingMatches(sent, encoding)) {
+        // `||` and not `??`: a header that is PRESENT AND EMPTY is `''`, which
+        // `??` passes straight through into the message.
         return onError(
-          [{ message: `the body was sent as ${ctx.req.headers['content-type'] ?? 'nothing'}, not ${encoding}` }],
+          [{ message: `the body was sent as ${sent || 'nothing'}, not ${encoding}` }],
           ctx,
         ) as Awaited<R>
       }
+
+      if (isMultipart(sent)) {
+        return onError(
+          [
+            {
+              message:
+                'a multipart body was parsed by other middleware: its files are not on `req.body`, so this entry would be half the payload',
+            },
+          ],
+          ctx,
+        ) as Awaited<R>
+      }
+
       return next({ body: ctx.req.body as BodyOf<E> })
     }
 

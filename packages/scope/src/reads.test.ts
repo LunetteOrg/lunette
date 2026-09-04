@@ -382,3 +382,49 @@ describe('Express `body`: what a mounted parser changes', () => {
     expect(without.status).toBe(422)
   })
 })
+
+describe('Express `body`: what a pre-parsed body cannot carry', () => {
+  const routed = (pre: (req: Request) => void) => {
+    const app = expressLib()
+    app.use((req, _res, next) => {
+      pre(req)
+      next()
+    })
+    app.post(
+      '/',
+      ex.express({}).handler(
+        scope(ex.expressCarrier())
+          .step(ex.body('form', (issues, ctx) => ctx.res.status(415).json({ m: issues[0]?.message })))
+          .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
+      ),
+    )
+    return app
+  }
+
+  it('refuses a MULTIPART body someone else parsed, rather than handing over half of it', async () => {
+    // The middleware that parses multipart — multer is the usual one — puts the
+    // FIELDS on `req.body` and the FILES somewhere of its own. The object left
+    // behind is half the payload, while the entry's type promises `string | File`.
+    const app = routed((req) => {
+      ;(req as unknown as { body: unknown }).body = { title: 'only the fields' }
+    })
+
+    const res = await request(app)
+      .post('/')
+      .set('content-type', 'multipart/form-data; boundary=x')
+      .send('--x--')
+
+    expect(res.status).toBe(415)
+    expect(res.body.m).toContain('half the payload')
+  })
+
+  it('names an EMPTY content-type as nothing, not as an empty gap in the message', async () => {
+    const app = routed((req) => {
+      ;(req as unknown as { body: unknown }).body = { a: 1 }
+      req.headers['content-type'] = ''
+    })
+
+    const res = await request(app).post('/').set('content-type', 'text/plain').send('x')
+    expect(res.body.m).toBe('the body was sent as nothing, not form')
+  })
+})
