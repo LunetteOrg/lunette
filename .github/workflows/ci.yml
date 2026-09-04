@@ -1,0 +1,55 @@
+name: CI
+
+# The gate `CLAUDE.md` already defines, run by a machine instead of by memory:
+# `pnpm -r test` (vitest, with the `*.test-d.ts` type contract typechecked
+# inside the run) and `pnpm -r typecheck` (`tsc --noEmit`). They are SEPARATE
+# gates and neither stands in for the other, which is why both run on every
+# push — the second even when the first has already failed, or a red suite
+# would hide a type error behind it.
+#
+# `pnpm -r` reaches `research/*` too, because `pnpm-workspace.yaml` lists it.
+# That is deliberate: research is excluded from CODE REVIEW (it is a proving
+# ground, not shipped product) but its suites are the measurements the decision
+# record cites, so a decision whose evidence has rotted should turn the build
+# red like anything else. They cost about a second.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push supersedes the run before it on the same branch. `main` is the
+# exception: its runs are the record of what was green, so they finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No version here on purpose: `pnpm/action-setup` reads the
+      # `packageManager` field of the root `package.json`, so the pinned pnpm
+      # lives in one place and cannot drift from what runs locally.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # `--frozen-lockfile` so a lockfile that drifted from the manifests fails
+      # here rather than being silently repaired.
+      - run: pnpm install --frozen-lockfile
+
+      - name: test
+        run: pnpm -r test
+
+      - name: typecheck
+        if: ${{ !cancelled() }}
+        run: pnpm -r typecheck
