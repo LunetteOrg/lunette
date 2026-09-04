@@ -98,3 +98,37 @@ describe('the tRPC carrier: `.input()` is still the read AND the check', () => {
     expect(ran).toBe(false)
   })
 })
+
+describe('the tRPC carrier: `middleware`', () => {
+  const { carrier, middleware } = trpc(t, greeter)
+
+  // The same guard shape as everywhere else — it derives, or it stops in the
+  // host's own door.
+  const authed = t.middleware(middleware(scope(carrier).step(requireActor)))
+
+  const router = t.router({
+    who: t.procedure.use(authed).query(({ ctx }) => ({ actor: ctx.actor, seen: ctx.actorId })),
+  })
+
+  it('what the steps derived becomes tRPC\'s context override, reaching the procedure', async () => {
+    const result = await router.createCaller({ actorId: 'u1' }).who()
+    expect(result).toEqual({ actor: 'u1', seen: 'u1' })
+  })
+
+  it('a step that stops never reaches the procedure', async () => {
+    await expect(router.createCaller({ actorId: undefined }).who()).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+  })
+
+  it('the middleware is reusable: two procedures share one scope', async () => {
+    const two = t.router({
+      a: t.procedure.use(authed).query(({ ctx }) => ctx.actor),
+      b: t.procedure.use(authed).mutation(({ ctx }) => ctx.actor.toUpperCase()),
+    })
+
+    const caller = two.createCaller({ actorId: 'u2' })
+    expect(await caller.a()).toBe('u2')
+    expect(await caller.b()).toBe('U2')
+  })
+})

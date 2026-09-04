@@ -9,7 +9,8 @@
 // giving it an Express-shaped middleware would invent a door tRPC does not
 // have.
 
-import type { TRPCRootObject } from '@trpc/server'
+import type { TRPCMiddlewareFunction, TRPCRootObject } from '@trpc/server'
+import type { Scope, State } from '../index.ts'
 
 // The context is the APPLICATION's — a session, a tenant, an actor id — so the
 // carrier is generic over it where the other three publish types their
@@ -39,6 +40,10 @@ export interface TrpcCarrier<Ctx> {
 // silently widening to `{}`.
 type CtxOf<T> = T extends TRPCRootObject<infer Ctx, any, any> ? Ctx : never
 
+// The app's `meta`, read off the same builder — a middleware's type carries it,
+// and inventing `object` in its place would refuse an app that declared one.
+type MetaOf<T> = T extends TRPCRootObject<any, infer Meta, any> ? Meta : object
+
 // The carrier comes OUT of the mount factory here, where the other three are
 // imported beside theirs. That asymmetry is the price of writing the context
 // type NOWHERE: `t` already knows it, and a scope must know it BEFORE its first
@@ -52,6 +57,22 @@ type CtxOf<T> = T extends TRPCRootObject<infer Ctx, any, any> ? Ctx : never
 //
 // `R` stays generic so a resolver's actual return type survives the wrapper,
 // which is what tRPC's own output inference reads.
+// What a middleware's steps derive becomes tRPC's own CONTEXT OVERRIDE — the
+// leaf every `middleware()` chain ends on, appended by it so nobody has to
+// remember to write it. It is the exact twin of Express's `res.locals` copy and
+// Hono's `c.set`, in the shape tRPC reads: `next({ ctx })`.
+//
+// `ctx` and `input` are destructured out: what extends the context is what the
+// STEPS populated, not what the run was handed.
+const toNext =
+  <R>(next: (o: { readonly ctx: object }) => R) =>
+  async (_app: {}, seen: Record<string, unknown>) => {
+    const { ctx, input, ...derived } = seen
+    void ctx
+    void input
+    return next({ ctx: derived })
+  }
+
 export const trpc = <T, App extends object>(_t: T, deps: App) => ({
   // PURE DECLARATION — the object carries nothing at all; what it is FOR is the
   // type it hands the scope.
@@ -63,4 +84,31 @@ export const trpc = <T, App extends object>(_t: T, deps: App) => ({
     ) =>
     (args: { readonly input: unknown; readonly ctx: CtxOf<T> }): R =>
       sc(deps, args),
+
+  // A scope as a tRPC MIDDLEWARE: `t.middleware(middleware(scope))`. The
+  // transparency that matters here is the CONTEXT OVERRIDE — tRPC reads what a
+  // middleware adds to `ctx` off what `next` was called with, and carries it
+  // into every procedure that `.use`s it. So `next` is called with exactly
+  // `S['acc']`, and what it hands back is handed straight on.
+  middleware: <S extends State>(sc: Scope<S>): TRPCMiddlewareFunction<
+    CtxOf<T>,
+    MetaOf<T>,
+    object,
+    S['acc'],
+    unknown
+  > =>
+    // The RETURN TYPE is written out rather than inferred, and that is what
+    // makes the override arrive: `t.middleware(fn)` reads `$ContextOverrides`
+    // off `fn`'s declared return (`Promise<MiddlewareResult<…>>`), so a generic
+    // return inferred from the `next` we are handed leaves it with nothing to
+    // read and the context silently does not grow (measured — the procedure
+    // downstream then sees the bare context).
+    ((opts) => {
+      const finished = (sc as unknown as { step: (s: unknown) => unknown }).step(
+        toNext(opts.next as unknown as (o: { readonly ctx: object }) => unknown),
+      ) as unknown as (app: App, args: object) => never
+      // The fold's promise resolves to what `next` handed back, and a promise
+      // of a promise is that promise once awaited — the only shape tRPC sees.
+      return finished(deps, { input: opts.input, ctx: opts.ctx })
+    }) as TRPCMiddlewareFunction<CtxOf<T>, MetaOf<T>, object, S['acc'], unknown>,
 })

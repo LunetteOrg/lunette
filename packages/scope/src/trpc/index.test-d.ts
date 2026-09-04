@@ -1,7 +1,7 @@
 import { initTRPC } from '@trpc/server'
 import type { inferRouterOutputs } from '@trpc/server'
 import { describe, expectTypeOf, it } from 'vitest'
-import { scope } from '../index.ts'
+import { scope, type Next } from '../index.ts'
 import { trpc } from './index.ts'
 
 // THE TYPE CONTRACT for this carrier: what it claims is that the app's context
@@ -58,5 +58,31 @@ describe('the mount is transparent: tRPC infers the output off the resolver', ()
       id: string
       title: string
     }>()
+  })
+})
+
+describe('a scope as a tRPC middleware', () => {
+  it('carries what the steps derived into the context of every procedure downstream', () => {
+    const { carrier, middleware } = trpc(t, {})
+
+    const authed = t.middleware(
+      middleware(
+        scope(carrier).step(
+          async (_app: {}, { ctx }: { readonly ctx: Context }, next: Next<{ actor: string }>) => {
+            if (ctx.actorId === undefined) throw new Error('no')
+            return next({ actor: ctx.actorId })
+          },
+        ),
+      ),
+    )
+
+    t.procedure.use(authed).query(({ ctx }) => {
+      // what the middleware derived, TYPED — this is what tRPC reads off the
+      // middleware's declared return type, and an inferred one erases it
+      expectTypeOf(ctx.actor).toEqualTypeOf<string>()
+      // and the app's own context is still there
+      expectTypeOf(ctx.actorId).toEqualTypeOf<string | undefined>()
+      return ctx.actor
+    })
   })
 })

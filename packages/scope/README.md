@@ -17,7 +17,7 @@ core stays dependency-free for anyone importing it:
 |---|---|---|
 | `@lntt/scope/express` | `express(deps)` | `{ route, mw }` |
 | `@lntt/scope/hono` | `hono(deps)` | `{ route, mw }` |
-| `@lntt/scope/trpc` | `trpc(t, deps)` | `{ carrier, procedure }` — a procedure is the only mount tRPC has |
+| `@lntt/scope/trpc` | `trpc(t, deps)` | `{ carrier, procedure, middleware }` — a resolver and a middleware, the two tRPC has |
 | `@lntt/scope/react-router` | `reactRouter(deps)` | `{ loader, action }` — two shapes, never a middleware |
 
 tRPC's carrier comes OUT of the factory rather than being imported beside it,
@@ -82,7 +82,7 @@ with what the scope knows filled in, never the widest thing that compiles.
 |---|---|
 | express | the params a route declares; the LOCALS a middleware derives (`LocalsOf<typeof mw>`) |
 | hono | what the leaf returned, value and status, for `hc<typeof app>()` |
-| trpc | the resolver's return type, which is what `inferRouterOutputs` reads |
+| trpc | the resolver's return type (`inferRouterOutputs`), and a middleware's CONTEXT OVERRIDE — what its steps derived reaches every procedure that `.use`s it |
 | react-router | what the loader or action returned, which is `useLoaderData<typeof loader>()` |
 
 Each is pinned in that subpath's `*.test-d.ts`, because none of them can fail a
