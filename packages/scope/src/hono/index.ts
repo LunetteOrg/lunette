@@ -165,36 +165,36 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
       (sc as (app: App, args: object) => Answered<S>)(deps, { c })
 
   return {
-    // TWO FORMS, and the second is the first plus a check.
+    // TWO VERBS, and the CHECKED one has the short name.
     //
-    //   app.get('/posts/:id', route(scope))        the handler, nothing checked
-    //   app.get(...route('/posts/:id', scope))     the pair, pattern checked
+    //   app.get(...route('/posts/:id', scope))     the pattern checked
+    //   app.get('/posts/:id', handler(scope))      the bare handler, nothing checked
     //
-    // The pattern cannot be checked in the one-argument form. On Hono the
-    // reason differs from Express's and is worth knowing: the path IS the type
-    // parameter of `app.get`, so the expected handler type is concrete — and it
-    // STILL does not catch a mismatch, because `Context<Env, Path>` is MUTUALLY
-    // ASSIGNABLE across paths (each accepts the other, verified), so
-    // contravariance has nothing to bite on. The path types `c.req.param('id')`
-    // correctly; it does not constrain assignability. Either way a pattern
-    // reaches a type of ours only by being an ARGUMENT to one.
-    route: (<Path extends string, S extends State>(
-      a: Path | Scope<S>,
-      b?: Scope<S> & PathGate<Path, PathOf<S>>,
-    ) => (b === undefined ? handlerFor(a) : [a as Path, handlerFor(b)])) as {
-      // `DepGuard` rides the scope argument on every form: the deps were
-      // curried at `hono(deps)`, so a mount owes the scope what a direct call
-      // owes it, and the same branded refusal says so.
-      <S extends State>(
-        sc: Scope<S> & ArgsGate<E> & DepGuard<App, S['need']>,
-      ): (c: Context<E, any>) => Answered<S>
-      <Path extends string, S extends State>(
-        path: Path,
-        // The gate rides the SCOPE argument: intersected onto the path, a
-        // failing gate collapses to `never` and the message is lost.
-        sc: Scope<S> & ArgsGate<E> & PathGate<Path, PathOf<S>> & DepGuard<App, S['need']>,
-      ): readonly [Path, (c: Context<E, any>) => Answered<S>]
-    },
+    // The reasoning is the Express carrier's and holds here word for word: the
+    // adjective belongs on whoever gives something up, so the escape hatch is
+    // the one that has to be named.
+    //
+    // WHY `handler` cannot check the pattern differs from Express's, and is
+    // worth knowing: the path IS the type parameter of `app.get`, so the
+    // expected handler type is concrete — and it STILL does not catch a
+    // mismatch, because `Context<Env, Path>` is MUTUALLY ASSIGNABLE across
+    // paths (each accepts the other, verified), so contravariance has nothing
+    // to bite on. The path types `c.req.param('id')` correctly; it does not
+    // constrain assignability. Either way a pattern reaches a type of ours only
+    // by being an ARGUMENT to one, which is what `route` is for.
+    //
+    // Both carry `DepGuard` and the carrier gate: the deps were curried at
+    // `hono(deps)`, so a mount owes the scope what a direct call owes it.
+    route: <Path extends string, S extends State>(
+      path: Path,
+      // The gates ride the SCOPE argument: intersected onto the path, a failing
+      // gate collapses to `never` and the message is lost.
+      sc: Scope<S> & ArgsGate<E> & PathGate<Path, PathOf<S>> & DepGuard<App, S['need']>,
+    ): readonly [Path, (c: Context<E, any>) => Answered<S>] => [path, handlerFor<S>(sc)],
+
+    handler: <S extends State>(
+      sc: Scope<S> & ArgsGate<E> & DepGuard<App, S['need']>,
+    ): ((c: Context<E, any>) => Answered<S>) => handlerFor<S>(sc),
 
     // Hono's middleware is real — it awaits `next()` and can act after it — so
     // unlike Express's, `mw` returns a promise the host awaits.

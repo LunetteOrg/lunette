@@ -8,7 +8,7 @@ import { expressCarrier } from '../express/index.ts'
 // THE TYPE CONTRACT for the pattern and the route gate — both type-level, so no
 // runtime test could make them. NOTHING HERE RUNS.
 
-const { route } = hono({})
+const { route, handler } = hono({})
 
 const byId = scope(honoCarrier<'/posts/:id'>()).step(async (_app: {}, { c }) => {
   expectTypeOf(c.req.param('id')).toEqualTypeOf<string>()
@@ -80,11 +80,11 @@ describe('`route(path, scope)`: what the scope READS against what the route SUPP
   })
 })
 
-describe('`route(scope)`: the plain handler, with nothing checked', () => {
+describe('`handler(scope)`: the plain handler, with nothing checked', () => {
   it('is a Hono handler, mountable anywhere', () => {
     // Nothing compares the pattern here — including this, which is wrong and
     // compiles. `route(path, scope)` is the form that catches it.
-    new Hono().get('/posts/:postId', route(byId))
+    new Hono().get('/posts/:postId', handler(byId))
   })
 })
 
@@ -100,7 +100,7 @@ describe('the typed RPC client reads what the scope hands back', () => {
 
   // Routes are CHAINED, which is how `typeof app` accumulates the schema.
   const app = new Hono()
-    .get('/posts/:id', route(showPost))
+    .get('/posts/:id', handler(showPost))
     .get(...route('/health', health))
 
   const client = hc<typeof app>('http://localhost')
@@ -129,7 +129,7 @@ describe('the mounts owe the scope its chain: `DepGuard` rides every mount', () 
 
   it('refuses a scope the curried chain does not satisfy', () => {
     // @ts-expect-error __ERROR_chain_Pub_missing_deps
-    route(needsDb)
+    handler(needsDb)
     // @ts-expect-error __ERROR_chain_Pub_missing_deps
     route('/', needsDb)
     // @ts-expect-error __ERROR_chain_Pub_missing_deps
@@ -138,7 +138,7 @@ describe('the mounts owe the scope its chain: `DepGuard` rides every mount', () 
 
   it('accepts it on a chain that does — a superset passes, as everywhere', () => {
     const withDb = hono({ db: 'pg', extra: 1 })
-    withDb.route(needsDb)
+    withDb.handler(needsDb)
     withDb.route('/', needsDb)
     withDb.mw(needsDb)
   })
@@ -158,7 +158,7 @@ describe('a middleware may not derive a ctx key the run itself brought', () => {
     // The key is `next` rather than `c` so the leaf can still answer: shadowing
     // `c` is legal too, and then the step after it reads the DERIVED value —
     // which is `Ctx`'s own decision, pinned in the core.
-    route(
+    handler(
       scope(honoCarrier())
         .step(async (_app: {}, _ctx, next: Next<{ next: string }>) => next({ next: 'mine' }))
         .step(async (_app: {}, { c }) => c.json({})),
@@ -171,7 +171,7 @@ describe('a mount takes a scope written for ITS carrier, and no other', () => {
 
   it('refuses a scope written for another host', () => {
     // @ts-expect-error — this scope reads `req`/`res`; a Hono mount brings `c`
-    route(forExpress)
+    handler(forExpress)
     // @ts-expect-error — this scope reads `req`/`res`; a Hono mount brings `c`
     route('/', forExpress)
     // @ts-expect-error — this scope reads `req`/`res`; a Hono mount brings `c`

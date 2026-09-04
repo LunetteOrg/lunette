@@ -12,7 +12,7 @@ import type { Next } from '../index.ts'
 // NOTHING HERE RUNS: a `*.test-d.ts` is typechecked and never executed, and the
 // refusals sit under `@ts-expect-error`.
 
-const { route, mw } = express({})
+const { route, handler, mw } = express({})
 
 const byId = scope(expressCarrier<{ id: string }>()).step(async (_app: {}, { req, res }) => {
   expectTypeOf(req.params.id).toEqualTypeOf<string>()
@@ -81,18 +81,18 @@ describe('`route(path, scope)`: what the scope READS against what the route SUPP
   })
 })
 
-describe('`route(scope)`: the plain handler, with nothing checked', () => {
+describe('`handler(scope)`: the plain handler, with nothing checked', () => {
   it('is an Express handler, mountable anywhere', () => {
     // The pattern is Express's own argument here, so it never reaches a type of
     // ours and nothing compares it — including this, which is wrong and
     // compiles. `route(path, scope)` is the form that catches it.
-    expressLib().get('/posts/:postId', route(byId))
+    expressLib().get('/posts/:postId', handler(byId))
   })
 })
 
 describe('the mounts are transparent: each hands back Express\'s own type, filled in', () => {
   it('a route declares the params the scope reads', () => {
-    expectTypeOf(route(byId)).toEqualTypeOf<RequestHandler<{ id: string }>>()
+    expectTypeOf(handler(byId)).toEqualTypeOf<RequestHandler<{ id: string }>>()
   })
 
   it('a middleware declares the locals its steps derived — what `toNext` really copies', () => {
@@ -137,7 +137,7 @@ describe('the mounts owe the scope its chain: `DepGuard` rides every mount', () 
 
   it('refuses a scope the curried chain does not satisfy', () => {
     // @ts-expect-error __ERROR_chain_Pub_missing_deps
-    route(needsDb)
+    handler(needsDb)
     // @ts-expect-error __ERROR_chain_Pub_missing_deps
     route('/', needsDb)
     // @ts-expect-error __ERROR_chain_Pub_missing_deps
@@ -146,7 +146,7 @@ describe('the mounts owe the scope its chain: `DepGuard` rides every mount', () 
 
   it('accepts it on a chain that does — a superset passes, as everywhere', () => {
     const withDb = express({ db: 'pg', extra: 1 })
-    withDb.route(needsDb)
+    withDb.handler(needsDb)
     withDb.route('/', needsDb)
     withDb.mw(needsDb)
   })
@@ -161,13 +161,13 @@ describe('a route ANSWERS on `res`, and the gate says so before the request does
     const returnsAValue = scope(expressCarrier()).step(async () => ({ ok: true }))
 
     // @ts-expect-error ⛔ a route answers on `res`
-    route(returnsAValue)
+    handler(returnsAValue)
     // @ts-expect-error ⛔ a route answers on `res`
     route('/', returnsAValue)
   })
 
   it('accepts a leaf that wrote the response and hands back nothing', () => {
-    route(
+    handler(
       scope(expressCarrier()).step(async (_app: {}, { res }) => {
         res.status(204).end()
         return undefined
@@ -176,7 +176,7 @@ describe('a route ANSWERS on `res`, and the gate says so before the request does
   })
 
   it('accepts a union of answers, which is what a guard plus a leaf builds', () => {
-    route(
+    handler(
       scope(expressCarrier())
         .step(async (_app: {}, { res }, next: Next<{ actor: string }>) =>
           res.headersSent ? res.status(401).json({}) : next({ actor: 'u1' }),
@@ -206,7 +206,7 @@ describe('a middleware may not derive a ctx key the run itself brought', () => {
   })
 
   it('a ROUTE takes no such gate: it copies nothing out, so nothing is stripped', () => {
-    route(
+    handler(
       scope(expressCarrier())
         .step(async (_app: {}, _ctx, next: Next<{ next: () => void }>) => next({ next: () => {} }))
         .step(async (_app: {}, { res }) => res.json({})),
@@ -223,7 +223,7 @@ describe('a mount takes a scope written for ITS carrier, and no other', () => {
 
   it('refuses a scope written for another host', () => {
     // @ts-expect-error — this scope reads `c`; an Express mount brings req/res
-    route(forHono)
+    handler(forHono)
     // @ts-expect-error — this scope reads `c`; an Express mount brings req/res
     route('/', forHono)
     // @ts-expect-error — this scope reads `c`; an Express mount brings req/res
@@ -234,7 +234,7 @@ describe('a mount takes a scope written for ITS carrier, and no other', () => {
     const bare = scope<{ readonly tenant: string }>().step(async (_app: {}, { tenant }) => tenant)
 
     // @ts-expect-error — this scope reads `tenant`, which no Express run brings
-    route(bare)
+    handler(bare)
   })
 })
 

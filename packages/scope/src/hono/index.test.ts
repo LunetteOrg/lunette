@@ -19,7 +19,7 @@ const requireActor = async (
 
 describe('the Hono carrier: what a run brings', () => {
   it('hands the step `c`, and the app the deps it was curried with', async () => {
-    const { route } = hono({ greeting: 'hello' })
+    const { handler } = hono({ greeting: 'hello' })
 
     // A SCOPE IS A VALUE, and it names the pattern it reads.
     const greet = scope(honoCarrier<'/greet/:name'>()).step(
@@ -28,7 +28,7 @@ describe('the Hono carrier: what a run brings', () => {
     )
 
     const app = new Hono()
-    app.get('/greet/:name', route(greet))
+    app.get('/greet/:name', handler(greet))
 
     const res = await app.request('/greet/ada')
     expect(res.status).toBe(200)
@@ -36,10 +36,10 @@ describe('the Hono carrier: what a run brings', () => {
   })
 
   it('hands back what the step returned: the route resolves to its Response', async () => {
-    const { route } = hono({})
+    const { handler } = hono({})
 
     const app = new Hono()
-    app.get('/', route(scope(honoCarrier()).step(async (_app: {}, { c }) => c.text('made', 201))))
+    app.get('/', handler(scope(honoCarrier()).step(async (_app: {}, { c }) => c.text('made', 201))))
 
     const res = await app.request('/')
     expect(res.status).toBe(201)

@@ -20,7 +20,7 @@ const requireActor = async (
 
 describe('the Express carrier: what a run brings', () => {
   it('hands the step `req` and `res`, and the app the deps it was curried with', async () => {
-    const { route } = express({ greeting: 'hello' })
+    const { handler } = express({ greeting: 'hello' })
 
     // A SCOPE IS A VALUE — declared once, mounted wherever.
     const greet = scope(expressCarrier<{ name: string }>()).step(
@@ -29,7 +29,7 @@ describe('the Express carrier: what a run brings', () => {
     )
 
     const app = expressLib()
-    app.get('/greet/:name', route(greet))
+    app.get('/greet/:name', handler(greet))
 
     const res = await request(app).get('/greet/ada')
     expect(res.status).toBe(200)
@@ -38,12 +38,12 @@ describe('the Express carrier: what a run brings', () => {
 
   it('curries the deps ONCE: every run of the mounted route reads the same app', async () => {
     const deps = { count: 0 }
-    const { route } = express(deps)
+    const { handler } = express(deps)
 
     const app = expressLib()
     app.get(
       '/',
-      route(
+      handler(
         scope(expressCarrier()).step(async (seen: { count: number }, { res }) => {
           seen.count += 1
           return res.json({ count: seen.count })
@@ -120,7 +120,7 @@ describe('the Express carrier: `mw`', () => {
 // hangs until the client gives up and the rejection surfaces as an unhandled
 // one — which Node kills the process over by default.
 describe('the Express carrier: a step that THROWS reaches the error middleware', () => {
-  const { route, mw } = express({})
+  const { handler, mw } = express({})
 
   const boom = scope(expressCarrier()).step(async () => {
     throw new Error('boom')
@@ -129,7 +129,7 @@ describe('the Express carrier: a step that THROWS reaches the error middleware',
   it('from a route', async () => {
     let caught: unknown
     const app = expressLib()
-    app.get('/', route(boom))
+    app.get('/', handler(boom))
     app.use((err: unknown, _req: Request, res: Response, _next: () => void) => {
       caught = err
       res.status(500).json({ error: 'infrastructure' })

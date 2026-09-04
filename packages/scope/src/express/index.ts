@@ -252,46 +252,51 @@ export const express = <App extends object>(deps: App) => {
     }
 
   return {
-    // TWO FORMS, and the second is the first plus a check.
+    // TWO VERBS, and the CHECKED one has the short name.
     //
-    //   app.get('/posts/:id', route(scope))        the handler, nothing checked
-    //   app.get(...route('/posts/:id', scope))     the pair, pattern checked
+    //   app.get(...route('/posts/:id', scope))     the pattern checked
+    //   app.get('/posts/:id', handler(scope))      the bare handler, nothing checked
     //
-    // The pattern cannot be checked in the one-argument form, and that is a
-    // fact about Express rather than a choice: its `P = RouteParameters<Route>`
-    // is a DEFAULT, used only where inference found no candidate, and a handler
-    // we return always offers one — its own `req`. Making that handler generic
-    // does not help either: TypeScript instantiates the variable to whatever
-    // keeps the call compatible, so a gate written inside it is never evaluated
-    // against the pattern. Measured across seven handler shapes — concrete,
-    // generic, generic-constrained, `NoInfer`, and the gate placed on the
-    // parameter, on `res`, or on the return type — and none reaches it. A
-    // pattern reaches a type of ours only by being an ARGUMENT to one.
-    // `DepGuard` rides the scope argument on every form. The deps were curried
-    // at `express(deps)`, so a mount hands them to the scope exactly as a direct
-    // call does — and without the gate the mount would be the one way to reach a
-    // scope while owing it less than it asks, refused nowhere and dying on the
-    // first request instead.
-    route: (<Path extends string, S extends State>(
-      a: Path | Scope<S>,
-      b?: Scope<S> & PathGate<Path, ParamsOf<S>>,
-    ) =>
-      b === undefined
-        ? handlerFor(a)
-        : [a as Path, handlerFor(b)]) as {
-      <S extends State>(
-        sc: Scope<S> & ArgsGate<RouteBrings<S>> & DepGuard<App, S['need']> & AnswerGate<S>,
-      ): RequestHandler<ParamsOf<S>>
-      <Path extends string, S extends State>(
-        path: Path,
-        // The gates ride the SCOPE argument: intersected onto the path, a
-        // failing gate collapses to `never` and the message is lost.
-        sc: Scope<S> &
-          ArgsGate<RouteBrings<S>> &
-          DepGuard<App, S['need']> &
-          AnswerGate<S, PathGate<Path, ParamsOf<S>>>,
-      ): readonly [Path, RequestHandler<ParamsOf<S>>]
-    },
+    // Which one is called `route` is the whole point. Written as one verb with
+    // two forms, the shorter and more natural call — `route(scope)` — was the
+    // one that checks NOTHING, so the library's own principle 1 cost an extra
+    // argument and a spread while the mistake was free. The adjective belongs
+    // on whoever gives something up, not on whoever keeps it, so the escape
+    // hatch is the one that has to be named — and `handler` says what it hands
+    // back rather than what it skips.
+    //
+    // `handler` is not a shortcut kept for comfort: the pattern is Express's
+    // own argument there, so it never reaches a type of ours and nothing can
+    // compare it. That is a fact about Express rather than a choice — its
+    // `P = RouteParameters<Route>` is a DEFAULT, used only where inference
+    // found no candidate, and a handler we return always offers one, its own
+    // `req`. Making it generic does not help: TypeScript instantiates the
+    // variable to whatever keeps the call compatible, so a gate written inside
+    // is never evaluated against the pattern. Measured across seven handler
+    // shapes — concrete, generic, generic-constrained, `NoInfer`, and the gate
+    // placed on the parameter, on `res`, or on the return type — and none
+    // reaches it. A pattern reaches a type of ours only by being an ARGUMENT to
+    // one, which is what `route` is for.
+    //
+    // Both carry `DepGuard` and the carrier gate: the deps were curried at
+    // `express(deps)`, so a mount hands them to the scope exactly as a direct
+    // call does, and a mount owing the scope less than it asks would be refused
+    // nowhere and die on the first request.
+    route: <Path extends string, S extends State>(
+      path: Path,
+      // The gates ride the SCOPE argument: intersected onto the path, a failing
+      // gate collapses to `never` and the message is lost. `AnswerGate` and
+      // `PathGate` are CHAINED for the same reason — two message literals side
+      // by side reduce to `never` between themselves.
+      sc: Scope<S> &
+        ArgsGate<RouteBrings<S>> &
+        DepGuard<App, S['need']> &
+        AnswerGate<S, PathGate<Path, ParamsOf<S>>>,
+    ): readonly [Path, RequestHandler<ParamsOf<S>>] => [path, handlerFor<S>(sc)],
+
+    handler: <S extends State>(
+      sc: Scope<S> & ArgsGate<RouteBrings<S>> & DepGuard<App, S['need']> & AnswerGate<S>,
+    ): RequestHandler<ParamsOf<S>> => handlerFor<S>(sc),
 
     // Express has no middleware the scope could return a value TO: a middleware
     // either answers on `res` or calls `next()`. So `mw` appends `toNext` as the

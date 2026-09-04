@@ -15,8 +15,8 @@ core stays dependency-free for anyone importing it:
 
 | subpath | the mount factory | it hands back |
 |---|---|---|
-| `@lntt/scope/express` | `express(deps)` | `{ route, mw }` |
-| `@lntt/scope/hono` | `hono(deps)` | `{ route, mw }` |
+| `@lntt/scope/express` | `express(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it |
+| `@lntt/scope/hono` | `hono(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it |
 | `@lntt/scope/trpc` | `trpc(t, deps)` | `{ carrier, procedure, middleware }` — a resolver and a middleware, the two tRPC has |
 | `@lntt/scope/react-router` | `reactRouter(deps)` | `{ loader, action }` — two shapes, never a middleware |
 
