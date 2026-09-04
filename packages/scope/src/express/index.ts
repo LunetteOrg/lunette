@@ -12,7 +12,7 @@
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
 import type { ParamsDictionary, RouteParameters } from 'express-serve-static-core'
-import type { DepGuard, Scope, State } from '../index.ts'
+import type { DepGuard, ResultOf, Scope, State } from '../index.ts'
 
 // `Params` is what the scope says the URL carries. It defaults to Express's own
 // wide dictionary — a scope that names nothing reads `string | undefined` and
@@ -63,9 +63,21 @@ type Opaque = typeof OPAQUE
 // A NON-LITERAL pattern resolves to `ParamsDictionary`, whose `keyof` is the
 // wide `string`. That must read as "cannot read this pattern", never as "every
 // name is missing": catching less is fine, rejecting a valid route is not.
-type Supplied<Path extends string> = string extends keyof RouteParameters<Path>
+type Readable<Path extends string> = string extends keyof RouteParameters<Path>
   ? Opaque
   : keyof RouteParameters<Path>
+
+// OPTIONALITY IS MEANING, and Express's own reader already carries it: an
+// optional group builds as `Partial<…>`, so `RouteParameters<'/posts{/:id}'>`
+// says `id?: string` where `/posts/:id` says `id: string`. Read with a bare
+// `keyof` the two look alike — and they are not, because `/posts{/:id}` matches
+// `/posts` too, where the param is `undefined` against a step whose type says
+// `string`. So the two key sets are split and compared by kind: a REQUIRED
+// demand takes only a required supply, an OPTIONAL one takes either, since the
+// step already reads `string | undefined`. This is Hono's `Unmet` in the shape
+// an object's keys take, and still no parser of ours.
+type Req<P> = { [K in keyof P]-?: {} extends Pick<P, K> ? never : K }[keyof P]
+type Opt<P> = { [K in keyof P]-?: {} extends Pick<P, K> ? K : never }[keyof P]
 
 // ONE DIRECTION, and which one is the point. The scope DEMANDS — it reads
 // `req.params.id` — and the route SUPPLIES. A param the scope reads and the
@@ -81,15 +93,54 @@ type Supplied<Path extends string> = string extends keyof RouteParameters<Path>
 // `expressCarrier()` holds Express's wide dictionary, whose `keyof` is `string`
 // — which says "names nothing", not "reads every possible name". Without this
 // such a scope would be refused by every pattern.
-type Demanded<Par> = string extends keyof Par ? never : keyof Par
+type DemandedReq<Par> = string extends keyof Par ? never : Req<Par>
+type DemandedOpt<Par> = string extends keyof Par ? never : Opt<Par>
 
-type Unsupplied<Path extends string, Par> = Opaque extends Supplied<Path>
+type Unsupplied<Path extends string, Par> = Opaque extends Readable<Path>
   ? never
-  : Exclude<Demanded<Par>, Supplied<Path>>
+  :
+      | Exclude<DemandedReq<Par>, Req<RouteParameters<Path>>>
+      | Exclude<DemandedOpt<Par>, keyof RouteParameters<Path>>
 
 type PathGate<Path extends string, Par> = [Unsupplied<Path, Par>] extends [never]
   ? unknown
   : `⛔ this route does not supply a param the scope reads: ${Unsupplied<Path, Par> & string}`
+
+// ── gate: what a MIDDLEWARE derives, against what the run itself brought ─────
+// `toNext` — and Hono's and tRPC's twins — strips the run's own args back off
+// by NAME, because the fold hands it one merged object and a name is all there
+// is to tell the two halves apart. So a step deriving a key the carrier already
+// occupies is dropped on the way out, and on Express it is worse than dropped:
+// a derived `next` IS what `toNext` calls, Express's real one never runs, and
+// the request hangs with no response and no error.
+//
+// The CORE does not refuse this, deliberately: refining a key the carrier
+// brought is a supported shape there (`Ctx` resolves it with an `Omit`, and
+// `shapes.test.ts` pins it). It is only the strip that cannot survive it — so
+// the refusal belongs here, at the mount that strips, and only on the mounts
+// that do. A `route` copies nothing out and takes no such gate.
+// The names are WRITTEN OUT, not read off `S['args']`: what the leaf strips is
+// what it destructures, and on Hono one of those two (`next`) is passed by the
+// mount without the carrier declaring it. Naming them here keeps the gate and
+// the destructuring one edit apart.
+type Strips<S extends State> = Extract<keyof S['acc'], 'req' | 'res' | 'next'>
+
+type StripGate<S extends State> = [Strips<S>] extends [never]
+  ? unknown
+  : `⛔ this middleware derives a ctx key the run itself brought: ${Strips<S> & string} — the leaf strips those by name, so it would never arrive`
+
+// ── gate: a route ANSWERS on `res` ───────────────────────────────────────────
+// Express ignores what a handler returns, so a leaf handing back a plain value
+// — the shape every other host takes — writes nothing and the request simply
+// never gets an answer. Hono catches this by TYPE, since its mount is declared
+// to return what the scope returned; here nothing downstream reads it, so the
+// check has to be asked for. `undefined` passes: a leaf that wrote the response
+// itself and has nothing to hand back says exactly that.
+type Unsendable<S extends State> = Exclude<ResultOf<Scope<S>>, Response | undefined>
+
+type AnswerGate<S extends State> = [Unsendable<S>] extends [never]
+  ? unknown
+  : `⛔ a route answers on \`res\`: this scope's leaf hands back a value Express will never send`
 
 // What the scope says it reads, taken off the carrier it was started on.
 type ParamsOf<S extends State> = S['args'] extends { readonly req: Request<infer P> } ? P : never
@@ -158,12 +209,14 @@ export const express = <App extends object>(deps: App) => {
       b === undefined
         ? handlerFor(a)
         : [a as Path, handlerFor(b)]) as {
-      <S extends State>(sc: Scope<S> & DepGuard<App, S['need']>): RequestHandler<ParamsOf<S>>
+      <S extends State>(
+        sc: Scope<S> & DepGuard<App, S['need']> & AnswerGate<S>,
+      ): RequestHandler<ParamsOf<S>>
       <Path extends string, S extends State>(
         path: Path,
-        // The gate rides the SCOPE argument: intersected onto the path, a
+        // The gates ride the SCOPE argument: intersected onto the path, a
         // failing gate collapses to `never` and the message is lost.
-        sc: Scope<S> & PathGate<Path, ParamsOf<S>> & DepGuard<App, S['need']>,
+        sc: Scope<S> & PathGate<Path, ParamsOf<S>> & DepGuard<App, S['need']> & AnswerGate<S>,
       ): readonly [Path, RequestHandler<ParamsOf<S>>]
     },
 
@@ -174,7 +227,7 @@ export const express = <App extends object>(deps: App) => {
     // No pattern here, and none to take: `app.use(…)` mounts across routes.
     mw:
       <S extends State>(
-        sc: Scope<S> & DepGuard<App, S['need']>,
+        sc: Scope<S> & DepGuard<App, S['need']> & StripGate<S>,
         // `Request['query']` rather than naming `ParsedQs`: that type lives in
         // `qs`, which is not a dependency here, and the query slot has to be
         // filled to reach the locals one.

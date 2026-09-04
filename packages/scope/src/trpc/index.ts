@@ -79,6 +79,19 @@ const toNext =
     return next({ ctx: derived })
   }
 
+// ── gate: what a MIDDLEWARE derives, against what the run itself brought ─────
+// `toNext` strips `ctx` and `input` back off by NAME, because the fold hands it
+// one merged object and a name is all there is to tell the run's own args from
+// what the steps populated. A step deriving either — a parsed `input` is the
+// plausible one — is dropped before `next({ ctx })` and silently never reaches
+// the procedure downstream. The reasoning is written out in the Express
+// carrier, where the same collision hangs the request.
+type Strips<S extends State> = Extract<keyof S['acc'], 'ctx' | 'input'>
+
+type StripGate<S extends State> = [Strips<S>] extends [never]
+  ? unknown
+  : `⛔ this middleware derives a ctx key the run itself brought: ${Strips<S> & string} — the leaf strips those by name, so it would never arrive`
+
 export const trpc = <T, App extends object>(_t: T, deps: App) => ({
   // PURE DECLARATION — the object carries nothing at all; what it is FOR is the
   // type it hands the scope.
@@ -105,7 +118,7 @@ export const trpc = <T, App extends object>(_t: T, deps: App) => ({
   // verdict for free — its plain `(app: App, …) => R` shape puts the deps under
   // contravariance. A `Scope<S>` argument does not, so the gate is written.
   middleware: <S extends State>(
-    sc: Scope<S> & DepGuard<App, S['need']>,
+    sc: Scope<S> & DepGuard<App, S['need']> & StripGate<S>,
   ): TRPCMiddlewareFunction<
     CtxOf<T>,
     MetaOf<T>,

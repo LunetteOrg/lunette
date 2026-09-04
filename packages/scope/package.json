@@ -30,6 +30,7 @@
   },
   "peerDependencies": {
     "@trpc/server": ">=11",
+    "@types/express": ">=5",
     "@types/express-serve-static-core": ">=5",
     "express": ">=5",
     "hono": ">=4",
@@ -37,6 +38,9 @@
   },
   "peerDependenciesMeta": {
     "@trpc/server": {
+      "optional": true
+    },
+    "@types/express": {
       "optional": true
     },
     "@types/express-serve-static-core": {

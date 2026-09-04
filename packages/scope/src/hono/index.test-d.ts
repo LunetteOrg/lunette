@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { hc } from 'hono/client'
 import { describe, expectTypeOf, it } from 'vitest'
-import { scope } from '../index.ts'
+import { scope, type Next } from '../index.ts'
 import { hono, honoCarrier } from './index.ts'
 
 // THE TYPE CONTRACT for the pattern and the route gate — both type-level, so no
@@ -140,5 +140,27 @@ describe('the mounts owe the scope its chain: `DepGuard` rides every mount', () 
     withDb.route(needsDb)
     withDb.route('/', needsDb)
     withDb.mw(needsDb)
+  })
+})
+
+describe('a middleware may not derive a ctx key the run itself brought', () => {
+  it('refuses it, because the leaf strips those by name before reaching c.set', () => {
+    const shadows = scope(honoCarrier()).step(
+      async (_app: {}, _ctx, next: Next<{ c: string }>) => next({ c: 'mine' }),
+    )
+
+    // @ts-expect-error ⛔ this middleware derives a ctx key the run itself brought: c
+    hono({}).mw(shadows)
+  })
+
+  it('a ROUTE takes no such gate: it copies nothing out, so nothing is stripped', () => {
+    // The key is `next` rather than `c` so the leaf can still answer: shadowing
+    // `c` is legal too, and then the step after it reads the DERIVED value —
+    // which is `Ctx`'s own decision, pinned in the core.
+    route(
+      scope(honoCarrier())
+        .step(async (_app: {}, _ctx, next: Next<{ next: string }>) => next({ next: 'mine' }))
+        .step(async (_app: {}, { c }) => c.json({})),
+    )
   })
 })

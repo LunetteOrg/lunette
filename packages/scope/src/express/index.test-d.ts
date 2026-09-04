@@ -56,15 +56,23 @@ describe('`route(path, scope)`: what the scope READS against what the route SUPP
     route(dynamic, byId)
   })
 
-  it('IS BLIND to Express 5\'s optional group: `{/:id}` reads as a required `id`', () => {
-    // `RouteParameters` — Express's own reader, and the reason there is no
-    // parser of ours — reports `{/:id}` as a plain required `id`, so the gate
-    // accepts this. The route matches `/posts` all the same and the step then
-    // reads `req.params.id` as `undefined` against a type that says `string`.
-    // Closing it means writing the reader this gate exists NOT to write; the
-    // gate catches the misspelt and the missing param, and says so here rather
-    // than being read as a claim it does not make.
+  it('rejects an OPTIONAL supply for a required demand: `{/:id}` also matches `/posts`', () => {
+    // Express's own reader already says it — an optional group builds as
+    // `Partial<…>`, so this pattern's `id` is `string | undefined` where
+    // `/posts/:id`'s is `string`. Mounted here the route answers `/posts` too,
+    // and the step reads `undefined` against a type saying `string`.
+    // @ts-expect-error ⛔ this route does not supply a param the scope reads: id
     route('/posts{/:id}', byId)
+  })
+
+  it('accepts either supply for an OPTIONAL demand — the step already reads undefined', () => {
+    const maybeById = scope(expressCarrier<{ id?: string }>()).step(async (_app: {}, { req, res }) => {
+      expectTypeOf(req.params.id).toEqualTypeOf<string | undefined>()
+      return res.json({ id: req.params.id ?? null })
+    })
+
+    route('/posts{/:id}', maybeById)
+    route('/posts/:id', maybeById)
   })
 
   it('hands back the pattern as its literal, so the mount stays typed', () => {
@@ -140,5 +148,67 @@ describe('the mounts owe the scope its chain: `DepGuard` rides every mount', () 
     withDb.route(needsDb)
     withDb.route('/', needsDb)
     withDb.mw(needsDb)
+  })
+})
+
+describe('a route ANSWERS on `res`, and the gate says so before the request does', () => {
+  it('refuses a leaf that hands back a value Express will never send', () => {
+    // Express ignores a handler's return, so this writes nothing and the
+    // request never gets an answer. Nothing downstream reads the type either,
+    // which is why the check is asked for here rather than falling out of the
+    // mount's own return the way Hono's does.
+    const returnsAValue = scope(expressCarrier()).step(async () => ({ ok: true }))
+
+    // @ts-expect-error ⛔ a route answers on `res`
+    route(returnsAValue)
+    // @ts-expect-error ⛔ a route answers on `res`
+    route('/', returnsAValue)
+  })
+
+  it('accepts a leaf that wrote the response and hands back nothing', () => {
+    route(
+      scope(expressCarrier()).step(async (_app: {}, { res }) => {
+        res.status(204).end()
+        return undefined
+      }),
+    )
+  })
+
+  it('accepts a union of answers, which is what a guard plus a leaf builds', () => {
+    route(
+      scope(expressCarrier())
+        .step(async (_app: {}, { res }, next: Next<{ actor: string }>) =>
+          res.headersSent ? res.status(401).json({}) : next({ actor: 'u1' }),
+        )
+        .step(async (_app: {}, { res }) => res.json({ ok: true })),
+    )
+  })
+})
+
+describe('a middleware may not derive a ctx key the run itself brought', () => {
+  it('refuses it, because the leaf strips those by name — and `next` would hang the request', () => {
+    const hijacks = scope(expressCarrier()).step(
+      async (_app: {}, _ctx, next: Next<{ next: () => void }>) => next({ next: () => {} }),
+    )
+
+    // @ts-expect-error ⛔ this middleware derives a ctx key the run itself brought: next
+    mw(hijacks)
+  })
+
+  it('refuses a derived `res` too, which would simply be dropped from res.locals', () => {
+    const shadows = scope(expressCarrier()).step(
+      async (_app: {}, _ctx, next: Next<{ res: string }>) => next({ res: 'mine' }),
+    )
+
+    // @ts-expect-error ⛔ this middleware derives a ctx key the run itself brought: res
+    mw(shadows)
+  })
+
+  it('a ROUTE takes no such gate: it copies nothing out, so nothing is stripped', () => {
+    route(
+      scope(expressCarrier())
+        .step(async (_app: {}, _ctx, next: Next<{ next: () => void }>) => next({ next: () => {} }))
+        .step(async (_app: {}, { res }) => res.json({})),
+    )
   })
 })

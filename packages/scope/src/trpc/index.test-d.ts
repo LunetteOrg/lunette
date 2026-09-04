@@ -149,3 +149,19 @@ describe('the mount owes the scope its chain: `DepGuard` rides `middleware`', ()
     trpc(t, { db: 'pg', extra: 1 }).middleware(needsDb)
   })
 })
+
+describe('a middleware may not derive a ctx key the run itself brought', () => {
+  it('refuses it: `toNext` strips those by name before `next({ ctx })`', () => {
+    const { carrier, middleware } = trpc(t, {})
+
+    // The plausible one: a step that parses the raw input and populates it
+    // under the same name. It would never reach the procedure downstream.
+    const reparses = scope(carrier()).step(
+      async (_app: {}, _ctx, next: Next<{ input: { id: string } }>) =>
+        next({ input: { id: 'p1' } }),
+    )
+
+    // @ts-expect-error ⛔ this middleware derives a ctx key the run itself brought: input
+    middleware(reparses)
+  })
+})

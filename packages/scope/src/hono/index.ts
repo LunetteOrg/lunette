@@ -97,6 +97,20 @@ type PathGate<Mounted extends string, Declared extends string> = [
   ? unknown
   : `⛔ this route does not supply a param the scope reads: ${Unsupplied<Mounted, Declared> & string}`
 
+// ── gate: what a MIDDLEWARE derives, against what the run itself brought ─────
+// `toNext` strips `c` and `next` back off by NAME, because the fold hands it
+// one merged object and a name is all there is to tell the run's own args from
+// what the steps populated. A step deriving either is dropped on the way out
+// and never reaches `c.set`, with nothing saying so. The reasoning is written
+// out in the Express carrier, where the same collision hangs the request; the
+// refusal belongs at the mount that strips, and `route` — which copies nothing
+// out — takes no such gate.
+type Strips<S extends State> = Extract<keyof S['acc'], 'c' | 'next'>
+
+type StripGate<S extends State> = [Strips<S>] extends [never]
+  ? unknown
+  : `⛔ this middleware derives a ctx key the run itself brought: ${Strips<S> & string} — the leaf strips those by name, so it would never arrive`
+
 // The pattern the scope was started on, taken off its carrier.
 type PathOf<S extends State> = S['args'] extends { readonly c: Context<any, infer P, any> }
   ? P & string
@@ -154,7 +168,7 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
     // unlike Express's, `mw` returns a promise the host awaits.
     //
     // No pattern here, and none to take: `app.use(…)` mounts across routes.
-    mw: <S extends State>(sc: Scope<S> & DepGuard<App, S['need']>) => {
+    mw: <S extends State>(sc: Scope<S> & DepGuard<App, S['need']> & StripGate<S>) => {
       // The leaf is appended ONCE, where `mw` is called. Built inside the
       // handler instead, every request would rebuild the step list and rewire
       // the verb map to reach the same value — `toNext` closes over nothing.
