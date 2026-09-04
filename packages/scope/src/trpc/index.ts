@@ -81,6 +81,28 @@ const toNext =
     return next({ ctx: derived })
   }
 
+// ── NO READ EXTENSIONS HERE, and the two refusals differ in hardness ─────────
+// The other three carriers ship `query`, `cookies`, `headers` and `body` (#62).
+// This one ships none, and the reasons are not the same one twice:
+//
+// THE BODY IS UNREACHABLE. What a run brings here is `input` and `ctx` — the
+// transport made both, and the request that carried them is gone by the time a
+// resolver sees them. There is nothing for a `body` step to read, and offering
+// one would be a name over an empty box. `.input(schema)` has already read AND
+// validated it, which is why this carrier declares `In` instead.
+//
+// THE URL IS RIGHT THERE, and that refusal is ADVISORY. A tRPC transport does
+// have a URL, and a step could parse one by hand off whatever the app put on its
+// context. What is declined is a typed convenience for a case that does not
+// exist in tRPC's own model: a procedure is addressed by its path in the router,
+// not by a query string, so a `query` entry would invite a shape the protocol
+// does not carry. An app that really has one puts it on its context and reads it
+// there — and `validate('input', schema, onError)` is the door for everything
+// the client actually sends.
+//
+// Conflating the two would be the "false safety" #38 warns about: the first is a
+// fact about the transport, the second is a judgement about a design.
+
 // ── gate: the scope was written for THIS carrier ─────────────────────────────
 // `procedure` above has this for free — it names the args in a real parameter
 // position — and `middleware`, which takes a `Scope<S>` and casts, had nothing

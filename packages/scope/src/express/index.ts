@@ -12,7 +12,19 @@
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
 import type { ParamsDictionary, RouteParameters } from 'express-serve-static-core'
-import type { DepGuard, ResultOf, Scope, State } from '../index.ts'
+import type { DepGuard, Next, Passed, ResultOf, Scope, State } from '../index.ts'
+import type { StandardIssue } from '../guard/index.ts'
+import {
+  cookiesFrom,
+  headersFrom,
+  queryFrom,
+  readBody,
+  type BodyOf,
+  type Cookies,
+  type Encoding,
+  type Headers_ as HeaderRecord,
+  type Query,
+} from '../reads.ts'
 
 // `Params` is what the scope says the URL carries. It defaults to Express's own
 // wide dictionary — a scope that names nothing reads `string | undefined` and
@@ -364,3 +376,80 @@ export const express = <App extends object>(deps: App) => {
       },
   }
 }
+
+// ── the read extensions ──────────────────────────────────────────────────────
+// PLAIN STEPS, not verbs: these ADD a ctx entry, and a verb is what may REPLACE
+// one (`@lntt/scope/guard`). The reasoning is written out in the Hono carrier.
+//
+// Express is its own family: `req` is a Node message, not a Fetch `Request`, so
+// the readers are handed the two shapes they really need — a `URLSearchParams`
+// and header pairs — and the adaptation happens here, in two lines, rather than
+// a Fetch shim being built around a Node stream.
+export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from '../reads.ts'
+
+// `req.originalUrl` rather than `req.url`: under a mounted router the second is
+// rewritten relative to the mount, and the query string survives both — but the
+// first is what the client actually sent, which is what a step reading `query`
+// means. The base is a placeholder; only the search part is read.
+export const query = async (
+  _app: {},
+  { req }: { readonly req: Request },
+  next: Next<{ query: Query }>,
+) => next({ query: queryFrom(new URL(req.originalUrl ?? req.url, 'http://host.invalid').searchParams) })
+
+export const headers = async (
+  _app: {},
+  { req }: { readonly req: Request },
+  next: Next<{ headers: HeaderRecord }>,
+) =>
+  next({
+    headers: headersFrom(
+      Object.entries(req.headers).map(
+        ([name, value]) => [name, Array.isArray(value) ? value.join(', ') : (value ?? '')] as const,
+      ),
+    ),
+  })
+
+export const cookies = async (
+  _app: {},
+  { req }: { readonly req: Request },
+  next: Next<{ cookies: Cookies }>,
+) => next({ cookies: cookiesFrom(req.headers.cookie) })
+
+// TWO WORLDS, and the branch is unavoidable rather than a shortcut. If a body
+// parser is already mounted — `express.json()` app-wide is the common case — it
+// has CONSUMED the stream, so reading it again yields nothing; its result is
+// what the route really has, and using it is the only correct answer. With no
+// parser mounted the stream is ours, and then the read and the parse are split
+// the way they are everywhere else: collecting the chunks is I/O and throws,
+// parsing the bytes in hand comes back as issues.
+export const body =
+  <E extends Encoding, R>(
+    encoding: E,
+    onError: (
+      issues: readonly StandardIssue[],
+      ctx: { readonly req: Request; readonly res: Response },
+    ) => R,
+  ) =>
+  async (
+    _app: {},
+    ctx: { readonly req: Request; readonly res: Response },
+    next: Next<{ body: BodyOf<E> }>,
+  ): Promise<Passed | Awaited<R>> => {
+    if (ctx.req.body !== undefined) return next({ body: ctx.req.body as BodyOf<E> })
+
+    const chunks: Buffer[] = []
+    for await (const chunk of ctx.req) chunks.push(chunk as Buffer)
+
+    const read = await readBody(
+      new globalThis.Request('http://body.invalid', {
+        method: 'POST',
+        headers: { 'content-type': ctx.req.headers['content-type'] ?? '' },
+        body: Buffer.concat(chunks),
+      }),
+      encoding,
+    )
+
+    if ('issues' in read) return onError(read.issues, ctx) as Awaited<R>
+    return next({ body: read.value as BodyOf<E> })
+  }
