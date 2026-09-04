@@ -444,6 +444,11 @@ export const cookies = async (
 // do, with `onError` as the single error path. Mounted anyway, nothing is
 // unsafe: the encoding check below closes the case where the data would be
 // WRONG, and what is left is which of two correct answers the client gets.
+//
+// WITH ONE COST STILL OWED, and it is not `express.json()`'s: the read below has
+// no size limit, where that parser has 100kB by default. Node has no default of
+// its own either, so following the advice above today means an unbounded read.
+// A limit with a default is #91.
 export const body =
   <E extends Encoding, R>(
     encoding: E,
