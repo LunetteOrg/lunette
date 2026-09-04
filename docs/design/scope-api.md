@@ -38,7 +38,7 @@ two are named as such.
 | **extension** | a STEP that populates a ctx entry, and sometimes contributes a verb. Added like any other step |
 | **step** | the primitive: wraps the rest of the fold. Distinct from wire's **layer**, which is a different mechanism (§33) |
 | **verb** | a method a step contributes to the BUILDER (`.header(…)`). Not a WORD — a word is a value a step returns |
-| **guard** | sugar for the step shape "enrich, or stop with one of the carrier's words". Named for the shape, not for authorization — one that never aborts is the degenerate case |
+| **guard** | a step that enriches or stops. NOT a verb and not a sugar (#63, §46) — it is a shape a plain `.step` already has, named for the shape rather than for authorization, and one that never stops is the degenerate case |
 | **leaf** | the use case: the innermost step, the one that does not call `next` |
 | **entry** | a ctx key that `validate` may name. Either ARRIVES in the execution parameters (`params`, `input`) or is DERIVED by an extension (`query`, `body`, …) |
 | **enrichment** | what a guard returns. Also validatable, but declared by nobody — it is a return type |
@@ -64,12 +64,47 @@ const postScope = scope(carrier)   // a carrier brings what a run carries, and i
 const result = await postScope(app, { request, params })
 ```
 
-**One verb.** `.step()` is the primitive and, in the base, the whole surface:
-there is no `.guard`, no `.handle`, no `.extend` until one of them earns its
-place against this (and `.handle` has lost the two things it was going to hide —
-there is no termination to declare and no outcome to build). Which sugars come
-back, and in what shape, is decided when the carriers and extensions are ported
-onto this base, because that is where each one shows what it needs.
+**One verb.** `.step()` is the primitive and, in the base, the whole surface,
+plus `.extend()` for the builder. Which sugars came back was to be decided once
+the carriers were ported, because that is where each would show what it needed
+(#63). They were ported, and the answer is NEITHER — decided, not left open:
+
+**`handle` is refused.** It was going to hide the TERMINATION declaration and
+the NORMALISATION of a leaf's value into an outcome. Neither exists: a step that
+does not call `next` ends the fold with nothing to declare, and §42 left nothing
+to normalise into. Four carriers were ported and the leaf never needed anything
+a step does not have, so `.handle(fn)` and `.step(fn)` would be one call under
+two names. The only leaf-specific rule that did emerge — what a leaf may hand
+back — lives at the MOUNT (`AnswerGate`), where the host that cannot send it is
+known, and not in the builder, which cannot know.
+
+**`guard` is refused, and the reason is stronger than YAGNI.** A guard must tell
+an ENRICHMENT from a STOP at runtime: merge this value into the ctx, or hand it
+back as the answer. A vocabulary made that sayable — a carrier's word said which
+— and §43 removed the vocabulary. Without one, `{ actor: 'u1' }` and a
+`Response` are both just objects, and any scheme that separates them is a brand,
+which is the vocabulary again under a different name.
+
+The split is per host, and shows the sugar could only ever be half a sugar: on
+tRPC and React Router a guard stops by THROWING, so everything returned is an
+enrichment and `guard` is expressible; on Express and Hono a guard may stop by
+RETURNING the host's own response, and there it is not. A form meaning different
+things depending on where it is used is what principle 5 exists to refuse.
+
+What is left is the shape itself, which needs no verb:
+
+```ts
+const requireActor = async (_app: {}, { req, res }, next: Next<{ actor: string }>) => {
+  const actor = req.header('x-actor-id')
+  if (!actor) return res.status(401).json({ error: 'unauthorized' })
+  return next({ actor })
+}
+```
+
+`next` is one parameter and one call, and it is what makes the enrichment
+VISIBLE as the thing later steps read. Both verbs stay refused until a real case
+in hand argues otherwise (principle 5) — not on symmetry, and not because the
+old core had them.
 
 > **Reading the rest of this document.** The sections below still write
 > `.extend(query)` and `.validate('params', schema)`. Neither is shipped. The
