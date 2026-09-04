@@ -22,7 +22,24 @@ core stays dependency-free for anyone importing it:
 
 tRPC's carrier comes OUT of the factory rather than being imported beside it,
 because its context is the APPLICATION's type and `t` already holds it: pass the
-builder and the context is inferred, written nowhere.
+builder and the context is inferred, written nowhere. What a scope reads of the
+INPUT it declares itself — `carrier<{ id: string }>()` — and that is checked
+against the procedure it mounts on:
+
+```ts
+const byId = scope(carrier<{ id: string }>()).step(
+  async ({ posts }: Deps, { input }) => posts.getPost(input.id),   // typed, no cast
+)
+
+t.procedure.input(z.object({ id: z.string() })).query(procedure(byId))   // ✓
+t.procedure.input(z.object({ slug: z.string() })).query(procedure(byId)) // refused
+t.procedure.query(procedure(byId))                                       // refused
+```
+
+There is no gate of ours behind that: tRPC hands a resolver the schema's OUTPUT,
+so a scope reading what the schema does not supply is refused at the argument by
+contravariance — the same mechanism `DepGuard` relies on. `.output(schema)` is
+checked the other way round, against what the leaf returned.
 
 On Express and Hono a scope is a VALUE and the mount is the host's own call:
 
@@ -82,7 +99,7 @@ with what the scope knows filled in, never the widest thing that compiles.
 |---|---|
 | express | the params a route declares; the LOCALS a middleware derives (`LocalsOf<typeof mw>`) |
 | hono | what the leaf returned, value and status, for `hc<typeof app>()` |
-| trpc | the resolver's return type (`inferRouterOutputs`), and a middleware's CONTEXT OVERRIDE — what its steps derived reaches every procedure that `.use`s it |
+| trpc | the resolver's return type (`inferRouterOutputs`, and what `.output(schema)` checks), the INPUT a scope declares (checked against `.input(schema)`), and a middleware's CONTEXT OVERRIDE — what its steps derived reaches every procedure that `.use`s it |
 | react-router | what the loader or action returned, which is `useLoaderData<typeof loader>()` |
 
 Each is pinned in that subpath's `*.test-d.ts`, because none of them can fail a

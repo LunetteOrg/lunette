@@ -29,7 +29,7 @@ describe('the tRPC carrier: what a run brings', () => {
   const router = t.router({
     greet: t.procedure.input((v) => v as { readonly who: string }).query(
       procedure(
-        scope(carrier).step(
+        scope(carrier()).step(
           async ({ greet }: typeof greeter, { input, ctx }) => ({
             said: greet((input as { readonly who: string }).who),
             by: ctx.actorId ?? 'anonymous',
@@ -40,7 +40,7 @@ describe('the tRPC carrier: what a run brings', () => {
 
     whoami: t.procedure.query(
       procedure(
-        scope(carrier)
+        scope(carrier())
           .step(requireActor)
           .step(async (_app: {}, { actor }: { readonly actor: string }) => ({ actor })),
       ),
@@ -84,7 +84,7 @@ describe('the tRPC carrier: `.input()` is still the read AND the check', () => {
         })
         .query(
           procedure(
-            scope(carrier).step(async (_app: {}, { input }) => {
+            scope(carrier()).step(async (_app: {}, { input }) => {
               ran = true
               return input
             }),
@@ -104,7 +104,7 @@ describe('the tRPC carrier: `middleware`', () => {
 
   // The same guard shape as everywhere else — it derives, or it stops in the
   // host's own door.
-  const authed = t.middleware(middleware(scope(carrier).step(requireActor)))
+  const authed = t.middleware(middleware(scope(carrier()).step(requireActor)))
 
   const router = t.router({
     who: t.procedure.use(authed).query(({ ctx }) => ({ actor: ctx.actor, seen: ctx.actorId })),

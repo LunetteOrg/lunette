@@ -27,8 +27,14 @@ import type { Scope, State } from '../index.ts'
 // is whatever sits under `ctx` — and a constraint here would force the
 // inference below to be widened to satisfy it, which is a type the steps would
 // then read.
-export interface TrpcCarrier<Ctx> {
-  readonly __args?: { readonly input: unknown; readonly ctx: Ctx }
+// `In` is what the scope says it reads of the input. It defaults to `unknown`
+// — a scope that declares nothing reads it at that width and casts, and mounts
+// on any procedure. Declaring it (`carrier<{ id: string }>()`) types `input`
+// inside every step AND makes `.input(schema)` checkable against it: the
+// resolver tRPC expects takes the schema's OUTPUT, so contravariance refuses a
+// scope reading something the schema does not supply.
+export interface TrpcCarrier<Ctx, In = unknown> {
+  readonly __args?: { readonly input: In; readonly ctx: Ctx }
 }
 
 // What the app's context IS, read off the tRPC builder the app already made.
@@ -76,13 +82,18 @@ const toNext =
 export const trpc = <T, App extends object>(_t: T, deps: App) => ({
   // PURE DECLARATION — the object carries nothing at all; what it is FOR is the
   // type it hands the scope.
-  carrier: {} as TrpcCarrier<CtxOf<T>>,
+  carrier: <In = unknown>(): TrpcCarrier<CtxOf<T>, In> => ({}),
 
+  // `In` is inferred FROM THE SCOPE, and that is what puts `.input(schema)`
+  // under a check: the resolver tRPC expects is handed the schema's output, so
+  // a scope reading `{ id: string }` mounted on a procedure whose schema
+  // supplies `{ slug: string }` is refused at the argument by contravariance —
+  // no gate of ours, the same shape `DepGuard` relies on. `R` stays generic so
+  // the resolver's return survives, which is what `.output(schema)` and
+  // `inferRouterOutputs` both read.
   procedure:
-    <R>(
-      sc: (app: App, args: { readonly input: unknown; readonly ctx: CtxOf<T> }) => R,
-    ) =>
-    (args: { readonly input: unknown; readonly ctx: CtxOf<T> }): R =>
+    <In, R>(sc: (app: App, args: { readonly input: In; readonly ctx: CtxOf<T> }) => R) =>
+    (args: { readonly input: In; readonly ctx: CtxOf<T> }): R =>
       sc(deps, args),
 
   // A scope as a tRPC MIDDLEWARE: `t.middleware(middleware(scope))`. The

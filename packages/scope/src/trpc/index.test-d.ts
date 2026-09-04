@@ -19,7 +19,7 @@ describe('what the carrier reads off the tRPC builder', () => {
   it('hands a step the app\'s own context, inferred — no type argument written', () => {
     const { carrier } = trpc(t, {})
 
-    scope(carrier).step(async (_app: {}, ctx) => {
+    scope(carrier()).step(async (_app: {}, ctx) => {
       expectTypeOf(ctx.ctx).toEqualTypeOf<Context>()
       expectTypeOf(ctx.input).toEqualTypeOf<unknown>()
       return ctx.ctx.tenant
@@ -30,7 +30,7 @@ describe('what the carrier reads off the tRPC builder', () => {
     const { carrier } = trpc(t, {})
 
     // @ts-expect-error — `region` is not on this app's context
-    scope(carrier).step(async (_app: {}, ctx) => ctx.ctx.region)
+    scope(carrier()).step(async (_app: {}, ctx) => ctx.ctx.region)
   })
 
   it('fails CLOSED on something that is not a tRPC builder: the ctx is `never`', () => {
@@ -38,7 +38,7 @@ describe('what the carrier reads off the tRPC builder', () => {
 
     // @ts-expect-error — nothing is readable off a `never` context, so a
     // mistyped first argument stops here rather than widening to `{}`
-    scope(carrier).step(async (_app: {}, ctx) => ctx.ctx.actorId)
+    scope(carrier()).step(async (_app: {}, ctx) => ctx.ctx.actorId)
   })
 })
 
@@ -48,7 +48,7 @@ describe('the mount is transparent: tRPC infers the output off the resolver', ()
 
     const router = t.router({
       getPost: t.procedure.query(
-        procedure(scope(carrier).step(async (_app: {}, _ctx) => ({ id: '1', title: 'x' }))),
+        procedure(scope(carrier()).step(async (_app: {}, _ctx) => ({ id: '1', title: 'x' }))),
       ),
     })
 
@@ -67,7 +67,7 @@ describe('a scope as a tRPC middleware', () => {
 
     const authed = t.middleware(
       middleware(
-        scope(carrier).step(
+        scope(carrier()).step(
           async (_app: {}, { ctx }: { readonly ctx: Context }, next: Next<{ actor: string }>) => {
             if (ctx.actorId === undefined) throw new Error('no')
             return next({ actor: ctx.actorId })
@@ -84,5 +84,50 @@ describe('a scope as a tRPC middleware', () => {
       expectTypeOf(ctx.actorId).toEqualTypeOf<string | undefined>()
       return ctx.actor
     })
+  })
+})
+
+describe('what `.input(schema)` supplies against what the scope reads', () => {
+  const { carrier, procedure } = trpc(t, {})
+
+  // The scope declares the input it reads — no cast anywhere in the step.
+  const byId = scope(carrier<{ id: string }>()).step(async (_app: {}, { input }) => {
+    expectTypeOf(input).toEqualTypeOf<{ id: string }>()
+    return input.id
+  })
+
+  it('accepts a procedure whose schema supplies it', () => {
+    t.procedure.input((v: unknown) => v as { id: string }).query(procedure(byId))
+  })
+
+  it('refuses a procedure whose schema supplies something else', () => {
+    // @ts-expect-error — the schema supplies `slug`, the scope reads `id`: the
+    // resolver is handed the schema's output, so contravariance refuses it
+    t.procedure.input((v: unknown) => v as { slug: string }).query(procedure(byId))
+  })
+
+  it('refuses a procedure with no input at all', () => {
+    // A procedure without `.input()` hands its resolver `input: undefined`, so
+    // this is the same refusal as a mismatched schema rather than a special
+    // case: nothing supplies the `id` this scope reads.
+    // @ts-expect-error
+    t.procedure.query(procedure(byId))
+  })
+
+  it('a scope declaring nothing reads `unknown` and mounts on any procedure', () => {
+    const anyInput = scope(carrier()).step(async (_app: {}, { input }) => {
+      expectTypeOf(input).toEqualTypeOf<unknown>()
+      return 'ok'
+    })
+
+    t.procedure.query(procedure(anyInput))
+    t.procedure.input((v: unknown) => v as { id: string }).query(procedure(anyInput))
+  })
+
+  it('`.output(schema)` checks the leaf\'s value, since the resolver\'s return survives', () => {
+    t.procedure
+      .input((v: unknown) => v as { id: string })
+      .output((v: unknown) => v as string)
+      .query(procedure(byId))
   })
 })
