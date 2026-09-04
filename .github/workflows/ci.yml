@@ -10,8 +10,12 @@ name: CI
 # `pnpm -r` reaches `research/*` too, because `pnpm-workspace.yaml` lists it.
 # That is deliberate: research is excluded from CODE REVIEW (it is a proving
 # ground, not shipped product) but its suites are the measurements the decision
-# record cites, so a decision whose evidence has rotted should turn the build
+# record cites, so a decision whose evidence has rotted should turn the gate
 # red like anything else. They cost about a second.
+#
+# GATE, not build: there is no build step in this repo — `exports` point at the
+# `.ts` sources, and the build/dist question is deferred to npm publication. What
+# runs here compiles nothing and emits nothing.
 
 on:
   push:
