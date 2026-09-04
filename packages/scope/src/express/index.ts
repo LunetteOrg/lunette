@@ -424,6 +424,25 @@ export const cookies = async (
 // parser mounted the stream is ours, and then the read and the parse are split
 // the way they are everywhere else: collecting the chunks is I/O and throws,
 // parsing the bytes in hand comes back as issues.
+//
+// WHOEVER PARSES FIRST OWNS THE ERROR PATH, and that is the whole of what a
+// mounted parser changes. Measured, and pinned in `reads.test.ts`:
+//
+//                        with `express.json()`        without
+//   valid JSON           the leaf, from `req.body`     the leaf, read here
+//   INVALID JSON         Express's own 400 — this      this `onError`, 422
+//                        `onError` never runs, the
+//                        parser threw before the
+//                        scope existed
+//   EMPTY body           the leaf, with `{}`           this `onError`, 422
+//   wrong encoding       this `onError` (below)        this `onError`
+//
+// So DO NOT MOUNT A BODY PARSER on a route whose scope reads the body. Express
+// scopes middleware to a path, so a legacy route can keep `express.json()` while
+// one with a scope does not — and then this carrier behaves as the other three
+// do, with `onError` as the single error path. Mounted anyway, nothing is
+// unsafe: the encoding check below closes the case where the data would be
+// WRONG, and what is left is which of two correct answers the client gets.
 export const body =
   <E extends Encoding, R>(
     encoding: E,

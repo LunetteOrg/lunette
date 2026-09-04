@@ -2411,8 +2411,25 @@ built around them.
 
 **Express has two worlds, and the branch is unavoidable.** A mounted
 `express.json()` has CONSUMED the stream, so reading it again yields nothing and
-its result is what the route really has. Using it is the only correct answer, and
-it means a parse failure is Express's to report there rather than `onError`'s.
+its result is what the route really has. Using it is the only correct answer.
+
+WHOEVER PARSES FIRST OWNS THE ERROR PATH, which is the whole of what a mounted
+parser changes — measured, and pinned:
+
+| | with `express.json()` | without |
+|---|---|---|
+| valid JSON | the leaf, from `req.body` | the leaf, read by the step |
+| INVALID JSON | Express's own 400; `onError` never runs, the parser threw before the scope existed | `onError`, 422 |
+| EMPTY body | the leaf, with `{}` | `onError`, 422 |
+| wrong encoding | `onError` | `onError` |
+
+So the guidance is not to mount a body parser on a route whose scope reads the
+body: Express scopes middleware to a path, so a legacy route can keep
+`express.json()` while one with a scope does not, and then this carrier behaves
+as the other three do with `onError` as the single error path. Mounted anyway,
+nothing is UNSAFE — a parsed body carries no record of what parsed it, so the
+encoding is checked against the content-type, which closes the case where the
+data would be wrong. What is left is which of two correct answers a client gets.
 
 **tRPC ships none, and the two refusals differ in hardness.** The body is
 unreachable — the transport made `input` and `ctx`, and the request is gone —

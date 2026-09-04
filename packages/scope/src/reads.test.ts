@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import expressLib from 'express'
+import type { Request, Response } from 'express'
 import request from 'supertest'
 import { Hono } from 'hono'
 import { scope } from './index.ts'
@@ -334,5 +335,50 @@ describe('Express `body`: a parsed body does not say what parsed it', () => {
 
     const res = await request(app).post('/').type('form').send({ a: '1' })
     expect(res.body).toEqual({ got: { a: '1' } })
+  })
+})
+
+// ── whoever parses first owns the error path ────────────────────────────────
+// The behavioural difference a mounted parser makes, measured rather than
+// described — the reason `express/index.ts` says not to mount one on a route
+// whose scope reads the body.
+describe('Express `body`: what a mounted parser changes', () => {
+  const routed = (parser: boolean) => {
+    const app = expressLib()
+    if (parser) app.use(expressLib.json())
+    app.post(
+      '/',
+      ex.express({}).handler(
+        scope(ex.expressCarrier())
+          .step(ex.body('json', (issues, ctx) => ctx.res.status(422).json({ from: 'onError', issues })))
+          .step(async (_a: {}, ctx) => ctx.res.json({ from: 'leaf', body: ctx.body })),
+      ),
+    )
+    app.use((_e: unknown, _q: Request, res: Response, _n: () => void) =>
+      res.status(400).json({ from: 'express' }),
+    )
+    return app
+  }
+
+  it('an INVALID payload is Express\'s to report when its parser ran first', async () => {
+    const res = await request(routed(true)).post('/').set('content-type', 'application/json').send('nope')
+
+    expect(res.status).toBe(400)
+    expect(res.body.from).toBe('express')
+  })
+
+  it('and is this `onError`\'s when the stream was ours', async () => {
+    const res = await request(routed(false)).post('/').set('content-type', 'application/json').send('nope')
+
+    expect(res.status).toBe(422)
+    expect(res.body.from).toBe('onError')
+  })
+
+  it('an EMPTY body reaches the leaf as `{}` with a parser, and stops without one', async () => {
+    const withParser = await request(routed(true)).post('/').set('content-type', 'application/json').send('')
+    expect(withParser.body).toEqual({ from: 'leaf', body: {} })
+
+    const without = await request(routed(false)).post('/').set('content-type', 'application/json').send('')
+    expect(without.status).toBe(422)
   })
 })
