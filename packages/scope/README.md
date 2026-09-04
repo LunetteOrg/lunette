@@ -60,6 +60,24 @@ type of ours only by being an argument to one — measured in
 
 `mw` takes no pattern: `app.use(…)` mounts across routes.
 
+On Hono the mount hands back what the SCOPE hands back, not a bare `Response`,
+so the typed RPC client keeps working end to end:
+
+```ts
+const app = new Hono()
+  .get('/posts/:id', route(showPost))
+  .get(...route('/health', health))
+
+const client = hc<typeof app>('http://localhost')
+const res = await client.posts[':id'].$get({ param: { id: '1' } })
+await res.json()   // { id: string; title: string } — not `unknown`
+```
+
+Both the value the leaf built and the status it chose survive as literals.
+Declaring the mount `Promise<Response>` erases them and `hc` answers `unknown`,
+which is why the return type is threaded through and pinned in
+`hono/index.test-d.ts`.
+
 > **This README describes the pre-#30 surface** (`.input`, `.guard`, `.handle`,
 > `runScope`) and is being rewritten with the carriers. The shipped API today is
 > `scope()`, `.step()`, `.extend()` and the four carriers above — each of them

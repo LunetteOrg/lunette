@@ -6,7 +6,7 @@
 
 import type { Context, Next } from 'hono'
 import type { BlankEnv, Env, ParamKeys } from 'hono/types'
-import type { Scope, State } from '../index.ts'
+import type { ResultOf, Scope, State } from '../index.ts'
 
 // `Path` is the ROUTE PATTERN the scope is written for, and it is what makes
 // `c.req.param('id')` typed — Hono's own `Context<Env, Path>` does the reading,
@@ -90,11 +90,19 @@ type PathOf<S extends State> = S['args'] extends { readonly c: Context<any, infe
   : never
 
 // `E` is written once per app, where the deps are curried: `hono<MyEnv>(deps)`.
+// What a route mounted from this scope RETURNS. Hono's RPC client reads the
+// handler's return type off `typeof app` — `c.json(v)` gives back a
+// `TypedResponse` carrying `v`, and declaring the mount as `Promise<Response>`
+// would erase it, leaving `hc<typeof app>()` with `unknown` where the leaf's
+// value should be (pinned in `index.test-d.ts`). So the mount hands back what
+// the SCOPE hands back, which is the union its steps accumulated.
+type Answered<S extends State> = Promise<ResultOf<Scope<S>>>
+
 export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) => {
   const handlerFor =
-    (sc: unknown) =>
-    (c: Context<E, any>): Promise<Response> =>
-      (sc as (app: App, args: object) => Promise<Response>)(deps, { c })
+    <S extends State>(sc: unknown) =>
+    (c: Context<E, any>): Answered<S> =>
+      (sc as (app: App, args: object) => Answered<S>)(deps, { c })
 
   return {
     // TWO FORMS, and the second is the first plus a check.
@@ -112,13 +120,13 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
       a: Path | Scope<S>,
       b?: Scope<S> & PathGate<Path, PathOf<S>>,
     ) => (b === undefined ? handlerFor(a) : [a as Path, handlerFor(b)])) as {
-      <S extends State>(sc: Scope<S>): (c: Context<E, any>) => Promise<Response>
+      <S extends State>(sc: Scope<S>): (c: Context<E, any>) => Answered<S>
       <Path extends string, S extends State>(
         path: Path,
         // The gate rides the SCOPE argument: intersected onto the path, a
         // failing gate collapses to `never` and the message is lost.
         sc: Scope<S> & PathGate<Path, PathOf<S>>,
-      ): readonly [Path, (c: Context<E, any>) => Promise<Response>]
+      ): readonly [Path, (c: Context<E, any>) => Answered<S>]
     },
 
     // Hono's middleware is real — it awaits `next()` and can act after it — so

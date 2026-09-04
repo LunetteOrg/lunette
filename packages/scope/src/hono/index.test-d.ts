@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { hc } from 'hono/client'
 import { describe, expectTypeOf, it } from 'vitest'
 import { scope } from '../index.ts'
 import { hono, honoCarrier } from './index.ts'
@@ -66,5 +67,36 @@ describe('`route(scope)`: the plain handler, with nothing checked', () => {
     // Nothing compares the pattern here — including this, which is wrong and
     // compiles. `route(path, scope)` is the form that catches it.
     new Hono().get('/posts/:postId', route(byId))
+  })
+})
+
+describe('the typed RPC client reads what the scope hands back', () => {
+  // Hono's `hc<typeof app>()` reads the SCHEMA off the app: path, method, and
+  // the handler's return type. A mount declared `Promise<Response>` erases the
+  // last one and the client answers `unknown`, so what the mount hands back is
+  // what the SCOPE hands back.
+  const showPost = scope(honoCarrier<'/posts/:id'>()).step(async (_app: {}, { c }) =>
+    c.json({ id: c.req.param('id'), title: 'x' }),
+  )
+  const health = scope(honoCarrier()).step(async (_app: {}, { c }) => c.json({ ok: true }, 201))
+
+  // Routes are CHAINED, which is how `typeof app` accumulates the schema.
+  const app = new Hono()
+    .get('/posts/:id', route(showPost))
+    .get(...route('/health', health))
+
+  const client = hc<typeof app>('http://localhost')
+
+  it('carries the leaf\'s value through the one-argument form', async () => {
+    const res = await client.posts[':id'].$get({ param: { id: '1' } })
+    expectTypeOf(await res.json()).toEqualTypeOf<{ id: string; title: string }>()
+  })
+
+  it('carries it through the checked form too, status included', async () => {
+    const res = await client.health.$get()
+    // the STATUS arrives as its literal, and so does the value the leaf built:
+    // nothing between the leaf and the client widens either
+    expectTypeOf(res.status).toEqualTypeOf<201>()
+    expectTypeOf(await res.json()).toEqualTypeOf<{ ok: true }>()
   })
 })
