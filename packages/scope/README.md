@@ -20,10 +20,37 @@ core stays dependency-free for anyone importing it:
 | `@lntt/scope/trpc` | `trpc(t, deps)` | `{ carrier, procedure }` — a procedure is the only mount tRPC has |
 | `@lntt/scope/react-router` | `reactRouter(deps)` | `{ loader, action }` — two shapes, never a middleware |
 
-Three of them import their carrier beside the factory (`expressCarrier`,
-`honoCarrier`, `reactRouterCarrier`). tRPC's comes OUT of the factory instead,
+tRPC's carrier comes OUT of the factory rather than being imported beside it,
 because its context is the APPLICATION's type and `t` already holds it: pass the
 builder and the context is inferred, written nowhere.
+
+On Express and Hono the same move types the URL params. `route` takes the route
+PATTERN and hands back the pair the host itself mounts, so the pattern is
+written once and the scope is built on a carrier typed by it:
+
+```ts
+app.get(
+  ...route('/posts/:id', (carrier) =>
+    scope(carrier).step(async ({ posts }: Deps, { req, res }) => {
+      const post = posts.getPost(req.params.id)   // `string`, off the pattern
+      return 'notFound' in post ? res.status(404).json({}) : res.json(post)
+    }),
+  ),
+)
+```
+
+The reading is each framework's own — Express's `RouteParameters`, Hono's
+`Context<Env, Path>` — never a parser of ours: Express's understands `*path` and
+`{/:id}`, Hono's knows a wildcard names nothing. On a pattern it cannot read (a
+non-literal string) it has NO OPINION and the params stay wide, which is the
+safe direction. Express refuses an undeclared param outright; Hono hands back
+`string | undefined`, unusable as a string without a check.
+
+The scope is a function OF the carrier rather than a value beside it, and that
+is forced: a step is checked against the ctx when it is ADDED, so a pattern
+supplied after the chain was built would arrive too late to type anything.
+`mw` takes no pattern — `app.use(…)` mounts across routes — so it runs on the
+pattern-less `expressCarrier`/`honoCarrier`.
 
 > **This README describes the pre-#30 surface** (`.input`, `.guard`, `.handle`,
 > `runScope`) and is being rewritten with the carriers. The shipped API today is

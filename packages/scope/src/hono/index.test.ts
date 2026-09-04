@@ -25,16 +25,12 @@ describe('the Hono carrier: what a run brings', () => {
 
     const app = new Hono()
     app.get(
-      '/greet/:name',
-      route(
-        scope(honoCarrier).step(
-          // `any` for Hono's Env: what a route narrows is the PATH. Pinning the
-          // env to anything narrower than what `honoCarrier` publishes is
-          // refused at the argument by contravariance.
-          async (
-            { greeting }: { readonly greeting: string },
-            { c }: { readonly c: Context<any, '/greet/:name'> },
-          ) => c.json({ said: `${greeting} ${c.req.param('name')}` }),
+      ...route('/greet/:name', (carrier) =>
+        scope(carrier).step(
+          // `c.req.param('name')` is `string` off the PATTERN, with nothing
+          // annotated: the carrier was typed by the pattern above.
+          async ({ greeting }: { readonly greeting: string }, { c }) =>
+            c.json({ said: `${greeting} ${c.req.param('name')}` }),
         ),
       ),
     )
@@ -48,7 +44,7 @@ describe('the Hono carrier: what a run brings', () => {
     const { route } = hono({})
 
     const app = new Hono()
-    app.get('/', route(scope(honoCarrier).step(async (_app: {}, { c }) => c.text('made', 201))))
+    app.get(...route('/', (carrier) => scope(carrier).step(async (_app: {}, { c }) => c.text('made', 201))))
 
     const res = await app.request('/')
     expect(res.status).toBe(201)

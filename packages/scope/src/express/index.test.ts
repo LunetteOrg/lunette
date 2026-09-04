@@ -24,11 +24,13 @@ describe('the Express carrier: what a run brings', () => {
 
     const app = expressLib()
     app.get(
-      '/greet/:name',
-      route(
-        scope(expressCarrier).step(
+      ...route('/greet/:name', (carrier) =>
+        scope(carrier).step(
+          // `req.params.name` is `string` off the PATTERN — no cast, and
+          // `noUncheckedIndexedAccess` does not reach it, because the pattern
+          // named the key.
           async ({ greeting }: { readonly greeting: string }, { req, res }) =>
-            res.json({ said: `${greeting} ${req.params.name as string}` }),
+            res.json({ said: `${greeting} ${req.params.name}` }),
         ),
       ),
     )
@@ -44,9 +46,8 @@ describe('the Express carrier: what a run brings', () => {
 
     const app = expressLib()
     app.get(
-      '/',
-      route(
-        scope(expressCarrier).step(async (seen: { count: number }, { res }) => {
+      ...route('/', (carrier) =>
+        scope(carrier).step(async (seen: { count: number }, { res }) => {
           seen.count += 1
           return res.json({ count: seen.count })
         }),
