@@ -190,3 +190,26 @@ describe('a mount takes a scope written for ITS carrier, and no other', () => {
     hono<{}, MyEnv>({}).route('/p/:id', reads)
   })
 })
+
+describe('a middleware answers with a Response, or with nothing', () => {
+  it('refuses a guard that stops by returning a domain value', () => {
+    // Hono sees `undefined` with the chain uncalled and answers 500; a `route`
+    // needs no such gate, since its mount hands back what the scope handed back
+    // and Hono's own handler type reads it.
+    const returnsAnError = scope(honoCarrier()).step(
+      async (_app: {}, _ctx, next: Next<{ actor: string }>) =>
+        Math.random() > 0.5 ? ({ error: 'unauthorized' } as const) : next({ actor: 'u1' }),
+    )
+
+    // @ts-expect-error ⛔ a middleware answers with a Response
+    hono({}).mw(returnsAnError)
+  })
+
+  it('accepts the same guard answering with `c.json`', () => {
+    hono({}).mw(
+      scope(honoCarrier()).step(async (_app: {}, { c }, next: Next<{ actor: string }>) =>
+        Math.random() > 0.5 ? c.json({ error: 'unauthorized' }, 401) : next({ actor: 'u1' }),
+      ),
+    )
+  })
+})

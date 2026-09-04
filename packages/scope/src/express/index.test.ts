@@ -188,3 +188,54 @@ describe('the Express carrier: a step does NOT wrap the handler', () => {
     expect(order).toEqual(['before', 'after-next', 'handler'])
   })
 })
+
+// ── the other side of `.catch(next)` ────────────────────────────────────────
+describe('the Express carrier: a throw AFTER `next` does not steal the handler\'s answer', () => {
+  it('leaves the response to the handler that was already running', async () => {
+    // `toNext` hands control on and returns at once, so the fold's promise is
+    // still pending while the handler runs. A step throwing there rejects it —
+    // and handed to `next` at that point it becomes a 500 for a request that
+    // was about to answer 200. The latch confines `.catch(next)` to the window
+    // before control was handed on.
+    const throwsAfterNext = async (_a: {}, _c: {}, next: Next<{}>) => {
+      await next({})
+      throw new Error('late')
+    }
+
+    let errorHandlerRan = false
+    const app = expressLib()
+    app.use(express({}).mw(scope().step(throwsAfterNext)))
+    app.get('/', async (_req, res) => {
+      await new Promise((r) => setTimeout(r, 10))
+      res.json({ ok: true })
+    })
+    app.use((_err: unknown, _req: Request, res: Response, _next: () => void) => {
+      errorHandlerRan = true
+      res.status(500).json({ error: 'infrastructure' })
+    })
+
+    const res = await request(app).get('/')
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ ok: true })
+    expect(errorHandlerRan).toBe(false)
+  })
+
+  it('still reaches the error middleware when the step throws BEFORE `next`', async () => {
+    // The window where Express can act is unchanged: this is the case
+    // `.catch(next)` exists for.
+    const app = expressLib()
+    app.use(
+      express({}).mw(
+        scope().step(async () => {
+          throw new Error('early')
+        }),
+      ),
+    )
+    app.get('/', (_req, res) => res.json({ ok: true }))
+    app.use((_err: unknown, _req: Request, res: Response, _next: () => void) =>
+      res.status(500).json({ error: 'infrastructure' }),
+    )
+
+    expect((await request(app).get('/')).status).toBe(500)
+  })
+})

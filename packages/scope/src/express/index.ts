@@ -173,10 +173,17 @@ type StripGate<S extends State> = [Strips<S>] extends [never]
 type Unsendable<S extends State> = Exclude<ResultOf<Scope<S>>, Response | undefined>
 
 // The OUTER link of the chain: a leaf Express cannot send is wrong under every
-// pattern, so it is answered before asking which pattern this is.
+// pattern and on either mount, so it is answered before asking which pattern
+// this is, or which key the middleware derived.
+//
+// It rides `mw` as well, where the SAME mistake ends worse than on a route.
+// Under the library's error convention a RETURNED error is a domain value (§3),
+// so `return { error: 'unauthorized' }` is the natural thing to write — and
+// there the fold never reaches `toNext`, so Express's `next` is never called
+// and the request hangs with no response at all.
 type AnswerGate<S extends State, Then = unknown> = [Unsendable<S>] extends [never]
   ? Then
-  : `⛔ a route answers on \`res\`: this scope's leaf hands back a value Express will never send`
+  : `⛔ answer on \`res\`: this scope's leaf hands back a value Express will never send`
 
 // ── gate: the scope was written for THIS carrier ─────────────────────────────
 // NO GATE OF OURS: what a mount brings is written as a FUNCTION the scope must
@@ -293,7 +300,10 @@ export const express = <App extends object>(deps: App) => {
     // No pattern here, and none to take: `app.use(…)` mounts across routes.
     mw:
       <S extends State>(
-        sc: Scope<S> & ArgsGate<MwBrings<S>> & DepGuard<App, S['need']> & StripGate<S>,
+        // CHAINED, not intersected: `AnswerGate` and `StripGate` are both
+        // message literals and both can fail here, and side by side they would
+        // collapse to `never` with nothing left to read.
+        sc: Scope<S> & ArgsGate<MwBrings<S>> & DepGuard<App, S['need']> & AnswerGate<S, StripGate<S>>,
         // `Request['query']` rather than naming `ParsedQs`: that type lives in
         // `qs`, which is not a dependency here, and the query slot has to be
         // filled to reach the locals one.
@@ -310,8 +320,33 @@ export const express = <App extends object>(deps: App) => {
         // leaf that calls Express's own `next()` — lives inside the fold, so a
         // dropped rejection would leave the chain stalled with no response AND
         // no error handler reached.
+        //
+        // THE LATCH IS WHAT MAKES THAT SAFE. `toNext` calls `next()` and returns
+        // at once (the limit stated where it is written), so the fold's promise
+        // is still pending while the downstream handler runs — and a step that
+        // throws AFTER `await next({})` rejects it then. Handed to `next` at
+        // that point it becomes a 500 for a request that was about to answer
+        // 200, with the handler's own write discarded and, on Express 5, the
+        // resulting `ERR_HTTP_HEADERS_SENT` swallowed so nothing is logged
+        // either. Measured.
+        //
+        // So the rejection goes to Express only in the window where Express can
+        // still act on it: before control was handed on. After, the response
+        // belongs to the handler and this error has nowhere left to go — it is
+        // DROPPED, deliberately and not silently, because the alternatives are
+        // worse: `next(err)` is the 500 above, and rethrowing is the unhandled
+        // rejection that kills the process. Work that must survive the response
+        // does not belong in a step here.
         return (req, res, next): void => {
-          void finished(deps, { req, res, next }).catch(next)
+          let handedOn = false
+          const once: NextFunction = (...args) => {
+            handedOn = true
+            next(...args)
+          }
+
+          void finished(deps, { req, res, next: once }).catch((err: unknown) => {
+            if (!handedOn) next(err)
+          })
         }
       },
   }

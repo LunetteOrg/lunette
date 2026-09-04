@@ -251,3 +251,27 @@ describe('two message-gates never meet on one argument', () => {
     route('/posts', unsendable)
   })
 })
+
+describe('a middleware answers on `res` too, and worse when it does not', () => {
+  it('refuses a guard that stops by returning a domain value', () => {
+    // The convention makes this the natural thing to write (§3: a RETURNED
+    // error is a domain value), and on `mw` it is worse than on a route: the
+    // fold never reaches `toNext`, so Express's `next` is never called and the
+    // request hangs with no response at all.
+    const returnsAnError = scope(expressCarrier()).step(
+      async (_app: {}, _ctx, next: Next<{ actor: string }>) =>
+        Math.random() > 0.5 ? ({ error: 'unauthorized' } as const) : next({ actor: 'u1' }),
+    )
+
+    // @ts-expect-error ⛔ answer on `res`
+    mw(returnsAnError)
+  })
+
+  it('accepts the same guard answering on `res`', () => {
+    mw(
+      scope(expressCarrier()).step(async (_app: {}, { res }, next: Next<{ actor: string }>) =>
+        Math.random() > 0.5 ? res.status(401).json({ error: 'unauthorized' }) : next({ actor: 'u1' }),
+      ),
+    )
+  })
+})

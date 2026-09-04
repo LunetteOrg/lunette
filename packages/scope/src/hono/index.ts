@@ -112,6 +112,21 @@ type PathGate<Mounted extends string, Declared extends string> = [
 // about it.
 type ArgsGate<E extends Env> = (app: never, args: { readonly c: Context<E, any> }) => unknown
 
+// ── gate: a middleware ANSWERS with a Response, or with nothing ──────────────
+// A `route` needs no such check: its mount is declared to hand back what the
+// scope handed back, so Hono's own handler type reads it. A `mw` does not —
+// what it returns is `Response | void`, and everything else is dropped. Under
+// the library's error convention a RETURNED error is a domain value (§3), so
+// `return { error: 'unauthorized' }` is the natural thing to write for a guard
+// that stops; Hono then sees `undefined` with the chain uncalled and answers
+// 500. Measured. The twin of Express's `AnswerGate`, and the reasoning is
+// written out there.
+type Unsendable<S extends State> = Exclude<ResultOf<Scope<S>>, Response | undefined>
+
+type AnswerGate<S extends State, Then = unknown> = [Unsendable<S>] extends [never]
+  ? Then
+  : `⛔ a middleware answers with a Response: this scope's leaf hands back a value Hono will not send`
+
 // ── gate: what a MIDDLEWARE derives, against what the run itself brought ─────
 // `toNext` strips `c` and `next` back off by NAME, because the fold hands it
 // one merged object and a name is all there is to tell the run's own args from
@@ -186,7 +201,10 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
     //
     // No pattern here, and none to take: `app.use(…)` mounts across routes.
     mw: <S extends State>(
-      sc: Scope<S> & ArgsGate<E> & DepGuard<App, S['need']> & StripGate<S>,
+      // CHAINED, not intersected: `AnswerGate` and `StripGate` are both message
+      // literals and both can fail here, and side by side they would collapse
+      // to `never` with nothing left to read.
+      sc: Scope<S> & ArgsGate<E> & DepGuard<App, S['need']> & AnswerGate<S, StripGate<S>>,
     ) => {
       // The leaf is appended ONCE, where `mw` is called. Built inside the
       // handler instead, every request would rebuild the step list and rewire
