@@ -1,13 +1,15 @@
-// `@lntt/scope/trpc` — the tRPC carrier and its mount.
+// `@lntt/scope/trpc` — the tRPC carrier and its two mounts.
 //
 // A carrier is `__args` alone (§43). tRPC's shape is its own: a resolver gets
 // `input` — already read AND validated by `.input(schema)`, so there is no raw
 // body to split from a schema check the way Express and Hono need — and `ctx`,
 // created once per request by the transport.
 //
-// There is no `mw` here. A procedure is the only mount unit tRPC has, and
-// giving it an Express-shaped middleware would invent a door tRPC does not
-// have.
+// There is no `mw` here, and `middleware` is not one under another name: an
+// EXPRESS-shaped middleware would invent a door tRPC does not have, while
+// `t.middleware` is a door tRPC already owns. So the second mount is tRPC's own
+// unit, and what it hands the chain is a CONTEXT OVERRIDE rather than a
+// `res.locals` copy or a `c.set` (§45).
 
 import type { TRPCMiddlewareFunction, TRPCRootObject } from '@trpc/server'
 import type { DepGuard, Scope, State } from '../index.ts'
