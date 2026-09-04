@@ -94,9 +94,28 @@ type PathGate<Path extends string, Par> = [Unsupplied<Path, Par>] extends [never
 // What the scope says it reads, taken off the carrier it was started on.
 type ParamsOf<S extends State> = S['args'] extends { readonly req: Request<infer P> } ? P : never
 
+// What a middleware's steps populated — exactly what `toNext` copies onto
+// `res.locals`, so the type and the runtime say the same thing.
+type LocalsDerivedBy<S extends State> = S['acc'] extends Record<string, any>
+  ? S['acc']
+  : Record<string, any>
+
+// THE MOUNTS ARE TRANSPARENT: each hands back the host's own type with what the
+// scope knows filled in, rather than the widest thing that would compile.
+//
+//   a route     the PARAMS it declared, so `RequestHandler<{ id: string }>`
+//   a middleware the LOCALS its steps derived, since `toNext` copies exactly
+//                those onto `res.locals`
+//
+// Express accumulates neither across a router the way Hono's RPC schema does,
+// so nothing downstream reads them on its own — but a handler written against
+// one (`RequestHandler<P, any, any, ParsedQs, LocalsOf<typeof withActor>>`)
+// then reads `res.locals.actor` typed, and the declaration stops being a lie.
+export type LocalsOf<Mw> = Mw extends RequestHandler<any, any, any, any, infer L> ? L : never
+
 export const express = <App extends object>(deps: App) => {
   const handlerFor =
-    (sc: unknown): RequestHandler =>
+    <S extends State>(sc: unknown): RequestHandler<ParamsOf<S>> =>
     (req, res) => {
       void (sc as (app: App, args: object) => unknown)(deps, { req, res })
     }
@@ -120,13 +139,13 @@ export const express = <App extends object>(deps: App) => {
       b === undefined
         ? handlerFor(a)
         : [a as Path, handlerFor(b)]) as {
-      <S extends State>(sc: Scope<S>): RequestHandler
+      <S extends State>(sc: Scope<S>): RequestHandler<ParamsOf<S>>
       <Path extends string, S extends State>(
         path: Path,
         // The gate rides the SCOPE argument: intersected onto the path, a
         // failing gate collapses to `never` and the message is lost.
         sc: Scope<S> & PathGate<Path, ParamsOf<S>>,
-      ): readonly [Path, RequestHandler]
+      ): readonly [Path, RequestHandler<ParamsOf<S>>]
     },
 
     // Express has no middleware the scope could return a value TO: a middleware
@@ -135,8 +154,13 @@ export const express = <App extends object>(deps: App) => {
     //
     // No pattern here, and none to take: `app.use(…)` mounts across routes.
     mw:
-      <S extends State>(sc: Scope<S>) =>
-      (req: Request, res: Response, next: NextFunction): void => {
+      <S extends State>(
+        sc: Scope<S>,
+        // `Request['query']` rather than naming `ParsedQs`: that type lives in
+        // `qs`, which is not a dependency here, and the query slot has to be
+        // filled to reach the locals one.
+      ): RequestHandler<ParamsDictionary, any, any, Request['query'], LocalsDerivedBy<S>> =>
+      (req, res, next): void => {
         const finished = (sc as { step: (s: unknown) => unknown }).step(toNext) as unknown as (
           app: App,
           args: unknown,

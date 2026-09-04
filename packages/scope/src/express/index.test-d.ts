@@ -1,7 +1,9 @@
 import expressLib from 'express'
 import { describe, expectTypeOf, it } from 'vitest'
 import { scope } from '../index.ts'
-import { express, expressCarrier } from './index.ts'
+import type { Request, RequestHandler, Response } from 'express'
+import { express, expressCarrier, type LocalsOf } from './index.ts'
+import type { Next } from '../index.ts'
 
 // THE TYPE CONTRACT for the params and the route gate. Both claims are
 // type-level, so no runtime test could make them.
@@ -9,7 +11,7 @@ import { express, expressCarrier } from './index.ts'
 // NOTHING HERE RUNS: a `*.test-d.ts` is typechecked and never executed, and the
 // refusals sit under `@ts-expect-error`.
 
-const { route } = express({})
+const { route, mw } = express({})
 
 const byId = scope(expressCarrier<{ id: string }>()).step(async (_app: {}, { req, res }) => {
   expectTypeOf(req.params.id).toEqualTypeOf<string>()
@@ -69,5 +71,40 @@ describe('`route(scope)`: the plain handler, with nothing checked', () => {
     // ours and nothing compares it — including this, which is wrong and
     // compiles. `route(path, scope)` is the form that catches it.
     expressLib().get('/posts/:postId', route(byId))
+  })
+})
+
+describe('the mounts are transparent: each hands back Express\'s own type, filled in', () => {
+  it('a route declares the params the scope reads', () => {
+    expectTypeOf(route(byId)).toEqualTypeOf<RequestHandler<{ id: string }>>()
+  })
+
+  it('a middleware declares the locals its steps derived — what `toNext` really copies', () => {
+    const requireActor = async (
+      _app: {},
+      { req, res }: { readonly req: Request; readonly res: Response },
+      next: Next<{ actor: string }>,
+    ) => {
+      const actor = req.header('x-actor-id')
+      if (!actor) return res.status(401).json({})
+      return next({ actor })
+    }
+
+    const withActor = mw(scope(expressCarrier()).step(requireActor))
+
+    expectTypeOf<LocalsOf<typeof withActor>>().toEqualTypeOf<{ actor: string }>()
+
+    // which is how a handler downstream reads them typed
+    const handler: RequestHandler<
+      {},
+      unknown,
+      unknown,
+      Request['query'],
+      LocalsOf<typeof withActor>
+    > = (_req, res) => {
+      expectTypeOf(res.locals.actor).toEqualTypeOf<string>()
+      res.end()
+    }
+    void handler
   })
 })

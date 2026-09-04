@@ -74,6 +74,20 @@ await res.json()   // { id: string; title: string } — not `unknown`
 ```
 
 Both the value the leaf built and the status it chose survive as literals.
+
+**Every mount is transparent**, on all four: it hands back the host's own type
+with what the scope knows filled in, never the widest thing that compiles.
+
+| subpath | what the mount carries through |
+|---|---|
+| express | the params a route declares; the LOCALS a middleware derives (`LocalsOf<typeof mw>`) |
+| hono | what the leaf returned, value and status, for `hc<typeof app>()` |
+| trpc | the resolver's return type, which is what `inferRouterOutputs` reads |
+| react-router | what the loader or action returned, which is `useLoaderData<typeof loader>()` |
+
+Each is pinned in that subpath's `*.test-d.ts`, because none of them can fail a
+runtime test: a mount that erases a type still serves the right bytes, and the
+loss shows up in someone else's file as `unknown`.
 Declaring the mount `Promise<Response>` erases them and `hc` answers `unknown`,
 which is why the return type is threaded through and pinned in
 `hono/index.test-d.ts`.

@@ -1,4 +1,5 @@
 import { initTRPC } from '@trpc/server'
+import type { inferRouterOutputs } from '@trpc/server'
 import { describe, expectTypeOf, it } from 'vitest'
 import { scope } from '../index.ts'
 import { trpc } from './index.ts'
@@ -38,5 +39,24 @@ describe('what the carrier reads off the tRPC builder', () => {
     // @ts-expect-error — nothing is readable off a `never` context, so a
     // mistyped first argument stops here rather than widening to `{}`
     scope(carrier).step(async (_app: {}, ctx) => ctx.ctx.actorId)
+  })
+})
+
+describe('the mount is transparent: tRPC infers the output off the resolver', () => {
+  it('carries the leaf\'s value into the router\'s output types', () => {
+    const { carrier, procedure } = trpc(t, {})
+
+    const router = t.router({
+      getPost: t.procedure.query(
+        procedure(scope(carrier).step(async (_app: {}, _ctx) => ({ id: '1', title: 'x' }))),
+      ),
+    })
+
+    // What a tRPC client would see. A wrapper declaring `unknown` — or
+    // widening `R` — erases it here and nowhere else says so.
+    expectTypeOf<inferRouterOutputs<typeof router>['getPost']>().toEqualTypeOf<{
+      id: string
+      title: string
+    }>()
   })
 })

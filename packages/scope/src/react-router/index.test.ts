@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { data, redirect } from 'react-router'
-import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router'
 import { scope, type Next } from '../index.ts'
 import { reactRouter, reactRouterCarrier } from './index.ts'
 
@@ -16,19 +15,23 @@ const requireActor = async (
   return next({ actor })
 }
 
-const loaderArgs = (id: string): LoaderFunctionArgs =>
+// The shape React Router really hands a route module: RR7's typegen types
+// `params` per route (`Route.LoaderArgs`), so the fixture does the same rather
+// than widening everything to `Params`. `context` is left off — the carrier
+// does not publish it, and a mount is handed a SUPERSET without complaint.
+const loaderArgs = (id: string) =>
   ({
     request: new Request(`http://localhost/posts/${id}`),
     params: { id },
     context: {},
-  }) as unknown as LoaderFunctionArgs
+  })
 
-const actionArgs = (id: string, init: RequestInit): ActionFunctionArgs =>
+const actionArgs = (id: string, init: RequestInit) =>
   ({
     request: new Request(`http://localhost/posts/${id}/publish`, init),
     params: { id },
     context: {},
-  }) as unknown as ActionFunctionArgs
+  })
 
 const thrown = async (fn: () => unknown): Promise<unknown> => {
   try {
@@ -43,10 +46,14 @@ describe('the React Router carrier: what a run brings', () => {
   it('hands a loader `request` and `params`, and the app the deps it was curried with', async () => {
     const { loader: mount } = reactRouter({ greeting: 'hello' })
 
+    // The params the route supplies, declared on the carrier — RR7's typegen
+    // hands this in as `Route.LoaderArgs['params']`, and then no `!` is needed.
     const loader = mount(
-      scope(reactRouterCarrier).step(async ({ greeting }: { readonly greeting: string }, { params }) => ({
-        said: `${greeting} ${params.id!}`,
-      })),
+      scope(reactRouterCarrier<{ id: string }>()).step(
+        async ({ greeting }: { readonly greeting: string }, { params }) => ({
+          said: `${greeting} ${params.id}`,
+        }),
+      ),
     )
 
     expect(await loader(loaderArgs('ada'))).toEqual({ said: 'hello ada' })
@@ -56,7 +63,7 @@ describe('the React Router carrier: what a run brings', () => {
     const { action: mount } = reactRouter({})
 
     const action = mount(
-      scope(reactRouterCarrier).step(async (_app: {}, { request }) => ({
+      scope(reactRouterCarrier()).step(async (_app: {}, { request }) => ({
         method: request.method,
       })),
     )
@@ -69,11 +76,9 @@ describe('the React Router carrier: stopping is the host\'s own door', () => {
   const { action: mount } = reactRouter({})
 
   const action = mount(
-    scope(reactRouterCarrier)
+    scope(reactRouterCarrier())
       .step(requireActor)
-      .step(async (_app: {}, { params }: { readonly params: { readonly id?: string } }) =>
-        redirect(`/posts/${params.id!}`),
-      ),
+      .step(async (_app: {}, { params }) => redirect(`/posts/${params.id}`)),
   )
 
   it('a step that stops THROWS a data() envelope, and the leaf never runs', async () => {
