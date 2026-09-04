@@ -129,9 +129,13 @@ export const express = <App extends object>(deps: App) => {
     // The pattern cannot be checked in the one-argument form, and that is a
     // fact about Express rather than a choice: its `P = RouteParameters<Route>`
     // is a DEFAULT, used only where inference found no candidate, and a handler
-    // we return always offers one — its own `req`. So a pattern reaches a type
-    // of ours only by being an ARGUMENT to one (`research/route-gate` measures
-    // this, and the seven shapes that do not work).
+    // we return always offers one — its own `req`. Making that handler generic
+    // does not help either: TypeScript instantiates the variable to whatever
+    // keeps the call compatible, so a gate written inside it is never evaluated
+    // against the pattern. Measured across seven handler shapes — concrete,
+    // generic, generic-constrained, `NoInfer`, and the gate placed on the
+    // parameter, on `res`, or on the return type — and none reaches it. A
+    // pattern reaches a type of ours only by being an ARGUMENT to one.
     route: (<Path extends string, S extends State>(
       a: Path | Scope<S>,
       b?: Scope<S> & PathGate<Path, ParamsOf<S>>,

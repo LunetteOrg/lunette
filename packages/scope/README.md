@@ -71,9 +71,9 @@ Hono's `ParamKeys` — never a parser of ours.
 The one-argument form cannot check anything, and that is a fact about the hosts
 rather than a choice: a handler we return always tells Express what its params
 are, so its own `RouteParameters` default is never used, and Hono's
-`Context<Env, Path>` is mutually assignable across paths. A pattern reaches a
-type of ours only by being an argument to one — measured in
-`research/route-gate`, along with the seven shapes that do not work.
+`Context<Env, Path>` is mutually assignable across paths. Seven handler shapes
+were measured against this and none reaches the pattern. It reaches a type of
+ours only by being an argument to one — which is what the two-argument form is.
 
 `mw` takes no pattern: `app.use(…)` mounts across routes.
 

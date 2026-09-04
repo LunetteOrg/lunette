@@ -112,10 +112,12 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
     //
     // The pattern cannot be checked in the one-argument form. On Hono the
     // reason differs from Express's and is worth knowing: the path IS the type
-    // parameter of `app.get`, so the expected handler type is concrete — but
-    // `Context<Env, Path>` is MUTUALLY ASSIGNABLE across paths, so
-    // contravariance has nothing to bite on. Either way a pattern reaches a
-    // type of ours only by being an ARGUMENT to one (`research/route-gate`).
+    // parameter of `app.get`, so the expected handler type is concrete — and it
+    // STILL does not catch a mismatch, because `Context<Env, Path>` is MUTUALLY
+    // ASSIGNABLE across paths (each accepts the other, verified), so
+    // contravariance has nothing to bite on. The path types `c.req.param('id')`
+    // correctly; it does not constrain assignability. Either way a pattern
+    // reaches a type of ours only by being an ARGUMENT to one.
     route: (<Path extends string, S extends State>(
       a: Path | Scope<S>,
       b?: Scope<S> & PathGate<Path, PathOf<S>>,
