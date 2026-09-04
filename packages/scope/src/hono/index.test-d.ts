@@ -3,6 +3,7 @@ import { hc } from 'hono/client'
 import { describe, expectTypeOf, it } from 'vitest'
 import { scope, type Next } from '../index.ts'
 import { hono, honoCarrier } from './index.ts'
+import { expressCarrier } from '../express/index.ts'
 
 // THE TYPE CONTRACT for the pattern and the route gate — both type-level, so no
 // runtime test could make them. NOTHING HERE RUNS.
@@ -162,5 +163,30 @@ describe('a middleware may not derive a ctx key the run itself brought', () => {
         .step(async (_app: {}, _ctx, next: Next<{ next: string }>) => next({ next: 'mine' }))
         .step(async (_app: {}, { c }) => c.json({})),
     )
+  })
+})
+
+describe('a mount takes a scope written for ITS carrier, and no other', () => {
+  const forExpress = scope(expressCarrier()).step(async (_app: {}, { res }) => res.json({}))
+
+  it('refuses a scope written for another host', () => {
+    // @ts-expect-error — this scope reads `req`/`res`; a Hono mount brings `c`
+    route(forExpress)
+    // @ts-expect-error — this scope reads `req`/`res`; a Hono mount brings `c`
+    route('/', forExpress)
+    // @ts-expect-error — this scope reads `req`/`res`; a Hono mount brings `c`
+    hono({}).mw(forExpress)
+  })
+
+  it('still accepts a scope carrying the app\'s own env', () => {
+    // The gate states the CONTEXT the mount hands over, so an env written once
+    // at `hono<typeof deps, MyEnv>(deps)` has to keep passing.
+    type MyEnv = { Bindings: { KV: string }; Variables: { rid: string } }
+
+    const reads = scope(honoCarrier<'/p/:id', MyEnv>()).step(async (_app: {}, { c }) =>
+      c.json({ id: c.req.param('id'), kv: c.env.KV }),
+    )
+
+    hono<{}, MyEnv>({}).route('/p/:id', reads)
   })
 })

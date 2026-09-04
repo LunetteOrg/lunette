@@ -102,8 +102,15 @@ type Unsupplied<Path extends string, Par> = Opaque extends Readable<Path>
       | Exclude<DemandedReq<Par>, Req<RouteParameters<Path>>>
       | Exclude<DemandedOpt<Par>, keyof RouteParameters<Path>>
 
-type PathGate<Path extends string, Par> = [Unsupplied<Path, Par>] extends [never]
-  ? unknown
+// GATES THAT CAN BOTH FAIL ARE CHAINED, never intersected side by side: two
+// message literals meeting on one argument give `'⛔ A' & '⛔ B'`, which is
+// `never`, and TypeScript then reports "not assignable to parameter of type
+// 'never'" with both messages gone — measured on exactly this pair. So each
+// message-gate takes what to check NEXT, and only one of them can be the answer.
+// A gate whose failure is not a literal — `DepGuard`'s branded object, the
+// contravariant `ArgsGate` — cannot collapse and needs no place in the chain.
+type PathGate<Path extends string, Par, Then = unknown> = [Unsupplied<Path, Par>] extends [never]
+  ? Then
   : `⛔ this route does not supply a param the scope reads: ${Unsupplied<Path, Par> & string}`
 
 // ── gate: what a MIDDLEWARE derives, against what the run itself brought ─────
@@ -138,9 +145,38 @@ type StripGate<S extends State> = [Strips<S>] extends [never]
 // itself and has nothing to hand back says exactly that.
 type Unsendable<S extends State> = Exclude<ResultOf<Scope<S>>, Response | undefined>
 
-type AnswerGate<S extends State> = [Unsendable<S>] extends [never]
-  ? unknown
+// The OUTER link of the chain: a leaf Express cannot send is wrong under every
+// pattern, so it is answered before asking which pattern this is.
+type AnswerGate<S extends State, Then = unknown> = [Unsendable<S>] extends [never]
+  ? Then
   : `⛔ a route answers on \`res\`: this scope's leaf hands back a value Express will never send`
+
+// ── gate: the scope was written for THIS carrier ─────────────────────────────
+// NO GATE OF OURS: what a mount brings is written as a FUNCTION the scope must
+// be assignable to, and `strictFunctionTypes` does the rest — a parameter is
+// contravariant, so a scope demanding args the mount does not bring is refused
+// at the argument. It is the shape `trpc.procedure` and `reactRouter` already
+// had for free by naming `S['args']` in a real parameter position; the two
+// mounts that take a `Scope<S>` and cast had nothing checking that axis at all,
+// so a Hono scope mounted here compiled and died on `c.json is not a function`
+// on every request.
+//
+// `app` is `never` because the CHAIN is `DepGuard`'s to judge: it is assignable
+// to any app type, so this member says nothing about the deps and the two gates
+// stay one claim each.
+//
+// It is a FUNCTION rather than a conditional yielding a message on purpose. Two
+// message-gates failing on the same argument intersect their literals, `'⛔ A' &
+// '⛔ B'` is `never`, and TypeScript then reports "not assignable to parameter
+// of type 'never'" with both messages gone — measured, and the exact trap the
+// route gate's own note describes. A function member cannot collapse that way.
+type RouteBrings<S extends State> = {
+  readonly req: Request<ParamsOf<S>>
+  readonly res: Response
+}
+type MwBrings<S extends State> = RouteBrings<S> & { readonly next: NextFunction }
+
+type ArgsGate<Brings> = (app: never, args: Brings) => unknown
 
 // What the scope says it reads, taken off the carrier it was started on.
 type ParamsOf<S extends State> = S['args'] extends { readonly req: Request<infer P> } ? P : never
@@ -210,13 +246,16 @@ export const express = <App extends object>(deps: App) => {
         ? handlerFor(a)
         : [a as Path, handlerFor(b)]) as {
       <S extends State>(
-        sc: Scope<S> & DepGuard<App, S['need']> & AnswerGate<S>,
+        sc: Scope<S> & ArgsGate<RouteBrings<S>> & DepGuard<App, S['need']> & AnswerGate<S>,
       ): RequestHandler<ParamsOf<S>>
       <Path extends string, S extends State>(
         path: Path,
         // The gates ride the SCOPE argument: intersected onto the path, a
         // failing gate collapses to `never` and the message is lost.
-        sc: Scope<S> & PathGate<Path, ParamsOf<S>> & DepGuard<App, S['need']> & AnswerGate<S>,
+        sc: Scope<S> &
+          ArgsGate<RouteBrings<S>> &
+          DepGuard<App, S['need']> &
+          AnswerGate<S, PathGate<Path, ParamsOf<S>>>,
       ): readonly [Path, RequestHandler<ParamsOf<S>>]
     },
 
@@ -227,7 +266,7 @@ export const express = <App extends object>(deps: App) => {
     // No pattern here, and none to take: `app.use(…)` mounts across routes.
     mw:
       <S extends State>(
-        sc: Scope<S> & DepGuard<App, S['need']> & StripGate<S>,
+        sc: Scope<S> & ArgsGate<MwBrings<S>> & DepGuard<App, S['need']> & StripGate<S>,
         // `Request['query']` rather than naming `ParsedQs`: that type lives in
         // `qs`, which is not a dependency here, and the query slot has to be
         // filled to reach the locals one.

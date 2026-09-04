@@ -3,6 +3,7 @@ import type { inferRouterOutputs } from '@trpc/server'
 import { describe, expectTypeOf, it } from 'vitest'
 import { scope, type Next } from '../index.ts'
 import { trpc } from './index.ts'
+import { honoCarrier } from '../hono/index.ts'
 
 // THE TYPE CONTRACT for this carrier: what it claims is that the app's context
 // arrives TYPED at every step, with the type written nowhere — so the claim is
@@ -163,5 +164,28 @@ describe('a middleware may not derive a ctx key the run itself brought', () => {
 
     // @ts-expect-error ⛔ this middleware derives a ctx key the run itself brought: input
     middleware(reparses)
+  })
+})
+
+describe('`middleware` takes a scope written for ITS carrier, and no other', () => {
+  it('refuses a scope written for another host', () => {
+    const { middleware } = trpc(t, {})
+    const forHono = scope(honoCarrier()).step(async (_app: {}, { c }) => c.json({}))
+
+    // @ts-expect-error — this scope reads `c`; a tRPC run brings input and ctx
+    middleware(forHono)
+  })
+
+  it('still accepts a scope that DECLARED the input it reads', () => {
+    // The gate takes `input` from the scope rather than fixing it at `unknown`:
+    // what a middleware is handed depends on where it sits, and `.input`'s own
+    // check rides `procedure`.
+    const { carrier, middleware } = trpc(t, {})
+
+    middleware(
+      scope(carrier<{ readonly id: string }>()).step(
+        async (_app: {}, ctx, next: Next<{ found: string }>) => next({ found: ctx.input.id }),
+      ),
+    )
   })
 })

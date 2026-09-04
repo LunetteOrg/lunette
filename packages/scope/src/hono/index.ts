@@ -97,6 +97,21 @@ type PathGate<Mounted extends string, Declared extends string> = [
   ? unknown
   : `⛔ this route does not supply a param the scope reads: ${Unsupplied<Mounted, Declared> & string}`
 
+// ── gate: the scope was written for THIS carrier ─────────────────────────────
+// NO GATE OF OURS: what the mount brings is written as a FUNCTION the scope
+// must be assignable to, and `strictFunctionTypes` refuses one demanding args
+// the mount does not bring — the shape `trpc.procedure` and `reactRouter`
+// already had by naming `S['args']` in a real parameter position. An Express
+// scope mounted here used to compile and die reading `c` off `{ req, res }`.
+// The reasoning, and why this is a function rather than a message, is written
+// out in the Express carrier.
+//
+// `Context<E, any>` is what `handlerFor` really hands over, and the path stays
+// `any`: `Context` is MUTUALLY ASSIGNABLE across paths (the note on `route`
+// below), so the pattern is `PathGate`'s to judge and this member says nothing
+// about it.
+type ArgsGate<E extends Env> = (app: never, args: { readonly c: Context<E, any> }) => unknown
+
 // ── gate: what a MIDDLEWARE derives, against what the run itself brought ─────
 // `toNext` strips `c` and `next` back off by NAME, because the fold hands it
 // one merged object and a name is all there is to tell the run's own args from
@@ -155,12 +170,14 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
       // `DepGuard` rides the scope argument on every form: the deps were
       // curried at `hono(deps)`, so a mount owes the scope what a direct call
       // owes it, and the same branded refusal says so.
-      <S extends State>(sc: Scope<S> & DepGuard<App, S['need']>): (c: Context<E, any>) => Answered<S>
+      <S extends State>(
+        sc: Scope<S> & ArgsGate<E> & DepGuard<App, S['need']>,
+      ): (c: Context<E, any>) => Answered<S>
       <Path extends string, S extends State>(
         path: Path,
         // The gate rides the SCOPE argument: intersected onto the path, a
         // failing gate collapses to `never` and the message is lost.
-        sc: Scope<S> & PathGate<Path, PathOf<S>> & DepGuard<App, S['need']>,
+        sc: Scope<S> & ArgsGate<E> & PathGate<Path, PathOf<S>> & DepGuard<App, S['need']>,
       ): readonly [Path, (c: Context<E, any>) => Answered<S>]
     },
 
@@ -168,7 +185,9 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
     // unlike Express's, `mw` returns a promise the host awaits.
     //
     // No pattern here, and none to take: `app.use(…)` mounts across routes.
-    mw: <S extends State>(sc: Scope<S> & DepGuard<App, S['need']> & StripGate<S>) => {
+    mw: <S extends State>(
+      sc: Scope<S> & ArgsGate<E> & DepGuard<App, S['need']> & StripGate<S>,
+    ) => {
       // The leaf is appended ONCE, where `mw` is called. Built inside the
       // handler instead, every request would rebuild the step list and rewire
       // the verb map to reach the same value — `toNext` closes over nothing.

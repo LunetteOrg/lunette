@@ -3,6 +3,7 @@ import { describe, expectTypeOf, it } from 'vitest'
 import { scope } from '../index.ts'
 import type { Request, RequestHandler, Response } from 'express'
 import { express, expressCarrier, type LocalsOf } from './index.ts'
+import { honoCarrier } from '../hono/index.ts'
 import type { Next } from '../index.ts'
 
 // THE TYPE CONTRACT for the params and the route gate. Both claims are
@@ -210,5 +211,43 @@ describe('a middleware may not derive a ctx key the run itself brought', () => {
         .step(async (_app: {}, _ctx, next: Next<{ next: () => void }>) => next({ next: () => {} }))
         .step(async (_app: {}, { res }) => res.json({})),
     )
+  })
+})
+
+describe('a mount takes a scope written for ITS carrier, and no other', () => {
+  // NO GATE OF OURS: what the mount brings is a parameter the scope has to be
+  // assignable to, and `strictFunctionTypes` refuses one demanding args that
+  // never arrive. Mounted ungated, these compiled and died on the first
+  // request, reading `c` off `{ req, res }`.
+  const forHono = scope(honoCarrier()).step(async (_app: {}, { c }) => c.json({}))
+
+  it('refuses a scope written for another host', () => {
+    // @ts-expect-error — this scope reads `c`; an Express mount brings req/res
+    route(forHono)
+    // @ts-expect-error — this scope reads `c`; an Express mount brings req/res
+    route('/', forHono)
+    // @ts-expect-error — this scope reads `c`; an Express mount brings req/res
+    mw(forHono)
+  })
+
+  it('refuses a scope started on no host carrier at all', () => {
+    const bare = scope<{ readonly tenant: string }>().step(async (_app: {}, { tenant }) => tenant)
+
+    // @ts-expect-error — this scope reads `tenant`, which no Express run brings
+    route(bare)
+  })
+})
+
+describe('two message-gates never meet on one argument', () => {
+  it('answers with a message where intersecting them would collapse to `never`', () => {
+    // Both the answer gate and the path gate fail here. Intersected side by
+    // side their literals give `'⛔ A' & '⛔ B'`, which is `never`, and the
+    // error becomes "not assignable to parameter of type 'never'" with nothing
+    // left to read. Chained, the outer link answers — pinned because the shape
+    // that breaks it compiles just as well.
+    const unsendable = scope(expressCarrier<{ id: string }>()).step(async () => ({ ok: true }))
+
+    // @ts-expect-error ⛔ a route answers on `res`
+    route('/posts', unsendable)
   })
 })

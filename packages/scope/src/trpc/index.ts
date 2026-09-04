@@ -79,6 +79,22 @@ const toNext =
     return next({ ctx: derived })
   }
 
+// ── gate: the scope was written for THIS carrier ─────────────────────────────
+// `procedure` above has this for free — it names the args in a real parameter
+// position — and `middleware`, which takes a `Scope<S>` and casts, had nothing
+// checking that axis. Written as a FUNCTION the scope must be assignable to, so
+// `strictFunctionTypes` does the refusing; the reasoning is in the Express
+// carrier.
+//
+// `input` is taken FROM THE SCOPE rather than fixed at `unknown`: what a
+// middleware is handed depends on where it sits in the chain, and `.input`'s
+// own check rides `procedure`. What this member states is the CONTEXT, which is
+// the app's and is the same for every middleware it mounts.
+type ArgsGate<T, S extends State> = (
+  app: never,
+  args: { readonly input: S['args'] extends { readonly input: infer I } ? I : unknown; readonly ctx: CtxOf<T> },
+) => unknown
+
 // ── gate: what a MIDDLEWARE derives, against what the run itself brought ─────
 // `toNext` strips `ctx` and `input` back off by NAME, because the fold hands it
 // one merged object and a name is all there is to tell the run's own args from
@@ -118,7 +134,7 @@ export const trpc = <T, App extends object>(_t: T, deps: App) => ({
   // verdict for free — its plain `(app: App, …) => R` shape puts the deps under
   // contravariance. A `Scope<S>` argument does not, so the gate is written.
   middleware: <S extends State>(
-    sc: Scope<S> & DepGuard<App, S['need']> & StripGate<S>,
+    sc: Scope<S> & ArgsGate<T, S> & DepGuard<App, S['need']> & StripGate<S>,
   ): TRPCMiddlewareFunction<
     CtxOf<T>,
     MetaOf<T>,
