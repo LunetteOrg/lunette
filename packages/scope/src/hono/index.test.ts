@@ -108,17 +108,33 @@ describe('the Hono carrier: `mw`', () => {
   })
 
   it('a middleware step may act AFTER next(): Hono awaits the fold', async () => {
+    // The TWIN of `a step does NOT wrap the handler` in `express/index.test.ts`,
+    // and the two assert opposite orders on purpose: Hono's `next` hands back a
+    // promise and `toNext` awaits it, Express's hands back nothing. That is
+    // where the portability of a step ends, and it is measured on both sides
+    // rather than believed on either.
+    const order: string[] = []
+
     const stamp = async (_app: {}, { c }: { readonly c: Context }, next: Next<{}>) => {
+      order.push('before')
       const passed = await next({})
+      order.push('after-next')
+      // still in time to decorate the response, which is what wrapping means
       c.header('x-stamped', 'yes')
       return passed
     }
 
     const app = new Hono()
     app.use(mw(scope(honoCarrier()).step(stamp)))
-    app.get('/', (c) => c.text('body'))
+    app.get('/', async (c) => {
+      await new Promise((r) => setTimeout(r, 10))
+      order.push('handler')
+      return c.text('body')
+    })
 
     expect((await app.request('/')).headers.get('x-stamped')).toBe('yes')
+    // on Express this is ['before', 'after-next', 'handler']
+    expect(order).toEqual(['before', 'handler', 'after-next'])
   })
 })
 

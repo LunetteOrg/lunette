@@ -157,3 +157,34 @@ describe('the Express carrier: a step that THROWS reaches the error middleware',
     expect(reached).toBe(false)
   })
 })
+
+// ── the limit, measured rather than believed ────────────────────────────────
+// Its twin lives in `hono/index.test.ts` — `a middleware step may act AFTER
+// next(): Hono awaits the fold` — and the two assert OPPOSITE orders on purpose.
+// That is where the portability of a step ends, and the comment on `toNext`
+// says why: Express's `next` dispatches and hands back nothing to wait on.
+describe('the Express carrier: a step does NOT wrap the handler', () => {
+  it('runs its code after `next` BEFORE the downstream handler has finished', async () => {
+    const order: string[] = []
+
+    const around = async (_a: {}, _c: {}, next: Next<{}>) => {
+      order.push('before')
+      const passed = await next({})
+      order.push('after-next')
+      return passed
+    }
+
+    const app = expressLib()
+    app.use(express({}).mw(scope().step(around)))
+    app.get('/', async (_req, res) => {
+      await new Promise((r) => setTimeout(r, 10))
+      order.push('handler')
+      res.json({ ok: true })
+    })
+
+    await request(app).get('/')
+
+    // On Hono and tRPC this is ['before', 'handler', 'after-next'].
+    expect(order).toEqual(['before', 'after-next', 'handler'])
+  })
+})

@@ -38,6 +38,33 @@ export const expressCarrier = <Params = ParamsDictionary>(): ExpressCarrier<Para
 // `req` is destructured out and discarded with the rest of the carrier's own
 // args: what belongs on `res.locals` is what the STEPS populated, not what the
 // run was handed.
+//
+// A STEP HERE OBSERVES AND DERIVES; IT DOES NOT WRAP — and that is the one
+// place a step stops meaning the same thing on every host. Express's `next`
+// DISPATCHES and hands back nothing to wait on, so this leaf returns as soon as
+// it has called it: a step written `const p = await next({}); …; return p` runs
+// its second half BEFORE the downstream handler has finished. Hono's `next`
+// returns a promise and its leaf awaits it, tRPC's hands that promise straight
+// back, so on those two the same step runs after. The order is pinned both ways
+// in the two `index.test.ts` files rather than left as a belief.
+//
+// It is a LIMIT, not a defect of this file: `next` returning nothing is
+// Express's, and no leaf can invent what the host does not have. Nor is it
+// expressible as a refusal — no type distinguishes a step that AWAITS `next`
+// from one that RETURNS it, they share a signature.
+//
+// What it costs, concretely: a step committing a transaction, closing a
+// connection or stopping a timer after `next` tears down while the handler is
+// still using it, and one that THROWS after `next` reaches the error middleware
+// with the response possibly already sent. Work that has to happen after the
+// response does not belong in a step here — it belongs where Express puts it,
+// on `res`.
+//
+// The one shape that CANNOT be made to work on Express whatever we did:
+// decorating the response after the handler. `res.on('finish')` would let this
+// leaf wait for the response to be SENT — a different claim from "the chain
+// answered", and by then the headers are gone. Measured before choosing the
+// limit over the half-truth.
 const toNext = async (
   _app: {},
   ctx: {

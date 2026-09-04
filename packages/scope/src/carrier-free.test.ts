@@ -23,6 +23,14 @@ import { trpc } from './trpc/index.ts'
 // least that, and a superset passes — the verdict `DepGuard` gives the chain
 // and `PathGate` gives the params, on the third axis.
 //
+// WHAT TRAVELS IS WHAT A STEP DERIVES, NOT WHEN ITS CODE RUNS. The unit that
+// moves between hosts is really the STEP — a plain function reading no ctx goes
+// into an Express scope and a Hono one unchanged — and there is exactly one
+// thing it cannot carry across: a step that acts AFTER `next` runs before the
+// downstream handler on Express and after it on Hono and tRPC, because
+// Express's `next` hands back nothing to wait on. Stated on `toNext` in
+// `express/index.ts` and pinned both ways in the two `index.test.ts` files.
+//
 // WHAT SUCH A SCOPE CAN DO is bounded by what it can see: the deps it was
 // curried with, and what the steps before it populated. NOT the request — a
 // guard reading a header has to name a carrier, and from there it belongs to
