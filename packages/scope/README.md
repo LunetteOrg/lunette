@@ -7,115 +7,131 @@ authorization, resource prefetch, and the use case itself — without an onion, 
 AsyncLocalStorage, or a framework.
 
 Framework-free by construction, and dependency-free: the core has none at all,
-not even types-only. The host adapters are set aside while the core is rebuilt,
-and land as `@lntt/integration` once it settles.
+not even types-only. A carrier ships as a SUBPATH of this package, carrying its
+host's mount with it — there is no separate adapter package, because a carrier
+that hands back its host's own mount helpers leaves one nothing to be (§43).
+The four that ship take their frameworks as OPTIONAL peer dependencies, so the
+core stays dependency-free for anyone importing it:
 
-> **This README describes the pre-#30 surface** (`.input`, `.guard`, `.handle`,
-> `runScope`) and is being rewritten with the carriers. The shipped API today is
-> `scope()`, `.step()` and `.extend()` — and nothing else: no carrier and no
-> extension ship yet, so the Standard Schema validation described below is not
-> there. It comes back per carrier (§41, #64).
+| subpath | the mount factory | it hands back |
+|---|---|---|
+| `@lntt/scope/express` | `express(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it |
+| `@lntt/scope/hono` | `hono(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it |
+| `@lntt/scope/trpc` | `trpc(t, deps)` | `{ carrier, procedure, middleware }` — a resolver and a middleware, the two tRPC has |
+| `@lntt/scope/react-router` | `reactRouter(deps)` | `{ loader, action }` — two shapes, never a middleware |
 
-## The model
-
-A **scope** is an abstract handler bound to no app. It declares:
-
-- its **input** — one Standard Schema (zod / Valibot / ArkType) via `.input`;
-- a stack of **guards** — cross-cutting steps (auth, ownership, prefetch) that
-  enrich the context or short-circuit;
-- a **leaf** — the use case, which reads the enrichments and returns a result.
-
-Both guard and leaf are `(deps, ctx)`:
-
-- `deps` — the handler's own dependencies, declared inline and structural
-  (`{ sessionRepo: SessionRepo }`), reconciled against the app at the adapter;
-- `ctx` — the validated `params` + every prior guard's enrichment + whatever the
-  injected extensions add (`request`, `cookies`, `body`/`form`).
-
-`scope()` is carrier-agnostic (`.input`/`.guard`/`.handle`, portable across any
-host). Carrier capabilities are injected as tree-shakable EXTENSIONS, each mapping
-to the hosts that support it — so a scope authored for a host never even sees the
-channels that host lacks:
-
-- **`@lntt/scope/http`** — the HTTP carrier: `ctx.request`, the `.params(schema)`
-  input verb, `.status(n)`, and the vocabulary its hosts render (`notFound()`,
-  `forbidden()`, `redirect()`, `json(v, 201)`, …).
-- **`@lntt/scope/trpc`** — the RPC carrier: `ctx.request`, the `.input(schema)`
-  input verb (on RPC the input IS the payload), and its own words, which are
-  codes rather than statuses. No `redirect`: an RPC reply has nowhere to go.
-- **`@lntt/scope/body`** — the `.body`/`.form` channels + the `body` capability →
-  rejected on tRPC (no readable body).
-- **`@lntt/scope/cookies`** — the `Set-Cookie` sink `ctx.cookies` + the `cookies`
-  capability → rejected on tRPC (drops `Set-Cookie`).
-
-A carrier owns BOTH ends: what its scopes can read, and what they can say back.
-A bare `scope()` has neither an input channel nor a way to abort — which is
-right, since a scope with no carrier runs nowhere. The mistake is then
-impossible by construction rather than caught late: a tRPC scope cannot call
-`.body` (the method is not there), and it cannot `redirect()` either — that word
-belongs to another carrier, and returning it is a compile error naming the
-intent, at the guard that returned it.
+tRPC's carrier comes OUT of the factory rather than being imported beside it,
+because its context is the APPLICATION's type and `t` already holds it: pass the
+builder and the context is inferred, written nowhere. What a scope reads of the
+INPUT it declares itself — `carrier<{ id: string }>()` — and that is checked
+against the procedure it mounts on:
 
 ```ts
-import { scope } from '@lntt/scope'
-import { http, forbidden, notFound, unauthorized } from '@lntt/scope/http'
-import { z } from 'zod'
+const byId = scope(carrier<{ id: string }>()).step(
+  async ({ posts }: Deps, { input }) => posts.getPost(input.id),   // typed, no cast
+)
 
-export const courseHandler = scope().extend(http)
-  .params(z.object({ courseId: z.string() }))
-  .guard(({ sessionRepo }: { sessionRepo: SessionRepo }, ctx) => {
-    const session = sessionRepo.get(ctx.request)
-    return session ? { session } : unauthorized()
-  })
-  .guard(({ adminRepo }: { adminRepo: AdminRepo }, ctx) => {
-    const admin = adminRepo.byId(ctx.session.userId)
-    return admin ? { admin } : forbidden()
-  })
-  .guard(({ courseRepo }: { courseRepo: CourseRepo }, ctx) => {
-    const course = courseRepo.byId(ctx.params.courseId)
-    if (!course) return notFound()
-    return course.ownerId === ctx.admin.id ? { course } : forbidden()
-  })
-  // the leaf IS the use case: it declares its own service and delegates
-  .handle(({ courseView }: { courseView: CourseView }, ctx) =>
-    courseView.detail(ctx.course),
-  )
+t.procedure.input(z.object({ id: z.string() })).query(procedure(byId))   // ✓
+t.procedure.input(z.object({ slug: z.string() })).query(procedure(byId)) // refused
+t.procedure.query(procedure(byId))                                       // refused
 ```
+
+There is no gate of ours behind that: tRPC hands a resolver the schema's OUTPUT,
+so a scope reading what the schema does not supply is refused at the argument by
+contravariance — the same mechanism `DepGuard` relies on. `.output(schema)` is
+checked the other way round, against what the leaf returned.
+
+On Express and Hono a scope is a VALUE and the mount is the host's own call:
+
+```ts
+export const showPost = scope(expressCarrier<{ id: string }>())
+  .step(async ({ posts }: Deps, { req, res }) => res.json(posts.getPost(req.params.id)))
+
+app.get('/posts/:id', route(showPost))         // the handler, nothing checked
+app.get(...route('/posts/:id', showPost))      // the pair, pattern CHECKED
+```
+
+The carrier says which params the scope reads (`expressCarrier<{ id: string }>()`
+on Express, the pattern itself on Hono: `honoCarrier<'/posts/:id'>()`), and that
+is what types `req.params.id` / `c.req.param('id')` with nothing annotated on
+the step. Give `route` the pattern as well and it is compared against that
+declaration:
+
+```
+⛔ this route does not supply a param the scope reads: id
+```
+
+The comparison runs in ONE direction — the scope demands, the route supplies —
+so a route supplying MORE than the scope reads passes, which is the verdict
+`DepGuard` already gives the chain and what lets one scope mount under a nested
+route. On a pattern neither reader can read (a non-literal string) the gate has
+no opinion. The reading is each framework's own: Express's `RouteParameters`,
+Hono's `ParamKeys` — never a parser of ours.
+
+The one-argument form cannot check anything, and that is a fact about the hosts
+rather than a choice: a handler we return always tells Express what its params
+are, so its own `RouteParameters` default is never used, and Hono's
+`Context<Env, Path>` is mutually assignable across paths. Seven handler shapes
+were measured against this and none reaches the pattern. It reaches a type of
+ours only by being an argument to one — which is what the two-argument form is.
+
+`mw` takes no pattern: `app.use(…)` mounts across routes.
+
+On Hono the mount hands back what the SCOPE hands back, not a bare `Response`,
+so the typed RPC client keeps working end to end:
+
+```ts
+const app = new Hono()
+  .get('/posts/:id', route(showPost))
+  .get(...route('/health', health))
+
+const client = hc<typeof app>('http://localhost')
+const res = await client.posts[':id'].$get({ param: { id: '1' } })
+await res.json()   // { id: string; title: string } — not `unknown`
+```
+
+Both the value the leaf built and the status it chose survive as literals.
+
+**Every mount is transparent**, on all four: it hands back the host's own type
+with what the scope knows filled in, never the widest thing that compiles.
+
+| subpath | what the mount carries through |
+|---|---|
+| express | the params a route declares; the LOCALS a middleware derives (`LocalsOf<typeof mw>`) |
+| hono | what the leaf returned, value and status, for `hc<typeof app>()` |
+| trpc | the resolver's return type (`inferRouterOutputs`, and what `.output(schema)` checks), the INPUT a scope declares (checked against `.input(schema)`), and a middleware's CONTEXT OVERRIDE — what its steps derived reaches every procedure that `.use`s it |
+| react-router | what the loader or action returned, which is `useLoaderData<typeof loader>()` |
+
+Each is pinned in that subpath's `*.test-d.ts`, because none of them can fail a
+runtime test: a mount that erases a type still serves the right bytes, and the
+loss shows up in someone else's file as `unknown`.
+Declaring the mount `Promise<Response>` erases them and `hc` answers `unknown`,
+which is why the return type is threaded through and pinned in
+`hono/index.test-d.ts`.
 
 ## The error convention
 
-A **returned** value is a domain outcome (a result, or an `Abort` like
-`forbidden()` / `redirect()` — the codec maps it to a 4xx / redirect). A
-**thrown** error is infrastructure (a 5xx / rollback / nack). A validation
-failure of the input is a returned `422` — never a throw.
+A **returned** value is a domain outcome: it passes through — commit, no retry,
+ack. A **thrown** error is infrastructure: react to it — rollback, retry, nack.
+The pivot is the same on every host, and each mount answers it in its host's own
+door (Express's error middleware, Hono's `HTTPException`, tRPC's `TRPCError`, a
+thrown `data()` on React Router).
 
-## Running a scope
+The fold produces nothing of its own on top of that: a scope hands back what its
+leaf RETURNED, and whether that went well is the carrier's statement, not the
+core's (§42). There is no `Outcome`, no `Abort`, and no branch to unwrap.
 
-Hosts run a scope through the fold; you rarely call these directly, but they
-are the whole runtime:
+## Not here yet
 
-- `runFold(handler, app, carrier, params)` — thread `app` through the guards to
-  the leaf, short-circuit on an `Abort`, return an `Outcome`.
-- `runScope(handler, app, carrier, rawInput)` — validate `rawInput` against the
-  scope's schema first (→ a returned `422` on failure), then fold.
+Two things the carriers deliberately leave out, so that neither is designed
+against a surface still in motion:
 
-Because a scope is abstract, it is **testable in isolation** with plain fakes
-— no host, no chain:
+- **guards** as a named shape, beyond "a step that stops" — #67. Every test in
+  this package writes its own guard inline for exactly that reason.
+- **validation**, and with it the input contract — #64. It comes back as a step
+  factory, per entry rather than per carrier.
 
-```ts
-const out = await runScope(courseHandler,
-  { sessionRepo, adminRepo, courseRepo, courseView }, // fakes
-  { request }, { courseId: 'c1' })
-```
-
-## The adapter contract
-
-A scope binds to a concrete app only at the host adapter. A **missing
-dependency** is a compile error at the adapter (`DepGuard` brand: what the host
-carries must satisfy the scope's accumulated `Need` — the chain's public surface
-where a pack holds it, the tRPC context where the app travels in it). The
-per-host adapters (Hono, Express, React Router, tRPC) — each preserving its
-host's native routing and typed client — come back with `@lntt/integration`.
+Extensions and the worked examples come back after those, on the settled core.
 
 ## Status
 
