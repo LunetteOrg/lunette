@@ -12,7 +12,7 @@
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
 import type { ParamsDictionary, RouteParameters } from 'express-serve-static-core'
-import type { Scope, State } from '../index.ts'
+import type { DepGuard, Scope, State } from '../index.ts'
 
 // `Params` is what the scope says the URL carries. It defaults to Express's own
 // wide dictionary — a scope that names nothing reads `string | undefined` and
@@ -114,10 +114,20 @@ type LocalsDerivedBy<S extends State> = S['acc'] extends Record<string, any>
 export type LocalsOf<Mw> = Mw extends RequestHandler<any, any, any, any, infer L> ? L : never
 
 export const express = <App extends object>(deps: App) => {
+  // THE REJECTION IS HANDED TO EXPRESS, never dropped. A THROWN error is the
+  // library's infrastructure signal (§3), and Express's error middleware is
+  // where that signal is answered — so the fold's promise goes to `next`. Left
+  // as a bare `void`, the request would hang until the client gave up and the
+  // rejection would surface as an unhandled one, which Node's default
+  // `--unhandled-rejections=throw` turns into a dead process.
+  //
+  // `.catch(next)` rather than RETURNING the promise: Express 5 forwards a
+  // returned rejection on its own, Express 4 does not, and this says the same
+  // thing on both.
   const handlerFor =
     <S extends State>(sc: unknown): RequestHandler<ParamsOf<S>> =>
-    (req, res) => {
-      void (sc as (app: App, args: object) => unknown)(deps, { req, res })
+    (req, res, next) => {
+      void (sc as (app: App, args: object) => Promise<unknown>)(deps, { req, res }).catch(next)
     }
 
   return {
@@ -136,6 +146,11 @@ export const express = <App extends object>(deps: App) => {
     // generic, generic-constrained, `NoInfer`, and the gate placed on the
     // parameter, on `res`, or on the return type — and none reaches it. A
     // pattern reaches a type of ours only by being an ARGUMENT to one.
+    // `DepGuard` rides the scope argument on every form. The deps were curried
+    // at `express(deps)`, so a mount hands them to the scope exactly as a direct
+    // call does — and without the gate the mount would be the one way to reach a
+    // scope while owing it less than it asks, refused nowhere and dying on the
+    // first request instead.
     route: (<Path extends string, S extends State>(
       a: Path | Scope<S>,
       b?: Scope<S> & PathGate<Path, ParamsOf<S>>,
@@ -143,12 +158,12 @@ export const express = <App extends object>(deps: App) => {
       b === undefined
         ? handlerFor(a)
         : [a as Path, handlerFor(b)]) as {
-      <S extends State>(sc: Scope<S>): RequestHandler<ParamsOf<S>>
+      <S extends State>(sc: Scope<S> & DepGuard<App, S['need']>): RequestHandler<ParamsOf<S>>
       <Path extends string, S extends State>(
         path: Path,
         // The gate rides the SCOPE argument: intersected onto the path, a
         // failing gate collapses to `never` and the message is lost.
-        sc: Scope<S> & PathGate<Path, ParamsOf<S>>,
+        sc: Scope<S> & PathGate<Path, ParamsOf<S>> & DepGuard<App, S['need']>,
       ): readonly [Path, RequestHandler<ParamsOf<S>>]
     },
 
@@ -159,17 +174,26 @@ export const express = <App extends object>(deps: App) => {
     // No pattern here, and none to take: `app.use(…)` mounts across routes.
     mw:
       <S extends State>(
-        sc: Scope<S>,
+        sc: Scope<S> & DepGuard<App, S['need']>,
         // `Request['query']` rather than naming `ParsedQs`: that type lives in
         // `qs`, which is not a dependency here, and the query slot has to be
         // filled to reach the locals one.
-      ): RequestHandler<ParamsDictionary, any, any, Request['query'], LocalsDerivedBy<S>> =>
-      (req, res, next): void => {
+      ): RequestHandler<ParamsDictionary, any, any, Request['query'], LocalsDerivedBy<S>> => {
+        // The leaf is appended ONCE, where `mw` is called. Built inside the
+        // handler instead, every request would rebuild the step list and rewire
+        // the verb map to reach the same value — `toNext` closes over nothing.
         const finished = (sc as { step: (s: unknown) => unknown }).step(toNext) as unknown as (
           app: App,
           args: unknown,
-        ) => unknown
-        void finished(deps, { req, res, next })
+        ) => Promise<unknown>
+
+        // `.catch(next)`, and here it is not only the error path: `toNext` — the
+        // leaf that calls Express's own `next()` — lives inside the fold, so a
+        // dropped rejection would leave the chain stalled with no response AND
+        // no error handler reached.
+        return (req, res, next): void => {
+          void finished(deps, { req, res, next }).catch(next)
+        }
       },
   }
 }

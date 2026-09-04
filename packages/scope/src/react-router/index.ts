@@ -11,7 +11,7 @@
 // same way an Express route reads `Request`/`Response` at the width it needs.
 
 import type { Params } from 'react-router'
-import type { ResultOf, Scope, State } from '../index.ts'
+import type { DepGuard, ResultOf, Scope, State } from '../index.ts'
 
 // `Par` is what the scope says the route supplies. It defaults to React
 // Router's own `Params`, whose values are `string | undefined`; a route module
@@ -41,8 +41,12 @@ export const reactRouterCarrier = <Par = Params>(): ReactRouterCarrier<Par> => (
 // instead of reaching an ErrorBoundary, and nothing here guards against writing
 // `return` by mistake: the mistake is at the call site, not at a missing check.
 export const reactRouter = <App extends object>(deps: App) => {
+  // `DepGuard` rides the scope argument: the deps were curried at
+  // `reactRouter(deps)`, so a mount hands the scope its chain exactly as a
+  // direct call does and owes the same verdict — without it, the mount would be
+  // the one way to reach a scope while supplying less than it asks.
   const mount =
-    <S extends State>(sc: Scope<S>) =>
+    <S extends State>(sc: Scope<S> & DepGuard<App, S['need']>) =>
     (args: S['args']): Promise<ResultOf<Scope<S>>> =>
       (sc as unknown as (app: App, a: object) => Promise<ResultOf<Scope<S>>>)(deps, args)
 

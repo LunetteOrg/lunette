@@ -57,6 +57,23 @@ describe('`route(path, scope)`: what the scope READS against what the route SUPP
     route(dynamic, byId)
   })
 
+  it('rejects an OPTIONAL supply for a required demand: `/posts/:id?` also matches `/posts`', () => {
+    // Hono keeps the `?` in the key, and it is the whole claim: mounted here
+    // the route answers `/posts` too, where `c.req.param('id')` is `undefined`
+    // against a step whose type says `string`.
+    // @ts-expect-error ⛔ this route does not supply a param the scope reads: id
+    route('/posts/:id?', byId)
+  })
+
+  it('accepts either supply for an OPTIONAL demand — the step already reads undefined', () => {
+    const maybeById = scope(honoCarrier<'/posts/:id?'>()).step(async (_app: {}, { c }) =>
+      c.json({ id: c.req.param('id') ?? null }),
+    )
+
+    route('/posts/:id?', maybeById)
+    route('/posts/:id', maybeById)
+  })
+
   it('hands back the pattern as its literal, so the mount stays typed', () => {
     expectTypeOf(route('/posts/:id', byId)[0]).toEqualTypeOf<'/posts/:id'>()
   })
@@ -98,5 +115,30 @@ describe('the typed RPC client reads what the scope hands back', () => {
     // nothing between the leaf and the client widens either
     expectTypeOf(res.status).toEqualTypeOf<201>()
     expectTypeOf(await res.json()).toEqualTypeOf<{ ok: true }>()
+  })
+})
+
+describe('the mounts owe the scope its chain: `DepGuard` rides every mount', () => {
+  // The deps are curried at `hono({})`, so an empty chain reaches the scope —
+  // and a scope demanding a `db` must be refused HERE, at the mount, exactly as
+  // a direct call is.
+  const needsDb = scope(honoCarrier()).step(async ({ db }: { readonly db: string }, { c }) =>
+    c.json({ db }),
+  )
+
+  it('refuses a scope the curried chain does not satisfy', () => {
+    // @ts-expect-error __ERROR_chain_Pub_missing_deps
+    route(needsDb)
+    // @ts-expect-error __ERROR_chain_Pub_missing_deps
+    route('/', needsDb)
+    // @ts-expect-error __ERROR_chain_Pub_missing_deps
+    hono({}).mw(needsDb)
+  })
+
+  it('accepts it on a chain that does — a superset passes, as everywhere', () => {
+    const withDb = hono({ db: 'pg', extra: 1 })
+    withDb.route(needsDb)
+    withDb.route('/', needsDb)
+    withDb.mw(needsDb)
   })
 })

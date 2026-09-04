@@ -114,3 +114,46 @@ describe('the Express carrier: `mw`', () => {
     expect(res.body).toEqual({ keys: ['actor'] })
   })
 })
+
+// ── the thrown error is INFRASTRUCTURE (§3), and Express's own door for it is
+// the error middleware. The fold's promise is a promise: dropped, the request
+// hangs until the client gives up and the rejection surfaces as an unhandled
+// one — which Node kills the process over by default.
+describe('the Express carrier: a step that THROWS reaches the error middleware', () => {
+  const { route, mw } = express({})
+
+  const boom = scope(expressCarrier()).step(async () => {
+    throw new Error('boom')
+  })
+
+  it('from a route', async () => {
+    let caught: unknown
+    const app = expressLib()
+    app.get('/', route(boom))
+    app.use((err: unknown, _req: Request, res: Response, _next: () => void) => {
+      caught = err
+      res.status(500).json({ error: 'infrastructure' })
+    })
+
+    const res = await request(app).get('/')
+    expect(res.status).toBe(500)
+    expect(res.body).toEqual({ error: 'infrastructure' })
+    expect((caught as Error).message).toBe('boom')
+  })
+
+  it('from a middleware, where the stalled chain would otherwise answer nothing at all', async () => {
+    let reached = false
+    const app = expressLib()
+    app.use(mw(boom))
+    app.get('/', (_req, res) => {
+      reached = true
+      return res.json({})
+    })
+    app.use((_err: unknown, _req: Request, res: Response, _next: () => void) =>
+      res.status(500).json({ error: 'infrastructure' }),
+    )
+
+    expect((await request(app).get('/')).status).toBe(500)
+    expect(reached).toBe(false)
+  })
+})

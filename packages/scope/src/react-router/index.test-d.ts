@@ -45,3 +45,23 @@ describe('what a route module sees', () => {
     })
   })
 })
+
+describe('the mounts owe the scope its chain: `DepGuard` rides both mounts', () => {
+  // The deps are curried at `reactRouter({})`, so a scope demanding a `db` is
+  // refused at the mount, exactly as a direct call is — and not on the first
+  // request, where the step would destructure it off `{}`.
+  const needsDb = scope(carrier).step(async ({ db }: { readonly db: string }) => ({ db }))
+
+  it('refuses a scope the curried chain does not satisfy', () => {
+    // @ts-expect-error __ERROR_chain_Pub_missing_deps
+    mountLoader(needsDb)
+    // @ts-expect-error __ERROR_chain_Pub_missing_deps
+    mountAction(needsDb)
+  })
+
+  it('accepts it on a chain that does — a superset passes, as everywhere', () => {
+    const { loader, action } = reactRouter({ db: 'pg', extra: 1 })
+    loader(needsDb)
+    action(needsDb)
+  })
+})

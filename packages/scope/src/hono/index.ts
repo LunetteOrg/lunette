@@ -6,7 +6,7 @@
 
 import type { Context, Next } from 'hono'
 import type { BlankEnv, Env, ParamKeys } from 'hono/types'
-import type { ResultOf, Scope, State } from '../index.ts'
+import type { DepGuard, ResultOf, Scope, State } from '../index.ts'
 
 // `Path` is the ROUTE PATTERN the scope is written for, and it is what makes
 // `c.req.param('id')` typed — Hono's own `Context<Env, Path>` does the reading,
@@ -56,15 +56,28 @@ declare const OPAQUE: unique symbol
 type Opaque = typeof OPAQUE
 
 // Hono keeps the `?` INSIDE the key for an optional param (`/posts/:id?` →
-// `"id?"`); a declared pattern's keys never need to carry one into the
-// comparison, so strip it on both sides.
-type NameOf<K> = K extends `${infer N}?` ? N : K
-
+// `"id?"`), and it is MEANING, not noise: `/posts/:id?` also matches `/posts`,
+// where `c.req.param('id')` is `undefined`. So both sides keep it and `Unmet`
+// below reads it — stripped on the supply side, an optional param would satisfy
+// a scope that reads a required one, which is the exact mismatch this gate
+// exists to catch.
+//
 // A NON-LITERAL pattern (`string`) means "cannot read this", never "no params":
 // catching less is fine, rejecting a valid route is not. Read on the SUPPLY
 // side as no opinion, and on the DEMAND side as naming nothing.
-type Supplied<Path extends string> = string extends Path ? Opaque : NameOf<ParamKeys<Path>>
-type Demanded<Path extends string> = string extends Path ? never : NameOf<ParamKeys<Path>>
+type Supplied<Path extends string> = string extends Path ? Opaque : ParamKeys<Path>
+type Demanded<Path extends string> = string extends Path ? never : ParamKeys<Path>
+
+// One demanded key against the whole supplied set, DISTRIBUTED over the union.
+// An optional demand (`"id?"`) takes either — the step already reads
+// `string | undefined`. A required one takes only the required supply.
+type Unmet<Demand, Sup> = Demand extends `${infer N}?`
+  ? [Extract<Sup, N | `${N}?`>] extends [never]
+    ? N
+    : never
+  : [Extract<Sup, Demand>] extends [never]
+    ? Demand
+    : never
 
 // ONE DIRECTION: the scope DEMANDS — it reads `c.req.param('id')` — and the
 // route SUPPLIES. A param the scope reads and the pattern does not supply is
@@ -76,7 +89,7 @@ type Demanded<Path extends string> = string extends Path ? never : NameOf<ParamK
 // way round, the gate would skip every param-less route.
 type Unsupplied<Mounted extends string, Declared extends string> = Opaque extends Supplied<Mounted>
   ? never
-  : Exclude<Demanded<Declared>, Supplied<Mounted>>
+  : Unmet<Demanded<Declared>, Supplied<Mounted>>
 
 type PathGate<Mounted extends string, Declared extends string> = [
   Unsupplied<Mounted, Declared>,
@@ -89,7 +102,6 @@ type PathOf<S extends State> = S['args'] extends { readonly c: Context<any, infe
   ? P & string
   : never
 
-// `E` is written once per app, where the deps are curried: `hono<MyEnv>(deps)`.
 // What a route mounted from this scope RETURNS. Hono's RPC client reads the
 // handler's return type off `typeof app` — `c.json(v)` gives back a
 // `TypedResponse` carrying `v`, and declaring the mount as `Promise<Response>`
@@ -98,6 +110,10 @@ type PathOf<S extends State> = S['args'] extends { readonly c: Context<any, infe
 // the SCOPE hands back, which is the union its steps accumulated.
 type Answered<S extends State> = Promise<ResultOf<Scope<S>>>
 
+// `E` is written once per app, where the deps are curried — and BOTH type
+// arguments are written there: `hono<typeof deps, MyEnv>(deps)`. `App` comes
+// first because it is what the deps gate reads, and TypeScript has no partial
+// explicit list, so naming the env means naming the deps type beside it.
 export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) => {
   const handlerFor =
     <S extends State>(sc: unknown) =>
@@ -122,12 +138,15 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
       a: Path | Scope<S>,
       b?: Scope<S> & PathGate<Path, PathOf<S>>,
     ) => (b === undefined ? handlerFor(a) : [a as Path, handlerFor(b)])) as {
-      <S extends State>(sc: Scope<S>): (c: Context<E, any>) => Answered<S>
+      // `DepGuard` rides the scope argument on every form: the deps were
+      // curried at `hono(deps)`, so a mount owes the scope what a direct call
+      // owes it, and the same branded refusal says so.
+      <S extends State>(sc: Scope<S> & DepGuard<App, S['need']>): (c: Context<E, any>) => Answered<S>
       <Path extends string, S extends State>(
         path: Path,
         // The gate rides the SCOPE argument: intersected onto the path, a
         // failing gate collapses to `never` and the message is lost.
-        sc: Scope<S> & PathGate<Path, PathOf<S>>,
+        sc: Scope<S> & PathGate<Path, PathOf<S>> & DepGuard<App, S['need']>,
       ): readonly [Path, (c: Context<E, any>) => Answered<S>]
     },
 
@@ -135,14 +154,28 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
     // unlike Express's, `mw` returns a promise the host awaits.
     //
     // No pattern here, and none to take: `app.use(…)` mounts across routes.
-    mw:
-      <S extends State>(sc: Scope<S>) =>
-      async (c: Context<E>, next: Next): Promise<void> => {
-        const finished = (sc as { step: (s: unknown) => unknown }).step(toNext) as unknown as (
-          app: App,
-          args: unknown,
-        ) => unknown
-        await finished(deps, { c, next })
-      },
+    mw: <S extends State>(sc: Scope<S> & DepGuard<App, S['need']>) => {
+      // The leaf is appended ONCE, where `mw` is called. Built inside the
+      // handler instead, every request would rebuild the step list and rewire
+      // the verb map to reach the same value — `toNext` closes over nothing.
+      const finished = (sc as { step: (s: unknown) => unknown }).step(toNext) as unknown as (
+        app: App,
+        args: unknown,
+      ) => Promise<unknown>
+
+      // A STEP THAT ANSWERS IS THE MIDDLEWARE'S ANSWER. A guard stops by
+      // returning a response — `return c.json({ error: 'unauthorized' }, 401)`,
+      // the same shape `route` takes — and never calls `next`; dropped here,
+      // Hono would see `undefined` with the chain uncalled and answer 500. So
+      // what the fold hands back is handed on when it is a `Response`, and the
+      // one guard scope really does compose on every host.
+      //
+      // `Response | void` is Hono's own middleware return: `undefined` is what
+      // `toNext` gives once the chain has run and Hono continues on it.
+      return async (c: Context<E>, next: Next): Promise<Response | void> => {
+        const answered = await finished(deps, { c, next })
+        return answered instanceof Response ? answered : undefined
+      }
+    },
   }
 }

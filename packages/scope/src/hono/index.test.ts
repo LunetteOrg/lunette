@@ -121,3 +121,36 @@ describe('the Hono carrier: `mw`', () => {
     expect((await app.request('/')).headers.get('x-stamped')).toBe('yes')
   })
 })
+
+// ── a guard that stops by RETURNING a response, which is how `route`'s own
+// steps answer. Hono reads a middleware's return: dropped, it sees `undefined`
+// with the chain uncalled and answers 500.
+describe('the Hono carrier: `mw` hands back a step\'s own response', () => {
+  const { mw } = hono({})
+
+  const requireActorReturning = async (
+    _app: {},
+    { c }: { readonly c: Context },
+    next: Next<{ actor: string }>,
+  ) => {
+    const actor = c.req.header('x-actor-id')
+    if (!actor) return c.json({ error: 'unauthorized' }, 401)
+    return next({ actor })
+  }
+
+  const app = new Hono()
+  app.use(mw(scope(honoCarrier()).step(requireActorReturning)))
+  app.get('/', (c) => c.json({ actor: c.get('actor' as never) }))
+
+  it('answers with what the step returned, and the handler never runs', async () => {
+    const res = await app.request('/')
+    expect(res.status).toBe(401)
+    expect(await res.json()).toEqual({ error: 'unauthorized' })
+  })
+
+  it('still continues the chain when the step calls next', async () => {
+    const res = await app.request('/', { headers: { 'x-actor-id': 'u1' } })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ actor: 'u1' })
+  })
+})

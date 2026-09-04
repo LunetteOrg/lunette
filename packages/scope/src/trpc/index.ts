@@ -10,7 +10,7 @@
 // have.
 
 import type { TRPCMiddlewareFunction, TRPCRootObject } from '@trpc/server'
-import type { Scope, State } from '../index.ts'
+import type { DepGuard, Scope, State } from '../index.ts'
 
 // The context is the APPLICATION's — a session, a tenant, an actor id — so the
 // carrier is generic over it where the other three publish types their
@@ -101,7 +101,12 @@ export const trpc = <T, App extends object>(_t: T, deps: App) => ({
   // middleware adds to `ctx` off what `next` was called with, and carries it
   // into every procedure that `.use`s it. So `next` is called with exactly
   // `S['acc']`, and what it hands back is handed straight on.
-  middleware: <S extends State>(sc: Scope<S>): TRPCMiddlewareFunction<
+  // `DepGuard` rides the argument here where `procedure` above gets the same
+  // verdict for free — its plain `(app: App, …) => R` shape puts the deps under
+  // contravariance. A `Scope<S>` argument does not, so the gate is written.
+  middleware: <S extends State>(
+    sc: Scope<S> & DepGuard<App, S['need']>,
+  ): TRPCMiddlewareFunction<
     CtxOf<T>,
     MetaOf<T>,
     object,

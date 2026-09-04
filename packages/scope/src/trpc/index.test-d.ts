@@ -131,3 +131,21 @@ describe('what `.input(schema)` supplies against what the scope reads', () => {
       .query(procedure(byId))
   })
 })
+
+describe('the mount owes the scope its chain: `DepGuard` rides `middleware`', () => {
+  // `procedure` gets this verdict for free — its plain `(app, args) => R` shape
+  // puts the deps under contravariance — so what is pinned here is the other
+  // mount, where a `Scope<S>` argument gives contravariance nothing to bite on
+  // and the gate is written out.
+  const { carrier, middleware } = trpc(t, {})
+  const needsDb = scope(carrier()).step(async ({ db }: { readonly db: string }) => db)
+
+  it('refuses a scope the curried chain does not satisfy', () => {
+    // @ts-expect-error __ERROR_chain_Pub_missing_deps
+    middleware(needsDb)
+  })
+
+  it('accepts it on a chain that does — a superset passes, as everywhere', () => {
+    trpc(t, { db: 'pg', extra: 1 }).middleware(needsDb)
+  })
+})

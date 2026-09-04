@@ -142,9 +142,14 @@ export type AnyStep = (
 //
 // A SUPERSET is fine: a chain exposing more than the scope requires passes.
 //
-// The MOUNT-side gates are not here — the same scope is correct on another
-// host, so they cannot move earlier. They come with the host mounts.
-type DepGuard<Pub, Need> = Pub extends Need
+// EXPORTED because a mount curries the deps too — `express(deps).route(sc)`
+// hands the chain to the scope exactly as a direct call does, so it owes the
+// same verdict at the same place, and a second gate saying it would be a second
+// wording of one rule.
+//
+// The PATH gates are not here — the same scope is correct on another host, so
+// they cannot move earlier. They come with the host mounts.
+export type DepGuard<Pub, Need> = Pub extends Need
   ? unknown
   : { readonly __ERROR_chain_Pub_missing_deps: Need }
 

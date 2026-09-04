@@ -56,7 +56,14 @@ describe('`route(path, scope)`: what the scope READS against what the route SUPP
     route(dynamic, byId)
   })
 
-  it('reads Express 5 syntax with Express\'s own reader: `{/:id}` supplies `id`', () => {
+  it('IS BLIND to Express 5\'s optional group: `{/:id}` reads as a required `id`', () => {
+    // `RouteParameters` — Express's own reader, and the reason there is no
+    // parser of ours — reports `{/:id}` as a plain required `id`, so the gate
+    // accepts this. The route matches `/posts` all the same and the step then
+    // reads `req.params.id` as `undefined` against a type that says `string`.
+    // Closing it means writing the reader this gate exists NOT to write; the
+    // gate catches the misspelt and the missing param, and says so here rather
+    // than being read as a claim it does not make.
     route('/posts{/:id}', byId)
   })
 
@@ -106,5 +113,32 @@ describe('the mounts are transparent: each hands back Express\'s own type, fille
       res.end()
     }
     void handler
+  })
+})
+
+describe('the mounts owe the scope its chain: `DepGuard` rides every mount', () => {
+  // The deps are curried at `express({})`, so an empty chain reaches the scope
+  // — and a scope demanding a `db` must be refused HERE, at the mount, exactly
+  // as a direct call is. Left ungated, the mount would be the one door into a
+  // scope that asks for more than it is handed, and the step would destructure
+  // `db` off `{}` on the first request instead.
+  const needsDb = scope(expressCarrier()).step(async ({ db }: { readonly db: string }, { res }) =>
+    res.json({ db }),
+  )
+
+  it('refuses a scope the curried chain does not satisfy', () => {
+    // @ts-expect-error __ERROR_chain_Pub_missing_deps
+    route(needsDb)
+    // @ts-expect-error __ERROR_chain_Pub_missing_deps
+    route('/', needsDb)
+    // @ts-expect-error __ERROR_chain_Pub_missing_deps
+    mw(needsDb)
+  })
+
+  it('accepts it on a chain that does — a superset passes, as everywhere', () => {
+    const withDb = express({ db: 'pg', extra: 1 })
+    withDb.route(needsDb)
+    withDb.route('/', needsDb)
+    withDb.mw(needsDb)
   })
 })
