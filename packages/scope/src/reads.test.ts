@@ -259,3 +259,80 @@ describe('Express `body`: the two worlds a Node request can be in', () => {
     expect(res.body.issues[0].message).toBe('the body is not valid JSON')
   })
 })
+
+// ── every key below is the CLIENT's ─────────────────────────────────────────
+describe('a client-chosen key cannot reach the prototype', () => {
+  const readAll = rr.reactRouter({}).loader(
+    scope(rr.reactRouterCarrier())
+      .step(rr.query)
+      .step(rr.cookies)
+      .step(rr.headers)
+      .step(async (_a: {}, { query, cookies, headers }) => ({ query, cookies, headers })),
+  )
+
+  it('keeps `__proto__` as an OWN property instead of running the setter', async () => {
+    // On an ordinary object literal this assignment runs the inherited setter:
+    // the value vanishes without a word, and a crafted one reaches the prototype
+    // of the object a step is handed.
+    const out = (await readAll({
+      request: new Request('http://h/?__proto__=polluted', {
+        headers: { cookie: '__proto__=polluted' },
+      }),
+      params: {},
+    })) as { query: Record<string, unknown>; cookies: Record<string, unknown> }
+
+    expect(Object.getPrototypeOf(out.query)).toBe(null)
+    expect(Object.hasOwn(out.query, '__proto__')).toBe(true)
+    expect(out.query['__proto__']).toBe('polluted')
+    expect(out.cookies['__proto__']).toBe('polluted')
+    expect(({} as Record<string, unknown>)['polluted']).toBeUndefined()
+  })
+
+  it('a repeated `__proto__` does not corrupt the bag it is written into', async () => {
+    const out = (await readAll({
+      request: new Request('http://h/?__proto__=a&__proto__=b&ok=1'),
+      params: {},
+    })) as { query: Record<string, unknown> }
+
+    expect(out.query['__proto__']).toEqual(['a', 'b'])
+    expect(out.query.ok).toBe('1')
+  })
+})
+
+describe('Express `body`: a parsed body does not say what parsed it', () => {
+  it('refuses a JSON payload where the step asked for a form', async () => {
+    // `express.json()` mounted app-wide leaves an object behind whatever the
+    // route asked for. Without the check this handed JSON on as form fields —
+    // no error, no `onError`, wrong data.
+    const app = expressLib()
+    app.use(expressLib.json())
+    app.post(
+      '/',
+      ex.express({}).handler(
+        scope(ex.expressCarrier())
+          .step(ex.body('form', (issues, ctx) => ctx.res.status(415).json({ issues })))
+          .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
+      ),
+    )
+
+    const res = await request(app).post('/').send({ a: 1 })
+    expect(res.status).toBe(415)
+    expect(res.body.issues[0].message).toContain('not form')
+  })
+
+  it('accepts it when the encoding the client sent is the one asked for', async () => {
+    const app = expressLib()
+    app.use(expressLib.urlencoded({ extended: false }))
+    app.post(
+      '/',
+      ex.express({}).handler(
+        scope(ex.expressCarrier())
+          .step(ex.body('form', (issues, ctx) => ctx.res.status(415).json({ issues })))
+          .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
+      ),
+    )
+
+    const res = await request(app).post('/').type('form').send({ a: '1' })
+    expect(res.body).toEqual({ got: { a: '1' } })
+  })
+})

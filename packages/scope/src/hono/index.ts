@@ -6,19 +6,8 @@
 
 import type { Context, Next } from 'hono'
 import type { BlankEnv, Env, ParamKeys } from 'hono/types'
-import type { DepGuard, Next as ScopeNext, Passed, ResultOf, Scope, State } from '../index.ts'
-import type { StandardIssue } from '../guard/index.ts'
-import {
-  cookiesFrom,
-  headersFrom,
-  queryFrom,
-  readBody,
-  type BodyOf,
-  type Cookies,
-  type Encoding,
-  type Headers_ as HeaderRecord,
-  type Query,
-} from '../reads.ts'
+import type { DepGuard, ResultOf, Scope, State } from '../index.ts'
+import { fetchReads } from '../reads.ts'
 
 // `Path` is the ROUTE PATTERN the scope is written for, and it is what makes
 // `c.req.param('id')` typed — Hono's own `Context<Env, Path>` does the reading,
@@ -256,41 +245,12 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
 export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from '../reads.ts'
 
 // `c.req.raw` is the Fetch `Request` Hono is built on, so these read the same
-// source React Router's do — one implementation per carrier FAMILY, and Hono and
-// React Router are the same family.
-export const query = async (
-  _app: {},
-  { c }: { readonly c: Context<any, any> },
-  next: ScopeNext<{ query: Query }>,
-) => next({ query: queryFrom(new URL(c.req.raw.url).searchParams) })
+// source React Router's do — ONE implementation for the whole Fetch family, in
+// `reads.ts`, and this subpath passes the one line that differs: where the
+// request is found.
+const reads = fetchReads((ctx: { readonly c: Context<any, any> }) => ctx.c.req.raw)
 
-export const headers = async (
-  _app: {},
-  { c }: { readonly c: Context<any, any> },
-  next: ScopeNext<{ headers: HeaderRecord }>,
-) => next({ headers: headersFrom(c.req.raw.headers) })
-
-export const cookies = async (
-  _app: {},
-  { c }: { readonly c: Context<any, any> },
-  next: ScopeNext<{ cookies: Cookies }>,
-) => next({ cookies: cookiesFrom(c.req.raw.headers.get('cookie')) })
-
-// A FACTORY, because a populated `ctx.body` has already been parsed and the
-// encoding is a per-route choice. It takes an `onError` where the other three do
-// not, and the asymmetry has a reason: `body` is the only one carrying a payload
-// that can be malformed.
-export const body =
-  <E extends Encoding, R>(
-    encoding: E,
-    onError: (issues: readonly StandardIssue[], ctx: { readonly c: Context<any, any> }) => R,
-  ) =>
-  async (
-    _app: {},
-    ctx: { readonly c: Context<any, any> },
-    next: ScopeNext<{ body: BodyOf<E> }>,
-  ): Promise<Passed | Awaited<R>> => {
-    const read = await readBody(ctx.c.req.raw, encoding)
-    if ('issues' in read) return onError(read.issues, ctx) as Awaited<R>
-    return next({ body: read.value as BodyOf<E> })
-  }
+export const query = reads.query
+export const headers = reads.headers
+export const cookies = reads.cookies
+export const body = reads.body

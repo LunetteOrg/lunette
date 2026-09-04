@@ -16,6 +16,7 @@ import type { DepGuard, Next, Passed, ResultOf, Scope, State } from '../index.ts
 import type { StandardIssue } from '../guard/index.ts'
 import {
   cookiesFrom,
+  encodingMatches,
   headersFrom,
   queryFrom,
   readBody,
@@ -436,7 +437,20 @@ export const body =
     ctx: { readonly req: Request; readonly res: Response },
     next: Next<{ body: BodyOf<E> }>,
   ): Promise<Passed | Awaited<R>> => {
-    if (ctx.req.body !== undefined) return next({ body: ctx.req.body as BodyOf<E> })
+    if (ctx.req.body !== undefined) {
+      // A PARSED BODY DOES NOT SAY WHAT PARSED IT. `express.json()` mounted
+      // app-wide leaves an object behind whatever the route asked for, so
+      // `body('form')` would hand a JSON payload on as form fields — no error,
+      // no `onError`, wrong data. The header the client sent is the only
+      // evidence left once the stream is gone, so it is what gets checked.
+      if (!encodingMatches(ctx.req.headers['content-type'], encoding)) {
+        return onError(
+          [{ message: `the body was sent as ${ctx.req.headers['content-type'] ?? 'nothing'}, not ${encoding}` }],
+          ctx,
+        ) as Awaited<R>
+      }
+      return next({ body: ctx.req.body as BodyOf<E> })
+    }
 
     const chunks: Buffer[] = []
     for await (const chunk of ctx.req) chunks.push(chunk as Buffer)

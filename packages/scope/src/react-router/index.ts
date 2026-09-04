@@ -11,19 +11,8 @@
 // same way an Express route reads `Request`/`Response` at the width it needs.
 
 import type { Params } from 'react-router'
-import type { DepGuard, Next, Passed, ResultOf, Scope, State } from '../index.ts'
-import type { StandardIssue } from '../guard/index.ts'
-import {
-  cookiesFrom,
-  headersFrom,
-  queryFrom,
-  readBody,
-  type BodyOf,
-  type Cookies,
-  type Encoding,
-  type Headers_ as HeaderRecord,
-  type Query,
-} from '../reads.ts'
+import type { DepGuard, ResultOf, Scope, State } from '../index.ts'
+import { fetchReads } from '../reads.ts'
 
 // `Par` is what the scope says the route supplies. It defaults to React
 // Router's own `Params`, whose values are `string | undefined`; a route module
@@ -72,37 +61,13 @@ export const reactRouter = <App extends object>(deps: App) => {
 // is only where the request is found, and the readers themselves are shared.
 export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from '../reads.ts'
 
-export const query = async (
-  _app: {},
-  { request }: { readonly request: Request },
-  next: Next<{ query: Query }>,
-) => next({ query: queryFrom(new URL(request.url).searchParams) })
+// ONE implementation for the whole Fetch family, in `reads.ts` — Hono reads the
+// same source through `c.req.raw`. This subpath passes the one line that
+// differs. A loader has no body; an ACTION does, and the same factory serves
+// both since the step reads whichever request the run brought.
+const reads = fetchReads((ctx: { readonly request: Request }) => ctx.request)
 
-export const headers = async (
-  _app: {},
-  { request }: { readonly request: Request },
-  next: Next<{ headers: HeaderRecord }>,
-) => next({ headers: headersFrom(request.headers) })
-
-export const cookies = async (
-  _app: {},
-  { request }: { readonly request: Request },
-  next: Next<{ cookies: Cookies }>,
-) => next({ cookies: cookiesFrom(request.headers.get('cookie')) })
-
-// A loader has no body; an ACTION does. The step reads whichever request the run
-// brought, so one factory serves both and the mount decides which it is.
-export const body =
-  <E extends Encoding, R>(
-    encoding: E,
-    onError: (issues: readonly StandardIssue[], ctx: { readonly request: Request }) => R,
-  ) =>
-  async (
-    _app: {},
-    ctx: { readonly request: Request },
-    next: Next<{ body: BodyOf<E> }>,
-  ): Promise<Passed | Awaited<R>> => {
-    const read = await readBody(ctx.request, encoding)
-    if ('issues' in read) return onError(read.issues, ctx) as Awaited<R>
-    return next({ body: read.value as BodyOf<E> })
-  }
+export const query = reads.query
+export const headers = reads.headers
+export const cookies = reads.cookies
+export const body = reads.body

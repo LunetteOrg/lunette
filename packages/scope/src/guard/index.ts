@@ -30,7 +30,7 @@
 // host-specific, because the one part that knew about a host (how to fail) lives
 // in the caller now.
 
-import type { Ctx, Extension, Scope, State, Surface, AnyStep } from '../index.ts'
+import type { AnyStep, Collides, Ctx, Extension, Scope, State, Surface } from '../index.ts'
 
 // ── Standard Schema, INLINED rather than depended on ─────────────────────────
 // This package ships `.ts` sources with no build step, so an import a consumer
@@ -206,10 +206,12 @@ export interface GuardVerbs {
 // key collapses to `never` silently: assignable to everything, complained about
 // nowhere, while the runtime hands back the second value.
 //
-// It reads names only, and points at the verb that DOES replace — which is the
-// whole shape of this extension in one message.
-type Collides<S extends State, Add> = Extract<keyof Add, keyof S['acc']>
-
+// The COMPARISON is the core's — `Collides`, the same formula `.step`'s own gate
+// reads, so the two cannot drift apart — and only the message is written here,
+// because a verb can point at its own sibling where the core can only say "an
+// extension may replace it". The core's `Add = any` limit is inherited with the
+// formula: once `Add` is inferred `any`, assignability short-circuits before any
+// intersected gate is read, and that is true here for the same reason.
 type AddGate<S extends State, Add> = [Collides<S, Add>] extends [never]
   ? unknown
   : `⛔ this ctx key is already populated: ${Collides<S, Add> & string} — \`refine\` replaces an entry, \`guard\` may only add`

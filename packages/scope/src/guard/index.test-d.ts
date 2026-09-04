@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { describe, expectTypeOf, it } from 'vitest'
 import { scope, type Next } from '../index.ts'
 import { fail, guards, type StandardSchemaV1 } from './index.ts'
+import type { BodyOf } from '../reads.ts'
 
 // THE TYPE CONTRACT for the three verbs. NOTHING HERE RUNS: a `*.test-d.ts` is
 // typechecked and never executed, and the refusals sit under `@ts-expect-error`.
@@ -145,5 +146,21 @@ describe('the extension is added, never stepped', () => {
     expectTypeOf(bare.guard).toBeFunction()
     // pinned at runtime in `index.test.ts`: `.extend` adds no step
     void (async (_a: {}, _c: {}, next: Next<{}>) => next({}))
+  })
+})
+
+describe('`BodyOf` does not distribute, so a generic caller keeps its narrowing', () => {
+  it('a wrapper over `body(encoding, onError)` still types the entry', () => {
+    // `E` is inferred as the whole `'json' | 'form'` here, which is what happens
+    // the moment anyone wraps the factory in a helper of their own. A NAKED
+    // conditional would distribute and give `unknown | Record<…>` — which
+    // collapses to `unknown`, losing the narrowing with nothing failing.
+    expectTypeOf<BodyOf<'json'>>().toEqualTypeOf<unknown>()
+    expectTypeOf<BodyOf<'form'>>().toEqualTypeOf<Record<string, string | File>>()
+
+    // and the honest answer for a caller that really is generic: both, not
+    // whichever one the distribution happened to swallow
+    expectTypeOf<BodyOf<'json' | 'form'>>().not.toEqualTypeOf<never>()
+    expectTypeOf<Record<string, string | File>>().toMatchTypeOf<BodyOf<'json' | 'form'>>()
   })
 })
