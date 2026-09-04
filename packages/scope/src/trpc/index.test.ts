@@ -132,3 +132,33 @@ describe('the tRPC carrier: `middleware`', () => {
     expect(await caller.b()).toBe('U2')
   })
 })
+
+// ── the third run every mount owes: a step that acts AFTER `next` ───────────
+describe('the tRPC carrier: a middleware step may act AFTER next()', () => {
+  it('runs after the procedure, because tRPC hands the promise straight back', async () => {
+    const order: string[] = []
+
+    const around = async (_app: {}, _ctx: object, next: Next<{}>) => {
+      order.push('before')
+      const passed = await next({})
+      order.push('after-next')
+      return passed
+    }
+
+    const { carrier, middleware } = trpc(t, greeter)
+    const wrapped = t.middleware(middleware(scope(carrier()).step(around)))
+
+    const router = t.router({
+      who: t.procedure.use(wrapped).query(async () => {
+        await new Promise((r) => setTimeout(r, 10))
+        order.push('procedure')
+        return 'ok'
+      }),
+    })
+
+    expect(await router.createCaller({ actorId: 'u1' }).who()).toBe('ok')
+    // the same order Hono gives, and the OPPOSITE of Express's — see the limit
+    // stated on `toNext` in `express/index.ts`
+    expect(order).toEqual(['before', 'procedure', 'after-next'])
+  })
+})

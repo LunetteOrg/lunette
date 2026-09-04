@@ -93,3 +93,20 @@ describe('the React Router carrier: stopping is the host\'s own door', () => {
     expect((res as Response).headers.get('location')).toBe('/posts/1')
   })
 })
+
+// ── the second run every mount owes: a step that stops by RETURNING ─────────
+describe('the React Router carrier: a step that stops by RETURNING', () => {
+  it('is handed back like any other value — the mistake is at the call site', async () => {
+    // React Router's own door for stopping is a THROWN `data(...)` or
+    // `redirect(...)`: a RETURNED envelope renders normally instead of reaching
+    // an ErrorBoundary, and nothing here guards against writing `return` by
+    // mistake. Pinned so the behaviour is a measured fact rather than a comment
+    // — this mount hands back what the leaf returned, whatever that is.
+    const loader = reactRouter({}).loader(
+      scope(reactRouterCarrier()).step(async () => data({ error: 'unauthorized' }, { status: 401 })),
+    )
+
+    const out = await loader(loaderArgs('1'))
+    expect(out).toMatchObject({ data: { error: 'unauthorized' }, init: { status: 401 } })
+  })
+})
