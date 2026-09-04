@@ -5,13 +5,13 @@
 // answer, and a step that answers returns Hono's own `Response`.
 
 import type { Context, Next } from 'hono'
-import type { BlankEnv, Env } from 'hono/types'
+import type { BlankEnv, Env, ParamKeys } from 'hono/types'
 import type { Scope, State } from '../index.ts'
 
-// `Path` is the ROUTE PATTERN, which is what makes `c.req.param('id')` typed —
-// Hono's own `Context<Env, Path>` does the reading, and there is no parser of
-// ours anywhere. It defaults to the bare `string`, which is what a middleware
-// gets: it has no pattern.
+// `Path` is the ROUTE PATTERN the scope is written for, and it is what makes
+// `c.req.param('id')` typed — Hono's own `Context<Env, Path>` does the reading,
+// and there is no parser of ours anywhere. It defaults to the bare `string`: a
+// scope that names no pattern reads `string | undefined` and mounts anywhere.
 //
 // `E` is the app's Hono environment (its bindings and variables). It is a type
 // parameter rather than a fixed `BlankEnv` because a step annotating a richer
@@ -22,20 +22,22 @@ export interface HonoCarrier<Path extends string = string, E extends Env = Blank
   readonly __args?: { readonly c: Context<E, Path> }
 }
 
-// PURE DECLARATION — no runtime value at all. This is the pattern-less one,
-// which `mw` runs on; `route` hands out a carrier typed by its own pattern.
-export const honoCarrier: HonoCarrier = {}
+// PURE DECLARATION — the returned object carries nothing; the type arguments
+// are the whole point of the call. `honoCarrier()` names no pattern;
+// `honoCarrier<'/posts/:id'>()` says which one the scope reads, and
+// `route(path, …)` can then check the mounted pattern against it.
+export const honoCarrier = <Path extends string = string, E extends Env = BlankEnv>(): HonoCarrier<
+  Path,
+  E
+> => ({})
 
 // Whatever a middleware's steps derive lands on `c` (via `c.set`) before Hono's
 // own `next()` runs — the leaf every `mw()` chain ends on, appended by `mw`
 // itself so nobody has to remember to write it.
 //
-// `c` and `next` are destructured out: what belongs on the context is what the
-// STEPS populated, not what the run was handed.
 // `Context<any>` here, and only here: what a middleware's steps populate are
 // keys no `Env['Variables']` declares — `c.set` on a typed env accepts only the
-// names that env wrote down, and these are the run's own. The mount's own `c`
-// keeps the app's env; this is the one write that cannot be typed by it.
+// names that env wrote down, and these are the run's own.
 const toNext = async (
   _app: {},
   ctx: { readonly c: Context<any>; readonly next: Next } & Record<string, unknown>,
@@ -46,43 +48,91 @@ const toNext = async (
   return undefined
 }
 
-// `E` is written once per app, where the deps are curried: `hono<MyEnv>(deps)`.
-// It defaults to Hono's blank env, which is what an app with no bindings and no
-// variables has.
-export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) => ({
-  // THE PATTERN IS WRITTEN ONCE. `route` takes it, hands back the pair Hono
-  // itself wants — `app.get(...route(…))` — and in between builds the scope on
-  // a carrier typed BY that pattern, so `c.req.param('id')` is `string`.
-  //
-  // Which is why the scope arrives as a FUNCTION of the carrier rather than as
-  // a value: a step is checked against `Ctx<S>` when it is ADDED, so a pattern
-  // supplied after the chain was built would arrive too late to type anything.
-  //
-  // Hono's reader is SOFTER than Express's: a param the pattern does not
-  // declare is not refused, it comes back `string | undefined` — unusable as a
-  // string without a check, which is the same safe direction by a weaker route.
-  route: <Path extends string>(
-    path: Path,
-    build: (
-      carrier: HonoCarrier<Path, E>,
-    ) => (app: App, args: { readonly c: Context<E, Path> }) => unknown,
-  ): [Path, (c: Context<E, Path>) => Promise<Response>] => {
-    const sc = build({})
-    return [path, (c) => sc(deps, { c }) as Promise<Response>]
-  },
+// ── the route gate: what the scope READS against what the pattern SUPPLIES ───
+// WE WRITE NO PARSER: `ParamKeys` is Hono's own reader, so this cannot drift
+// from the router that matches paths at runtime — it knows, for one, that a
+// bare wildcard names nothing.
+declare const OPAQUE: unique symbol
+type Opaque = typeof OPAQUE
 
-  // Hono's middleware is real — it awaits `next()` and can act after it — so
-  // unlike Express's, `mw` returns a promise the host awaits.
-  //
-  // No pattern here, and none to take: `app.use(…)` mounts across routes, so
-  // there is no one pattern to read its params from.
-  mw:
-    <S extends State>(sc: Scope<S>) =>
-    async (c: Context<E>, next: Next): Promise<void> => {
-      const finished = (sc as { step: (s: unknown) => unknown }).step(toNext) as unknown as (
-        app: App,
-        args: unknown,
-      ) => unknown
-      await finished(deps, { c, next })
+// Hono keeps the `?` INSIDE the key for an optional param (`/posts/:id?` →
+// `"id?"`); a declared pattern's keys never need to carry one into the
+// comparison, so strip it on both sides.
+type NameOf<K> = K extends `${infer N}?` ? N : K
+
+// A NON-LITERAL pattern (`string`) means "cannot read this", never "no params":
+// catching less is fine, rejecting a valid route is not. Read on the SUPPLY
+// side as no opinion, and on the DEMAND side as naming nothing.
+type Supplied<Path extends string> = string extends Path ? Opaque : NameOf<ParamKeys<Path>>
+type Demanded<Path extends string> = string extends Path ? never : NameOf<ParamKeys<Path>>
+
+// ONE DIRECTION: the scope DEMANDS — it reads `c.req.param('id')` — and the
+// route SUPPLIES. A param the scope reads and the pattern does not supply is
+// `undefined` at runtime; a param supplied and never read is nothing at all,
+// the same verdict `DepGuard` gives the chain (a superset passes).
+//
+// The test is REVERSED on purpose: a param-less pattern's real key set is
+// `never`, and `never extends Opaque` is VACUOUSLY TRUE — written the natural
+// way round, the gate would skip every param-less route.
+type Unsupplied<Mounted extends string, Declared extends string> = Opaque extends Supplied<Mounted>
+  ? never
+  : Exclude<Demanded<Declared>, Supplied<Mounted>>
+
+type PathGate<Mounted extends string, Declared extends string> = [
+  Unsupplied<Mounted, Declared>,
+] extends [never]
+  ? unknown
+  : `⛔ this route does not supply a param the scope reads: ${Unsupplied<Mounted, Declared> & string}`
+
+// The pattern the scope was started on, taken off its carrier.
+type PathOf<S extends State> = S['args'] extends { readonly c: Context<any, infer P, any> }
+  ? P & string
+  : never
+
+// `E` is written once per app, where the deps are curried: `hono<MyEnv>(deps)`.
+export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) => {
+  const handlerFor =
+    (sc: unknown) =>
+    (c: Context<E, any>): Promise<Response> =>
+      (sc as (app: App, args: object) => Promise<Response>)(deps, { c })
+
+  return {
+    // TWO FORMS, and the second is the first plus a check.
+    //
+    //   app.get('/posts/:id', route(scope))        the handler, nothing checked
+    //   app.get(...route('/posts/:id', scope))     the pair, pattern checked
+    //
+    // The pattern cannot be checked in the one-argument form. On Hono the
+    // reason differs from Express's and is worth knowing: the path IS the type
+    // parameter of `app.get`, so the expected handler type is concrete — but
+    // `Context<Env, Path>` is MUTUALLY ASSIGNABLE across paths, so
+    // contravariance has nothing to bite on. Either way a pattern reaches a
+    // type of ours only by being an ARGUMENT to one (`research/route-gate`).
+    route: (<Path extends string, S extends State>(
+      a: Path | Scope<S>,
+      b?: Scope<S> & PathGate<Path, PathOf<S>>,
+    ) => (b === undefined ? handlerFor(a) : [a as Path, handlerFor(b)])) as {
+      <S extends State>(sc: Scope<S>): (c: Context<E, any>) => Promise<Response>
+      <Path extends string, S extends State>(
+        path: Path,
+        // The gate rides the SCOPE argument: intersected onto the path, a
+        // failing gate collapses to `never` and the message is lost.
+        sc: Scope<S> & PathGate<Path, PathOf<S>>,
+      ): readonly [Path, (c: Context<E, any>) => Promise<Response>]
     },
-})
+
+    // Hono's middleware is real — it awaits `next()` and can act after it — so
+    // unlike Express's, `mw` returns a promise the host awaits.
+    //
+    // No pattern here, and none to take: `app.use(…)` mounts across routes.
+    mw:
+      <S extends State>(sc: Scope<S>) =>
+      async (c: Context<E>, next: Next): Promise<void> => {
+        const finished = (sc as { step: (s: unknown) => unknown }).step(toNext) as unknown as (
+          app: App,
+          args: unknown,
+        ) => unknown
+        await finished(deps, { c, next })
+      },
+  }
+}

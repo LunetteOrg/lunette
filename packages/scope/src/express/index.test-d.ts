@@ -1,52 +1,73 @@
 import expressLib from 'express'
 import { describe, expectTypeOf, it } from 'vitest'
 import { scope } from '../index.ts'
-import { express } from './index.ts'
+import { express, expressCarrier } from './index.ts'
 
-// THE TYPE CONTRACT for the route pattern: the params a step reads come from
-// the pattern the mount was given, so the claim is only checkable here.
+// THE TYPE CONTRACT for the params and the route gate. Both claims are
+// type-level, so no runtime test could make them.
 //
 // NOTHING HERE RUNS: a `*.test-d.ts` is typechecked and never executed, and the
 // refusals sit under `@ts-expect-error`.
 
 const { route } = express({})
 
-describe('what the route pattern types', () => {
-  it('names each param the pattern declares, as `string`', () => {
-    expressLib().get(
-      ...route('/posts/:id/by/:author', (carrier) =>
-        scope(carrier).step(async (_app: {}, { req, res }) => {
-          expectTypeOf(req.params.id).toEqualTypeOf<string>()
-          expectTypeOf(req.params.author).toEqualTypeOf<string>()
-          return res.end()
-        }),
-      ),
-    )
+const byId = scope(expressCarrier<{ id: string }>()).step(async (_app: {}, { req, res }) => {
+  expectTypeOf(req.params.id).toEqualTypeOf<string>()
+  return res.json({ id: req.params.id })
+})
+
+// Nothing declared: the scope holds Express's own wide dictionary, so it names
+// no param and mounts under any pattern (pinned below).
+const wide = scope(expressCarrier()).step(async (_app: {}, { res }) => res.end())
+
+describe('what a scope declares it reads', () => {
+  it('types `req.params` by the carrier, with no annotation on the step', () => {
+    // pinned by the `expectTypeOf` calls inside the two scopes above
+    expectTypeOf(byId).toBeFunction()
+  })
+})
+
+describe('`route(path, scope)`: what the scope READS against what the route SUPPLIES', () => {
+  it('accepts a pattern that supplies what the scope reads', () => {
+    expressLib().get(...route('/posts/:id', byId))
   })
 
-  it('refuses a param the pattern does not declare', () => {
-    route('/posts/:id', (carrier) =>
-      // @ts-expect-error — `author` is not in this route's pattern
-      scope(carrier).step(async (_app: {}, { req, res }) => res.json(req.params.author)),
-    )
+  it('rejects a pattern that supplies a different param — the scope would read undefined', () => {
+    // @ts-expect-error ⛔ this route does not supply a param the scope reads: id
+    route('/posts/:postId', byId)
   })
 
-  it('has NO OPINION on a pattern it cannot read: the params stay wide', () => {
+  it('rejects a pattern that supplies none', () => {
+    // @ts-expect-error ⛔ this route does not supply a param the scope reads: id
+    route('/posts', byId)
+  })
+
+  it('ACCEPTS a route supplying more than the scope reads — a superset passes', () => {
+    // the verdict `DepGuard` already gives the chain, applied to params: one
+    // scope mounts under a nested route, or on a second pattern naming the same
+    route('/tenants/:tenant/posts/:id', byId)
+    route('/posts/:id', wide)
+  })
+
+  it('has NO OPINION on a pattern it cannot read', () => {
     const dynamic: string = '/posts/:id'
-
-    route(dynamic, (carrier) =>
-      scope(carrier).step(async (_app: {}, { req, res }) => {
-        // @ts-expect-error — a non-literal pattern yields Express's wide
-        // dictionary, so a key read is `string | undefined`: catching less is
-        // fine, claiming wrongly is not
-        const id: string = req.params.id
-        return res.json(id)
-      }),
-    )
+    route(dynamic, byId)
   })
 
-  it('hands back the pair Express itself takes, so the pattern is written once', () => {
-    expectTypeOf(route('/posts/:id', (c) => scope(c).step(async (_a: {}, { res }) => res.end()))[0])
-      .toEqualTypeOf<'/posts/:id'>()
+  it('reads Express 5 syntax with Express\'s own reader: `{/:id}` supplies `id`', () => {
+    route('/posts{/:id}', byId)
+  })
+
+  it('hands back the pattern as its literal, so the mount stays typed', () => {
+    expectTypeOf(route('/posts/:id', byId)[0]).toEqualTypeOf<'/posts/:id'>()
+  })
+})
+
+describe('`route(scope)`: the plain handler, with nothing checked', () => {
+  it('is an Express handler, mountable anywhere', () => {
+    // The pattern is Express's own argument here, so it never reaches a type of
+    // ours and nothing compares it — including this, which is wrong and
+    // compiles. `route(path, scope)` is the form that catches it.
+    expressLib().get('/posts/:postId', route(byId))
   })
 })

@@ -22,18 +22,14 @@ describe('the Express carrier: what a run brings', () => {
   it('hands the step `req` and `res`, and the app the deps it was curried with', async () => {
     const { route } = express({ greeting: 'hello' })
 
-    const app = expressLib()
-    app.get(
-      ...route('/greet/:name', (carrier) =>
-        scope(carrier).step(
-          // `req.params.name` is `string` off the PATTERN — no cast, and
-          // `noUncheckedIndexedAccess` does not reach it, because the pattern
-          // named the key.
-          async ({ greeting }: { readonly greeting: string }, { req, res }) =>
-            res.json({ said: `${greeting} ${req.params.name}` }),
-        ),
-      ),
+    // A SCOPE IS A VALUE — declared once, mounted wherever.
+    const greet = scope(expressCarrier<{ name: string }>()).step(
+      async ({ greeting }: { readonly greeting: string }, { req, res }) =>
+        res.json({ said: `${greeting} ${req.params.name}` }),
     )
+
+    const app = expressLib()
+    app.get('/greet/:name', route(greet))
 
     const res = await request(app).get('/greet/ada')
     expect(res.status).toBe(200)
@@ -46,8 +42,9 @@ describe('the Express carrier: what a run brings', () => {
 
     const app = expressLib()
     app.get(
-      ...route('/', (carrier) =>
-        scope(carrier).step(async (seen: { count: number }, { res }) => {
+      '/',
+      route(
+        scope(expressCarrier()).step(async (seen: { count: number }, { res }) => {
           seen.count += 1
           return res.json({ count: seen.count })
         }),
@@ -55,8 +52,30 @@ describe('the Express carrier: what a run brings', () => {
     )
 
     await request(app).get('/')
-    const second = await request(app).get('/')
-    expect(second.body).toEqual({ count: 2 })
+    expect((await request(app).get('/')).body).toEqual({ count: 2 })
+  })
+})
+
+describe('the Express carrier: `route(path, scope)`', () => {
+  const { route } = express({})
+
+  const showPost = scope(expressCarrier<{ id: string }>()).step(async (_app: {}, { req, res }) =>
+    res.json({ id: req.params.id }),
+  )
+
+  it('hands back the pair Express mounts, so the pattern is written once', async () => {
+    const app = expressLib()
+    app.get(...route('/posts/:id', showPost))
+
+    expect((await request(app).get('/posts/7')).body).toEqual({ id: '7' })
+  })
+
+  it('the same scope value mounts more than once, on more than one pattern', async () => {
+    const app = expressLib()
+    app.get(...route('/posts/:id', showPost))
+    app.get(...route('/archive/:id', showPost))
+
+    expect((await request(app).get('/archive/9')).body).toEqual({ id: '9' })
   })
 })
 
@@ -65,7 +84,7 @@ describe('the Express carrier: `mw`', () => {
 
   it('derives onto res.locals and calls next(), reaching the route handler', async () => {
     const app = expressLib()
-    app.use(mw(scope(expressCarrier).step(requireActor)))
+    app.use(mw(scope(expressCarrier()).step(requireActor)))
     app.get('/', (_req, res) => res.json({ actor: res.locals.actor }))
 
     const res = await request(app).get('/').set('x-actor-id', 'u1')
@@ -76,20 +95,19 @@ describe('the Express carrier: `mw`', () => {
   it('a step that stops answers on `res`, and the route handler never runs', async () => {
     let reached = false
     const app = expressLib()
-    app.use(mw(scope(expressCarrier).step(requireActor)))
+    app.use(mw(scope(expressCarrier()).step(requireActor)))
     app.get('/', (_req, res) => {
       reached = true
       return res.json({})
     })
 
-    const res = await request(app).get('/')
-    expect(res.status).toBe(401)
+    expect((await request(app).get('/')).status).toBe(401)
     expect(reached).toBe(false)
   })
 
   it('puts only what the steps populated on res.locals — never the run\'s own args', async () => {
     const app = expressLib()
-    app.use(mw(scope(expressCarrier).step(requireActor)))
+    app.use(mw(scope(expressCarrier()).step(requireActor)))
     app.get('/', (_req, res) => res.json({ keys: Object.keys(res.locals) }))
 
     const res = await request(app).get('/').set('x-actor-id', 'u1')

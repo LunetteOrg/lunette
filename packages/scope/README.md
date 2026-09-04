@@ -24,33 +24,41 @@ tRPC's carrier comes OUT of the factory rather than being imported beside it,
 because its context is the APPLICATION's type and `t` already holds it: pass the
 builder and the context is inferred, written nowhere.
 
-On Express and Hono the same move types the URL params. `route` takes the route
-PATTERN and hands back the pair the host itself mounts, so the pattern is
-written once and the scope is built on a carrier typed by it:
+On Express and Hono a scope is a VALUE and the mount is the host's own call:
 
 ```ts
-app.get(
-  ...route('/posts/:id', (carrier) =>
-    scope(carrier).step(async ({ posts }: Deps, { req, res }) => {
-      const post = posts.getPost(req.params.id)   // `string`, off the pattern
-      return 'notFound' in post ? res.status(404).json({}) : res.json(post)
-    }),
-  ),
-)
+export const showPost = scope(expressCarrier<{ id: string }>())
+  .step(async ({ posts }: Deps, { req, res }) => res.json(posts.getPost(req.params.id)))
+
+app.get('/posts/:id', route(showPost))         // the handler, nothing checked
+app.get(...route('/posts/:id', showPost))      // the pair, pattern CHECKED
 ```
 
-The reading is each framework's own — Express's `RouteParameters`, Hono's
-`Context<Env, Path>` — never a parser of ours: Express's understands `*path` and
-`{/:id}`, Hono's knows a wildcard names nothing. On a pattern it cannot read (a
-non-literal string) it has NO OPINION and the params stay wide, which is the
-safe direction. Express refuses an undeclared param outright; Hono hands back
-`string | undefined`, unusable as a string without a check.
+The carrier says which params the scope reads (`expressCarrier<{ id: string }>()`
+on Express, the pattern itself on Hono: `honoCarrier<'/posts/:id'>()`), and that
+is what types `req.params.id` / `c.req.param('id')` with nothing annotated on
+the step. Give `route` the pattern as well and it is compared against that
+declaration:
 
-The scope is a function OF the carrier rather than a value beside it, and that
-is forced: a step is checked against the ctx when it is ADDED, so a pattern
-supplied after the chain was built would arrive too late to type anything.
-`mw` takes no pattern — `app.use(…)` mounts across routes — so it runs on the
-pattern-less `expressCarrier`/`honoCarrier`.
+```
+⛔ this route does not supply a param the scope reads: id
+```
+
+The comparison runs in ONE direction — the scope demands, the route supplies —
+so a route supplying MORE than the scope reads passes, which is the verdict
+`DepGuard` already gives the chain and what lets one scope mount under a nested
+route. On a pattern neither reader can read (a non-literal string) the gate has
+no opinion. The reading is each framework's own: Express's `RouteParameters`,
+Hono's `ParamKeys` — never a parser of ours.
+
+The one-argument form cannot check anything, and that is a fact about the hosts
+rather than a choice: a handler we return always tells Express what its params
+are, so its own `RouteParameters` default is never used, and Hono's
+`Context<Env, Path>` is mutually assignable across paths. A pattern reaches a
+type of ours only by being an argument to one — measured in
+`research/route-gate`, along with the seven shapes that do not work.
+
+`mw` takes no pattern: `app.use(…)` mounts across routes.
 
 > **This README describes the pre-#30 surface** (`.input`, `.guard`, `.handle`,
 > `runScope`) and is being rewritten with the carriers. The shipped API today is

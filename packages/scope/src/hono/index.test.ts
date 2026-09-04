@@ -6,9 +6,7 @@ import { scope, type Next } from '../index.ts'
 import { hono, honoCarrier } from './index.ts'
 
 // A guard, written here rather than imported: what a guard IS belongs to no
-// carrier (§43), and the carrier's own claim is only that a step which stops
-// is never followed by the ones after it. It stops the way Hono stops —
-// `throw new HTTPException(...)`, its own door.
+// carrier (§43). It stops the way Hono stops — `throw new HTTPException(…)`.
 const requireActor = async (
   _app: {},
   { c }: { readonly c: Context },
@@ -23,17 +21,14 @@ describe('the Hono carrier: what a run brings', () => {
   it('hands the step `c`, and the app the deps it was curried with', async () => {
     const { route } = hono({ greeting: 'hello' })
 
-    const app = new Hono()
-    app.get(
-      ...route('/greet/:name', (carrier) =>
-        scope(carrier).step(
-          // `c.req.param('name')` is `string` off the PATTERN, with nothing
-          // annotated: the carrier was typed by the pattern above.
-          async ({ greeting }: { readonly greeting: string }, { c }) =>
-            c.json({ said: `${greeting} ${c.req.param('name')}` }),
-        ),
-      ),
+    // A SCOPE IS A VALUE, and it names the pattern it reads.
+    const greet = scope(honoCarrier<'/greet/:name'>()).step(
+      async ({ greeting }: { readonly greeting: string }, { c }) =>
+        c.json({ said: `${greeting} ${c.req.param('name')}` }),
     )
+
+    const app = new Hono()
+    app.get('/greet/:name', route(greet))
 
     const res = await app.request('/greet/ada')
     expect(res.status).toBe(200)
@@ -44,11 +39,34 @@ describe('the Hono carrier: what a run brings', () => {
     const { route } = hono({})
 
     const app = new Hono()
-    app.get(...route('/', (carrier) => scope(carrier).step(async (_app: {}, { c }) => c.text('made', 201))))
+    app.get('/', route(scope(honoCarrier()).step(async (_app: {}, { c }) => c.text('made', 201))))
 
     const res = await app.request('/')
     expect(res.status).toBe(201)
     expect(await res.text()).toBe('made')
+  })
+})
+
+describe('the Hono carrier: `route(path, scope)`', () => {
+  const { route } = hono({})
+
+  const showPost = scope(honoCarrier<'/posts/:id'>()).step(async (_app: {}, { c }) =>
+    c.json({ id: c.req.param('id') }),
+  )
+
+  it('hands back the pair Hono mounts, so the pattern is written once', async () => {
+    const app = new Hono()
+    app.get(...route('/posts/:id', showPost))
+
+    expect(await (await app.request('/posts/7')).json()).toEqual({ id: '7' })
+  })
+
+  it('the same scope value mounts more than once, on more than one pattern', async () => {
+    const app = new Hono()
+    app.get(...route('/posts/:id', showPost))
+    app.get(...route('/archive/:id', showPost))
+
+    expect(await (await app.request('/archive/9')).json()).toEqual({ id: '9' })
   })
 })
 
@@ -57,7 +75,7 @@ describe('the Hono carrier: `mw`', () => {
 
   it('derives onto the context via c.set and awaits next(), reaching the handler', async () => {
     const app = new Hono()
-    app.use(mw(scope(honoCarrier).step(requireActor)))
+    app.use(mw(scope(honoCarrier()).step(requireActor)))
     app.get('/', (c) => c.json({ actor: c.get('actor' as never) }))
 
     const res = await app.request('/', { headers: { 'x-actor-id': 'u1' } })
@@ -68,21 +86,22 @@ describe('the Hono carrier: `mw`', () => {
   it('a step that stops throws Hono\'s own HTTPException, and the handler never runs', async () => {
     let reached = false
     const app = new Hono()
-    app.use(mw(scope(honoCarrier).step(requireActor)))
+    app.use(mw(scope(honoCarrier()).step(requireActor)))
     app.get('/', (c) => {
       reached = true
       return c.json({})
     })
 
-    const res = await app.request('/')
-    expect(res.status).toBe(401)
+    expect((await app.request('/')).status).toBe(401)
     expect(reached).toBe(false)
   })
 
   it('sets only what the steps populated — never the run\'s own args', async () => {
     const app = new Hono()
-    app.use(mw(scope(honoCarrier).step(requireActor)))
-    app.get('/', (c) => c.json({ c: c.get('c' as never) ?? null, next: c.get('next' as never) ?? null }))
+    app.use(mw(scope(honoCarrier()).step(requireActor)))
+    app.get('/', (c) =>
+      c.json({ c: c.get('c' as never) ?? null, next: c.get('next' as never) ?? null }),
+    )
 
     const res = await app.request('/', { headers: { 'x-actor-id': 'u1' } })
     expect(await res.json()).toEqual({ c: null, next: null })
@@ -96,10 +115,9 @@ describe('the Hono carrier: `mw`', () => {
     }
 
     const app = new Hono()
-    app.use(mw(scope(honoCarrier).step(stamp)))
+    app.use(mw(scope(honoCarrier()).step(stamp)))
     app.get('/', (c) => c.text('body'))
 
-    const res = await app.request('/')
-    expect(res.headers.get('x-stamped')).toBe('yes')
+    expect((await app.request('/')).headers.get('x-stamped')).toBe('yes')
   })
 })
