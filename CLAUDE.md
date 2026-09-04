@@ -137,9 +137,8 @@ the tracker when relevant — never from here.
   A mount is the one place the library hands control to a framework, and
   the ways it goes wrong there are RUNTIME ways the type contract cannot
   reach: a promise dropped, a `next` never called, a response never sent,
-  an error arriving after the answer already left. Sixteen such defects
-  shipped past a suite whose mount tests were the happy path plus
-  `*.test-d.ts` claims — every one of them invisible to both. So for each
+  an error arriving after the answer already left. A suite of happy-path
+  mount tests plus `*.test-d.ts` claims sees none of them. So for each
   mount, run at least: a step that THROWS, a step that stops by RETURNING,
   and a step that acts AFTER `next`. Write those before the mount, not
   after the review.
