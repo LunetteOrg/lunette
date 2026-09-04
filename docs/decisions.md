@@ -2189,11 +2189,24 @@ Two traps paid for, both in the code:
   reader carries this as `Partial<…>` and the first version of the gate lost it
   to a bare `keyof`.
 
-*Correcting the record.* This was reported as narrowing a gate that
-`origin/story-30/scope-impl` had in both directions. That branch has no pattern
-gate at all — no `RouteParameters`, no `ParamKeys` anywhere in it. What it had
-was `CarrierGuard`/`IntentGuard` over capabilities and intents, themselves
-one-direction `Exclude`s, on the axis §43 removed.
+*What the second direction was FOR, on the branch that had it.*
+`origin/story-30/scope-impl` runs the same gate BOTH ways
+(`packages/integration/src/{express,hono}.ts`, pinned in
+`test/route-gate.test-d.ts`: "Both directions of a mismatch are rejected, on
+both hosts"). The difference is not the count of directions, it is WHAT the
+pattern is compared against. There it was the `.params()` SCHEMA — what
+VALIDATES — and a param the schema does not declare is a param nobody checks,
+which is a hole worth naming. Here it is what the scope READS, and a param
+nobody reads is nothing at all. Same machine, two sources, and the source is
+what decides how many directions are meaningful.
+
+Two things carry over from that file and one does not. The reversed
+vacuous-truth test is there already, named as decision 34's trap, and the
+message-per-branch chaining (`Missing` first, then `Extra`) is the shape this
+branch had to rediscover as an invariant — see §44. What does NOT carry over is
+optionality: its `RouteParams` reads a bare `keyof` too, so the header claiming
+`{/:id}` resolves to its real param set is half right — the name arrives, the
+`?` does not. Whoever revives that code inherits the hole this branch closed.
 
 **Every mount is TRANSPARENT: it hands back the host's own type with what the
 scope knows filled in.** This is a requirement, not a detail, and it is what

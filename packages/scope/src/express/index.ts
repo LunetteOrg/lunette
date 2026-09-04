@@ -338,18 +338,26 @@ export const express = <App extends object>(deps: App) => {
         // So the rejection goes to Express only in the window where Express can
         // still act on it: before control was handed on. After, the response
         // belongs to the handler and this error has nowhere left to go — it is
-        // DROPPED, deliberately and not silently, because the alternatives are
-        // worse: `next(err)` is the 500 above, and rethrowing is the unhandled
-        // rejection that kills the process. Work that must survive the response
-        // does not belong in a step here.
+        // DROPPED, and dropped SILENTLY, because there is nowhere for it to be
+        // dropped loudly: this package has no logger and invents no channel, so
+        // saying otherwise would be a comfort rather than a fact. The two
+        // alternatives are worse and both were measured: `next(err)` is the 500
+        // above, and rethrowing is the unhandled rejection that kills the
+        // process. Work that must survive the response does not belong in a
+        // step here.
+        //
+        // `handOn` MARKS and forwards; it does not deduplicate. Calling
+        // Express's `next` twice is Express's own business, and a wrapper that
+        // quietly swallowed the second call would be a second behaviour hiding
+        // inside a latch that exists for one thing.
         return (req, res, next): void => {
           let handedOn = false
-          const once: NextFunction = (...args) => {
+          const handOn: NextFunction = (...args) => {
             handedOn = true
             next(...args)
           }
 
-          void finished(deps, { req, res, next: once }).catch((err: unknown) => {
+          void finished(deps, { req, res, next: handOn }).catch((err: unknown) => {
             if (!handedOn) next(err)
           })
         }
