@@ -15,8 +15,21 @@ export async function makeApp(env: { catalog: CatalogEnv; admin: AdminEnv }): Pr
   app: Express
   dispose: () => Promise<void>
 }> {
-  const shopBuild = await catalogChain.build({ env: env.catalog })
-  const backBuild = await adminChain.build({ env: env.admin })
+  // Built independently, and torn down independently below if either build
+  // fails: a `Promise.allSettled` rather than two sequential `await`s, so the
+  // catalogue's resource is not left open forever because the admin chain's
+  // build rejected after it.
+  const [shopResult, backResult] = await Promise.allSettled([
+    catalogChain.build({ env: env.catalog }),
+    adminChain.build({ env: env.admin }),
+  ])
+  if (shopResult.status === 'rejected' || backResult.status === 'rejected') {
+    if (shopResult.status === 'fulfilled') await shopResult.value.dispose()
+    if (backResult.status === 'fulfilled') await backResult.value.dispose()
+    throw shopResult.status === 'rejected' ? shopResult.reason : (backResult as PromiseRejectedResult).reason
+  }
+  const shopBuild = shopResult.value
+  const backBuild = backResult.value
 
   const shop = express(shopBuild.app)
   const back = express(backBuild.app)
@@ -31,10 +44,12 @@ export async function makeApp(env: { catalog: CatalogEnv; admin: AdminEnv }): Pr
 
   return {
     app,
-    // Independent teardown: closing one product does not touch the other.
+    // INDEPENDENT teardown: closing one product does not touch the other, and
+    // `allSettled` means a failure disposing one does not skip the other's.
     dispose: async () => {
-      await shopBuild.dispose()
-      await backBuild.dispose()
+      const [shop, back] = await Promise.allSettled([shopBuild.dispose(), backBuild.dispose()])
+      if (shop.status === 'rejected') throw shop.reason
+      if (back.status === 'rejected') throw back.reason
     },
   }
 }

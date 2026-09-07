@@ -35,7 +35,10 @@ const withSource = layer<{ env: CatalogEnv }, { items: Item[] }>(async ({ env },
 
 export const catalogChain = lunette<{ env: CatalogEnv }>()
   .use(withSource)
-  // private: the raw list never reaches a scope
+  // PRIVATE: this accessor itself, `ctx.lookup`, never reaches a scope by that
+  // name — only `catalog.byId` below, which wraps it, does. `catalog.list`
+  // hands back the live array as it stands, since nothing here writes through
+  // it; a chain whose scopes could mutate the list would expose a copy.
   .provide('lookup', (ctx) => (id: string) => ctx.items.find((i) => i.id === id))
   .expose('catalog', (ctx) => ({
     list: () => ctx.items,

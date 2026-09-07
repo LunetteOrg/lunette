@@ -53,6 +53,10 @@ describe('two chains on one Express app', () => {
 
     // the admin gate rejects without the admin token…
     expect((await fetch(`${url}/admin/audit`)).status).toBe(401)
+    // …and a PRESENT but WRONG token the same way — an equality check, not
+    // merely a presence one.
+    const wrong = await fetch(`${url}/admin/audit`, { headers: { authorization: 'nope' } })
+    expect(wrong.status).toBe(401)
     // …while the catalogue, which has no gate at all, serves anyone
     expect((await fetch(`${url}/items`)).status).toBe(200)
 
@@ -110,7 +114,7 @@ describe('two chains on one Express app', () => {
     await close()
   })
 
-  it('renders an abort from whichever chain produced it', async () => {
+  it("answers with whichever chain's own leaf stopped the request", async () => {
     const { url, close } = await start()
 
     expect((await fetch(`${url}/items/nope`)).status).toBe(404) // catalogue's not-found
