@@ -1,0 +1,25 @@
+{
+  "name": "@lntt/example-express",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example: the shared app, mounted on Express with @lntt/scope/express — the read extensions, guard, validate, and the reads' own size limit, all used rather than only described.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lntt/example-app": "workspace:*",
+    "@lntt/scope": "workspace:*",
+    "express": "5.2.1",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.13.2",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.2.2",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.0"
+  }
+}

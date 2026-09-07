@@ -24,8 +24,28 @@ The admin product's gate (`src/admin.ts`) uses the pattern #67 closed on
 (`docs/design/scope-api.md`) rather than only describing it: one scope value,
 built once with `.guard()`, two routes branching from it with `.step()`.
 
+## [`app/`](./app) — the shared app
+
+A small posts domain (`src/posts.ts`, unit-tested with no host and no chain in
+the picture) dissolved into one `@lntt/wire` chain (`src/chain.ts`). Its public
+surface — `Deps`, `src/deps.ts` — is what every per-host entry below builds
+once and mounts.
+
+## Per-host entries — mount the SAME app on each host
+
+Each is its own package: it imports `app`'s chain and `Deps`, and mounts its
+own routes with that host's `@lntt/scope/<host>` carrier.
+
+| entry | host | what it demonstrates beyond routing |
+|---|---|---|
+| [`express/`](./express) | Express | `.step(headers).guard(...)` (the shared gate, #67's pattern again — here on a route rather than a whole product), `body('json', onError)` + `.validate(...)` with NO `express.json()` mounted (decision 48 + 49), and `AnswerGate` catching a real bug: `res.redirect(...)` returns `void`, not `Response` |
+
+More entries (Hono, React Router, tRPC) land as their own slices.
+
 ## Run
 
 ```
+pnpm --filter @lntt/example-app test
+pnpm --filter @lntt/example-express test
 pnpm --filter @lntt/example-two-chains test
 ```

@@ -1,0 +1,22 @@
+{
+  "name": "@lntt/example-app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example: the shared app — a small posts domain, an @lntt/wire chain, and nothing that knows about a host. Mounted by the per-host entries.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lntt/wire": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.0"
+  }
+}
