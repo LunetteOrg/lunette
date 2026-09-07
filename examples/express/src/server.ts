@@ -21,8 +21,10 @@ const { route, mw } = express(deps)
 // `string` cast never did (`/posts/abc` reached the domain lookup before;
 // now it never does). Traded, not lost; see the comparison this carried
 // before landing, `docs/decisions.md` decision 52.
+const IdParam = z.object({ id: z.string().regex(/^\d+$/, 'must be numeric') })
+
 const readId = (_app: {}, { req }: { readonly req: { params: unknown } }) => {
-  const result = z.object({ id: z.string().regex(/^\d+$/, 'must be numeric') }).safeParse(req.params)
+  const result = IdParam.safeParse(req.params)
   return result.success ? result.data : fail(result.error.issues.map((i) => ({ message: i.message })))
 }
 
