@@ -32,11 +32,20 @@ export interface Supply<Req extends string, Opt extends string> {
 }
 
 // ── the demand ───────────────────────────────────────────────────────────────
-// What `validate` put on the ctx: the schema's OUTPUT, whose required and
-// optional keys are the params the scope really insists on.
-export type ValidatedParams<S extends State> = 'params' extends keyof S['acc']
-  ? S['acc']['params']
+// What `validate` put on the ctx: the schema's OUTPUT, and the one place any
+// host reads what a scope says about an entry it did not merely receive.
+//
+// The tRPC carrier borrows THIS half and none of the rest: it has no pattern to
+// compare — its framework supplies a schema, so `.input(schema)`'s own output
+// meets `Validated<S, 'input'>` at the resolver's parameter and contravariance
+// does the refusing, with no gate of ours (§53). What is shared is where the
+// demand comes from, which is the whole point of the design.
+export type Validated<S extends State, N extends string> = N extends keyof S['acc']
+  ? S['acc'][N]
   : unknown
+
+// The params half, which is what the two pattern hosts compare.
+export type ValidatedParams<S extends State> = Validated<S, 'params'>
 
 type Req<P> = { [K in keyof P]-?: {} extends Pick<P, K> ? never : K }[keyof P]
 type Opt<P> = { [K in keyof P]-?: {} extends Pick<P, K> ? K : never }[keyof P]

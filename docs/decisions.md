@@ -2705,13 +2705,17 @@ schema and now serves both hosts.
 
 ### 53. The route gate reads the SCHEMA, and no carrier declares params
 
-**Decision.** Neither carrier takes a params declaration any more —
+**Decision.** NO CARRIER DECLARES WHAT A SCOPE READS OF AN ENTRY any more.
 `expressCarrier()` has no type argument at all, `honoCarrier<E>()` keeps only
-the env — and `route`'s pattern gate, which compared a mounted pattern against
-that declaration, compares it against the OUTPUT of `.validate('params', schema,
-onError)` instead. ONE comparison serves both hosts (`src/route-gate.ts`); each
-subpath contributes only its framework's reader. Hono gains a `params` read
-extension so it can say the same thing Express does.
+the env, `trpc().carrier()` loses its `In` — and in each case what the scope
+reads is said once, by `.validate(name, schema, onError)`, and THAT is what the
+mount is checked against. On Express and Hono the check is `route`'s pattern
+gate, re-pointed from the declaration to the schema; on tRPC it is the
+resolver's own parameter, refused by contravariance exactly as before. ONE
+comparison serves the two pattern hosts (`src/route-gate.ts`), each subpath
+contributing only its framework's reader; tRPC borrows the demand reader and
+needs no comparison of ours. Hono gains a `params` read extension so it can say
+the same thing Express does.
 
 ```ts
 // before, two ways and two hosts' worth of spelling
@@ -2778,20 +2782,70 @@ that settled it: with the gate gone, a scope reading params through the schema �
 the very shape §52 promotes — had NO compile-time protection at all against a
 mispatterned mount, where the old carrier form did.
 
-**How the four carriers stand now.**
+**THE RULE, which is what this entry is really for.** A carrier takes a type
+argument for what the run BRINGS, never for what the scope wants to READ of it.
+The second is the schema's job — and the check that used to ride the
+declaration rides the schema instead, which is strictly better: the schema
+exists anyway, and it looks at the value.
 
-| host | what types the entry | what the mount compares | copies written by hand |
+Every type argument on every carrier, decided:
+
+| carrier | argument | what it says | verdict |
 |---|---|---|---|
-| Express | the `validate` schema | mounted pattern ↔ schema keys | 1 |
-| Hono | the `validate` schema | mounted pattern ↔ schema keys | 1 |
-| React Router | RR7 typegen (`Route.LoaderArgs['params']`) | nothing — the pattern never reaches a mount | 1 |
-| tRPC | `.input(schema)` | declared `In` ↔ `.input`'s output, by contravariance | 1 |
+| Express | — | | none left |
+| Hono | `E` | the env the run brings: `Variables` a foreign middleware set, and bindings | **stays** — supply, and measured to have no other door: a step annotating a richer `Context` than the carrier publishes is refused by contravariance |
+| React Router | `Par` | the params the loader is HANDED, from RR7's typegen | **stays** — supply, generated from `routes.ts`, not written by hand, and there is no mount where a pattern could be compared |
+| tRPC | `In` | what the scope reads of the input | **removed** — demand, and the same shape the two params declarations were |
 
-The invariant that makes this one design and not four: **nothing is declared a
-second time to be compared, and every gate compares two things that each exist
-on their own.** React Router has no mount-time pattern to compare — its
-`routes.ts` owns that mapping and its typegen carries it — so it needs no gate
-rather than lacking one. tRPC has no URL at all.
+React Router is the one host with no gate, and it is not missing one: its
+pattern never reaches a mount, because `routes.ts` owns that mapping and the
+typegen carries it into the loader's own type.
+
+**A note on Hono's `E`, since the rule invites the question.** It stays for the
+`Variables` — what a Hono middleware outside this library put on `c`. A BINDING
+is a dependency and belongs in the chain: a step reading `c.env.KV` depends on
+something its `need` never declared, so no mount can check it and `DepGuard` has
+nothing to say. A per-request-env platform boots its chain from those bindings
+at the composition root (§12), and `examples/two-chains` already does exactly
+that, reading `ctx.env.TOKEN` in a wire layer. The carrier's `E` types the
+CONTEXT, and is not an invitation to reach around the chain.
+
+**tRPC, which is where the rule was tested against a real counter-argument.**
+The case for keeping `In` was that tRPC's supply is a SCHEMA (`.input(schema)`,
+which tRPC needs anyway to validate) where Express's and Hono's is a PATTERN
+(names, no values) — so `In` was a declaration checked against something real,
+not a third name. The case is sound and was not what decided it: a carrier
+argument for what the scope READS is the shape this entry exists to remove, and
+tRPC was the last one holding it. It went, and the check did not:
+
+```ts
+const Id = z.object({ id: z.string() })
+
+const byId = scope(carrier()).extend(guards)
+  .validate('input', Id, onError)
+  .step(async (_app, { input }) => input.id)      // `{ id: string }`
+
+t.procedure.input(Id).query(procedure(byId))                      // ✓
+t.procedure.input(z.object({ slug: z.string() })).query(procedure(byId))  // refused
+t.procedure.query(procedure(byId))                                // refused
+```
+
+`procedure` puts `Validated<S, 'input'>` in the RESOLVER'S PARAMETER, so what
+refuses a mismatch is tRPC handing that resolver `.input(schema)`'s output —
+contravariance, no gate of ours, the same mechanism as before with the demand
+read from a different place. One schema VALUE is referenced twice (tRPC
+validates with it, the scope types itself from it), which is not two
+declarations to keep aligned.
+
+*What it costs, and it is not nothing.* Reading the state means `procedure`
+takes a `Scope<S>` instead of a plain function, so `DepGuard` and the carrier
+gate — free from a `(app: App, args) => R` parameter — are written out. And
+tRPC's `middleware` can no longer read a typed input at all: `validate('input',
+…)` is REFUSED there by `StripGate`, because a middleware's leaf strips `input`
+by name before `next({ ctx })` and the narrowed value would never reach the
+procedure downstream. That refusal is correct and falls out of a gate that
+already existed, but it means a middleware needing the input narrows it by hand.
+Discovered by implementing, pinned in `trpc/index.test-d.ts`.
 
 **Alternatives.** *Keep both mechanisms* — measured in §52 and set aside there.
 *Keep the carrier declaration and add value validation beside it* — three names

@@ -24,23 +24,37 @@ core stays dependency-free for anyone importing it:
 tRPC's carrier comes OUT of the factory rather than being imported beside it,
 because its context is the APPLICATION's type and `t` already holds it: pass the
 builder and the context is inferred, written nowhere. What a scope reads of the
-INPUT it declares itself — `carrier<{ id: string }>()` — and that is checked
-against the procedure it mounts on:
+INPUT it says in the SCHEMA — the same way it says what it reads of a URL — and
+that is checked against the procedure it mounts on:
 
 ```ts
-const byId = scope(carrier<{ id: string }>()).step(
-  async ({ posts }: Deps, { input }) => posts.getPost(input.id),   // typed, no cast
-)
+const Id = z.object({ id: z.string() })
 
-t.procedure.input(z.object({ id: z.string() })).query(procedure(byId))   // ✓
+const byId = scope(carrier())
+  .extend(guards)
+  .validate('input', Id, onError)
+  .step(async ({ posts }: Deps, { input }) => posts.getPost(input.id))   // typed, no cast
+
+t.procedure.input(Id).query(procedure(byId))                             // ✓
 t.procedure.input(z.object({ slug: z.string() })).query(procedure(byId)) // refused
 t.procedure.query(procedure(byId))                                       // refused
 ```
 
-There is no gate of ours behind that: tRPC hands a resolver the schema's OUTPUT,
-so a scope reading what the schema does not supply is refused at the argument by
+There is no gate of ours behind that: `procedure` puts what the scope validated
+in the RESOLVER'S PARAMETER, tRPC hands that resolver the schema's OUTPUT, and a
+resolver demanding what the schema does not supply is refused at the argument by
 contravariance — the same mechanism `DepGuard` relies on. `.output(schema)` is
-checked the other way round, against what the leaf returned.
+checked the other way round, against what the leaf returned. One schema value,
+referenced twice; nothing declared twice.
+
+A tRPC MIDDLEWARE cannot validate the input — its leaf strips `input` by name
+before `next({ ctx })`, so the narrowed value would never reach the procedure
+downstream, and the mount says so. A middleware that must read the input narrows
+it by hand.
+
+**No carrier declares what a scope reads.** A carrier's type arguments are for
+what the run BRINGS — Hono's env, React Router's typegen params — and what a
+scope reads of an entry is the schema's to say, on every host.
 
 On Express and Hono a scope is a VALUE and the mount is the host's own call:
 

@@ -15,9 +15,19 @@ import { fetchReads } from '../reads.ts'
 // parameter rather than a fixed `BlankEnv` because a step annotating a richer
 // `Context<MyEnv, …>` than the carrier publishes would be refused at the
 // argument by contravariance — the env has to come in at the carrier or not at
-// all.
+// all. Measured both ways, and it is not needed for the MOUNT: a handler typed
+// `Context<BlankEnv>` mounts on a `Hono<MyEnv>` app perfectly well. What needs
+// it is a STEP.
 //
-// AND IT IS THE ONLY ONE. The carrier used to take the ROUTE PATTERN too
+// AND WHAT A STEP NEEDS IT FOR IS `Variables` — `c.get('rid')`, what a Hono
+// middleware outside this library put on `c`, which has no other door. A
+// BINDING is a dependency and belongs in the CHAIN: a step reading `c.env.KV`
+// depends on something its `need` never declared, so no mount can check it and
+// `DepGuard` has nothing to say. A per-request-env platform boots its chain
+// from those bindings at the composition root (§12), and a scope then reads
+// them as ordinary typed deps.
+//
+// AND IT IS THE ONLY TYPE ARGUMENT LEFT. The carrier used to take the ROUTE PATTERN too
 // (`honoCarrier<'/posts/:id'>()`), which typed `c.req.param('id')` as `string`
 // and gave `route` something to compare a mounted pattern against. It went with
 // Express's own declaration (§53): the pattern was then written TWICE by hand —

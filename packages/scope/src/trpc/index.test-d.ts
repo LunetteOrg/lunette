@@ -3,6 +3,8 @@ import type { inferRouterOutputs } from '@trpc/server'
 import { describe, expectTypeOf, it } from 'vitest'
 import { scope, type Next } from '../index.ts'
 import { trpc } from './index.ts'
+import { guards } from '../guard/index.ts'
+import { z } from 'zod'
 import { honoCarrier } from '../hono/index.ts'
 
 // THE TYPE CONTRACT for this carrier: what it claims is that the app's context
@@ -88,48 +90,54 @@ describe('a scope as a tRPC middleware', () => {
   })
 })
 
-describe('what `.input(schema)` supplies against what the scope reads', () => {
+describe('what `.input(schema)` supplies against what the scope VALIDATES', () => {
   const { carrier, procedure } = trpc(t, {})
 
-  // The scope declares the input it reads — no cast anywhere in the step.
-  const byId = scope(carrier<{ id: string }>()).step(async (_app: {}, { input }) => {
-    expectTypeOf(input).toEqualTypeOf<{ id: string }>()
-    return input.id
-  })
+  // The scope says what it reads of the input ONCE, in the schema — the same
+  // shape the two pattern hosts use for their params (§53). `procedure` puts
+  // that in the resolver's parameter, so the check below is tRPC's own
+  // contravariance and no gate of ours.
+  //
+  // ONE SCHEMA VALUE, used twice: `.input(Id)` is what tRPC validates with, and
+  // `.validate('input', Id, …)` is what types it inside the steps. Two
+  // references to one constant, not two declarations to keep aligned.
+  const Id = z.object({ id: z.string() })
+
+  const byId = scope(carrier())
+    .extend(guards)
+    .step(async (_app: {}, _ctx, next: Next<{ seen: true }>) => next({ seen: true }))
+    .validate('input', Id, () => null)
+    .step(async (_app: {}, { input }) => {
+      expectTypeOf(input).toEqualTypeOf<{ id: string }>()
+      return input.id
+    })
 
   it('accepts a procedure whose schema supplies it', () => {
-    t.procedure.input((v: unknown) => v as { id: string }).query(procedure(byId))
+    t.procedure.input(Id).query(procedure(byId))
   })
 
   it('refuses a procedure whose schema supplies something else', () => {
-    // @ts-expect-error — the schema supplies `slug`, the scope reads `id`: the
-    // resolver is handed the schema's output, so contravariance refuses it
-    t.procedure.input((v: unknown) => v as { slug: string }).query(procedure(byId))
+    // @ts-expect-error — the schema supplies `slug`, the scope validated `id`:
+    // the resolver is handed the schema's output, so contravariance refuses it
+    t.procedure.input(z.object({ slug: z.string() })).query(procedure(byId))
   })
 
   it('refuses a procedure with no input at all', () => {
     // A procedure without `.input()` hands its resolver `input: undefined`, so
     // this is the same refusal as a mismatched schema rather than a special
-    // case: nothing supplies the `id` this scope reads.
+    // case: nothing supplies the `id` this scope validated.
     // @ts-expect-error
     t.procedure.query(procedure(byId))
   })
 
-  it('a scope declaring nothing reads `unknown` and mounts on any procedure', () => {
+  it('a scope validating nothing reads `unknown` and mounts on any procedure', () => {
     const anyInput = scope(carrier()).step(async (_app: {}, { input }) => {
       expectTypeOf(input).toEqualTypeOf<unknown>()
       return 'ok'
     })
 
     t.procedure.query(procedure(anyInput))
-    t.procedure.input((v: unknown) => v as { id: string }).query(procedure(anyInput))
-  })
-
-  it('`.output(schema)` checks the leaf\'s value, since the resolver\'s return survives', () => {
-    t.procedure
-      .input((v: unknown) => v as { id: string })
-      .output((v: unknown) => v as string)
-      .query(procedure(byId))
+    t.procedure.input(Id).query(procedure(anyInput))
   })
 })
 
@@ -176,16 +184,35 @@ describe('`middleware` takes a scope written for ITS carrier, and no other', () 
     middleware(forHono)
   })
 
-  it('still accepts a scope that DECLARED the input it reads', () => {
-    // The gate takes `input` from the scope rather than fixing it at `unknown`:
-    // what a middleware is handed depends on where it sits, and `.input`'s own
-    // check rides `procedure`.
+  it('states the CONTEXT and leaves `input` alone', () => {
+    // The gate says what a run brings — the app's context, typed, and a raw
+    // `unknown` input. What a scope reads OF the input is the RESOLVER's
+    // parameter's business, over on `procedure`.
     const { carrier, middleware } = trpc(t, {})
 
     middleware(
-      scope(carrier<{ readonly id: string }>()).step(
-        async (_app: {}, ctx, next: Next<{ found: string }>) => next({ found: ctx.input.id }),
-      ),
+      scope(carrier()).step(async (_app: {}, ctx, next: Next<{ found: string }>) => {
+        expectTypeOf(ctx.input).toEqualTypeOf<unknown>()
+        return next({ found: ctx.ctx.tenant })
+      }),
     )
+  })
+
+  it('REFUSES a middleware that validates the input — the leaf would strip it', () => {
+    // A LIMIT WORTH NAMING, and it falls out of `StripGate` rather than being
+    // written for this: `validate('input', …)` replaces the `input` entry, and
+    // a middleware's leaf strips `input` by name before `next({ ctx })`, so the
+    // narrowed value would never reach the procedure downstream. On `procedure`
+    // the same call is the whole mechanism; here it has nowhere to go, and a
+    // middleware that must read the input narrows it by hand.
+    const { carrier, middleware } = trpc(t, {})
+
+    const narrowsInput = scope(carrier())
+      .extend(guards)
+      .validate('input', z.object({ id: z.string() }), () => null)
+      .step(async (_app: {}, ctx, next: Next<{ found: string }>) => next({ found: ctx.input.id }))
+
+    // @ts-expect-error ⛔ this middleware derives a ctx key the run itself brought: input
+    middleware(narrowsInput)
   })
 })
