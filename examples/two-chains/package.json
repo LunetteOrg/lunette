@@ -1,0 +1,22 @@
+{
+  "name": "@lntt/example-two-chains",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example: two independent chains — two products in one process — mounted on the same Express app, each serving its own routes with its own lifecycle.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lntt/scope": "workspace:*",
+    "@lntt/wire": "workspace:*",
+    "express": "5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.13.2",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.0"
+  }
+}
