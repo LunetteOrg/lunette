@@ -25,7 +25,7 @@ describe('the Express carrier: what a run brings', () => {
     const { handler } = express({ greeting: 'hello' })
 
     // A SCOPE IS A VALUE — declared once, mounted wherever.
-    const greet = scope(expressCarrier<{ name: string }>()).step(
+    const greet = scope(expressCarrier()).step(
       async ({ greeting }: { readonly greeting: string }, { req, res }) =>
         res.json({ said: `${greeting} ${req.params.name}` }),
     )
@@ -61,7 +61,7 @@ describe('the Express carrier: what a run brings', () => {
 describe('the Express carrier: `route(path, scope)`', () => {
   const { route } = express({})
 
-  const showPost = scope(expressCarrier<{ id: string }>()).step(async (_app: {}, { req, res }) =>
+  const showPost = scope(expressCarrier()).step(async (_app: {}, { req, res }) =>
     res.json({ id: req.params.id }),
   )
 

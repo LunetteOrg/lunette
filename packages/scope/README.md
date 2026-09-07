@@ -45,18 +45,28 @@ checked the other way round, against what the leaf returned.
 On Express and Hono a scope is a VALUE and the mount is the host's own call:
 
 ```ts
-export const showPost = scope(expressCarrier<{ id: string }>())
-  .step(async ({ posts }: Deps, { req, res }) => res.json(posts.getPost(req.params.id)))
+export const showPost = scope(expressCarrier())
+  .extend(guards)
+  .step(params)
+  .validate('params', z.object({ id: z.string().regex(/^\d+$/) }), (issues, { res }) =>
+    res.status(400).json({ issues }),
+  )
+  .step(async ({ posts }: Deps, { params, res }) => res.json(posts.getPost(params.id)))
 
-app.get('/posts/:id', route(showPost))         // the handler, nothing checked
-app.get(...route('/posts/:id', showPost))      // the pair, pattern CHECKED
+app.get('/posts/:id', handler(showPost))     // the handler, the pattern is Express's
+app.get(...route('/posts/:id', showPost))    // the pair, the pattern written once
 ```
 
-The carrier says which params the scope reads (`expressCarrier<{ id: string }>()`
-on Express, the pattern itself on Hono: `honoCarrier<'/posts/:id'>()`), and that
-is what types `req.params.id` / `c.req.param('id')` with nothing annotated on
-the step. Give `route` the pattern as well and it is compared against that
-declaration:
+On Express the two are typed identically and the pattern is the only difference:
+`route` carries it into the tuple, so it cannot drift from the handler it belongs
+to. **What the URL carries is read by `params` and checked by `validate`** — on
+the VALUE, not merely on a key's presence — and the carrier declares nothing
+about it (§53).
+
+Hono says it the other way round, because its `Context` is parameterised by the
+pattern natively: `honoCarrier<'/posts/:id'>()` types `c.req.param('id')` with
+nothing annotated on the step, and `route` compares the declared pattern against
+the mounted one:
 
 ```
 ⛔ this route does not supply a param the scope reads: id
@@ -65,9 +75,8 @@ declaration:
 The comparison runs in ONE direction — the scope demands, the route supplies —
 so a route supplying MORE than the scope reads passes, which is the verdict
 `DepGuard` already gives the chain and what lets one scope mount under a nested
-route. On a pattern neither reader can read (a non-literal string) the gate has
-no opinion. The reading is each framework's own: Express's `RouteParameters`,
-Hono's `ParamKeys` — never a parser of ours.
+route. On a pattern it cannot read (a non-literal string) the gate has no
+opinion. The reading is Hono's own `ParamKeys` — never a parser of ours.
 
 The one-argument form cannot check anything, and that is a fact about the hosts
 rather than a choice: a handler we return always tells Express what its params
@@ -98,7 +107,7 @@ with what the scope knows filled in, never the widest thing that compiles.
 
 | subpath | what the mount carries through |
 |---|---|
-| express | the params a route declares; the LOCALS a middleware derives (`LocalsOf<typeof mw>`) |
+| express | the LOCALS a middleware derives (`LocalsOf<typeof mw>`) |
 | hono | what the leaf returned, value and status, for `hc<typeof app>()` |
 | trpc | the resolver's return type (`inferRouterOutputs`, and what `.output(schema)` checks), the INPUT a scope declares (checked against `.input(schema)`), and a middleware's CONTEXT OVERRIDE — what its steps derived reaches every procedure that `.use`s it |
 | react-router | what the loader or action returned, which is `useLoaderData<typeof loader>()` |

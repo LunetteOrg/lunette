@@ -2,78 +2,52 @@ import expressLib from 'express'
 import { describe, expectTypeOf, it } from 'vitest'
 import { scope } from '../index.ts'
 import type { Request, RequestHandler, Response } from 'express'
-import { express, expressCarrier, type LocalsOf } from './index.ts'
+import type { ParamsDictionary } from 'express-serve-static-core'
+import { express, expressCarrier, params, type LocalsOf } from './index.ts'
+import { guards } from '../guard/index.ts'
+import { z } from 'zod'
 import { honoCarrier } from '../hono/index.ts'
 import type { Next } from '../index.ts'
 
-// THE TYPE CONTRACT for the params and the route gate. Both claims are
-// type-level, so no runtime test could make them.
+// THE TYPE CONTRACT for the two mounts and their gates. Every claim here is
+// type-level, so no runtime test could make it.
 //
 // NOTHING HERE RUNS: a `*.test-d.ts` is typechecked and never executed, and the
 // refusals sit under `@ts-expect-error`.
 
 const { route, handler, mw } = express({})
 
-const byId = scope(expressCarrier<{ id: string }>()).step(async (_app: {}, { req, res }) => {
-  expectTypeOf(req.params.id).toEqualTypeOf<string>()
+// The carrier declares no params (§53): `req.params` is Express's own wide
+// dictionary on every scope, and what a route really carries is checked by
+// `.step(params).validate('params', …)` instead, on the value.
+//
+// Read straight off `req` it is `string | string[] | undefined` — Express's own
+// dictionary width, plus what `noUncheckedIndexedAccess` makes of an index
+// signature — and every part of that union is a case the router really produces
+// (a repeated param, a pattern that does not carry the name). The declaration
+// used to narrow all three away on the strength of a NAME check alone: the
+// narrowing §53 gave up, and `.validate('params', …)` is what earns it back,
+// having actually looked at the value.
+const byId = scope(expressCarrier()).step(async (_app: {}, { req, res }) => {
+  expectTypeOf(req.params.id).toEqualTypeOf<string | string[] | undefined>()
   return res.json({ id: req.params.id })
 })
 
-// Nothing declared: the scope holds Express's own wide dictionary, so it names
-// no param and mounts under any pattern (pinned below).
-const wide = scope(expressCarrier()).step(async (_app: {}, { res }) => res.end())
-
-describe('what a scope declares it reads', () => {
-  it('types `req.params` by the carrier, with no annotation on the step', () => {
-    // pinned by the `expectTypeOf` calls inside the two scopes above
-    expectTypeOf(byId).toBeFunction()
-  })
-})
-
-describe('`route(path, scope)`: what the scope READS against what the route SUPPLIES', () => {
-  it('accepts a pattern that supplies what the scope reads', () => {
+describe('`route(path, scope)` and `handler(scope)`: one shape, two places to write the pattern', () => {
+  it('mounts under any pattern — neither verb compares one, and nothing declares params', () => {
     expressLib().get(...route('/posts/:id', byId))
+    expressLib().get(...route('/tenants/:tenant/posts/:id', byId))
+    // wrong, and it compiles: what `:postId` supplies nobody named, and the
+    // step reads `req.params.id` as `undefined` at runtime. The refusal that
+    // catches THIS is `.validate('params', …)`'s, on the first request (§52) —
+    // no longer a compile-time one, which is the trade §53 records.
+    expressLib().get(...route('/posts/:postId', byId))
+    expressLib().get('/posts/:postId', handler(byId))
   })
 
-  it('rejects a pattern that supplies a different param — the scope would read undefined', () => {
-    // @ts-expect-error ⛔ this route does not supply a param the scope reads: id
-    route('/posts/:postId', byId)
-  })
-
-  it('rejects a pattern that supplies none', () => {
-    // @ts-expect-error ⛔ this route does not supply a param the scope reads: id
-    route('/posts', byId)
-  })
-
-  it('ACCEPTS a route supplying more than the scope reads — a superset passes', () => {
-    // the verdict `DepGuard` already gives the chain, applied to params: one
-    // scope mounts under a nested route, or on a second pattern naming the same
-    route('/tenants/:tenant/posts/:id', byId)
-    route('/posts/:id', wide)
-  })
-
-  it('has NO OPINION on a pattern it cannot read', () => {
+  it('has no opinion on a pattern it cannot read, as it never had', () => {
     const dynamic: string = '/posts/:id'
     route(dynamic, byId)
-  })
-
-  it('rejects an OPTIONAL supply for a required demand: `{/:id}` also matches `/posts`', () => {
-    // Express's own reader already says it — an optional group builds as
-    // `Partial<…>`, so this pattern's `id` is `string | undefined` where
-    // `/posts/:id`'s is `string`. Mounted here the route answers `/posts` too,
-    // and the step reads `undefined` against a type saying `string`.
-    // @ts-expect-error ⛔ this route does not supply a param the scope reads: id
-    route('/posts{/:id}', byId)
-  })
-
-  it('accepts either supply for an OPTIONAL demand — the step already reads undefined', () => {
-    const maybeById = scope(expressCarrier<{ id?: string }>()).step(async (_app: {}, { req, res }) => {
-      expectTypeOf(req.params.id).toEqualTypeOf<string | undefined>()
-      return res.json({ id: req.params.id ?? null })
-    })
-
-    route('/posts{/:id}', maybeById)
-    route('/posts/:id', maybeById)
   })
 
   it('hands back the pattern as its literal, so the mount stays typed', () => {
@@ -81,18 +55,35 @@ describe('`route(path, scope)`: what the scope READS against what the route SUPP
   })
 })
 
-describe('`handler(scope)`: the plain handler, with nothing checked', () => {
-  it('is an Express handler, mountable anywhere', () => {
-    // The pattern is Express's own argument here, so it never reaches a type of
-    // ours and nothing compares it — including this, which is wrong and
-    // compiles. `route(path, scope)` is the form that catches it.
-    expressLib().get('/posts/:postId', handler(byId))
+describe('what a scope reads of the URL: `params`, then `validate`', () => {
+  it('starts WIDE and is narrowed by the schema, not by a declaration', () => {
+    scope(expressCarrier())
+      .extend(guards)
+      .step(params)
+      .step(async (_app: {}, { params: p }) => {
+        // straight off the router, at Express's own width: no key is promised
+        expectTypeOf(p).toEqualTypeOf<ParamsDictionary>()
+        return undefined
+      })
+
+    scope(expressCarrier())
+      .extend(guards)
+      .step(params)
+      .validate('params', z.object({ id: z.string() }), (issues, { res }) =>
+        res.status(400).json({ issues }),
+      )
+      .step(async (_app: {}, { params: p, res }) => {
+        // and here `id` is `string` because something LOOKED at it: this is
+        // the narrowing §53 keeps, in exchange for the one it gave up
+        expectTypeOf(p.id).toEqualTypeOf<string>()
+        return res.json({ id: p.id })
+      })
   })
 })
 
 describe('the mounts are transparent: each hands back Express\'s own type, filled in', () => {
-  it('a route declares the params the scope reads', () => {
-    expectTypeOf(handler(byId)).toEqualTypeOf<RequestHandler<{ id: string }>>()
+  it('a route hands back Express\'s own handler, at the params width the router has', () => {
+    expectTypeOf(handler(byId)).toEqualTypeOf<RequestHandler>()
   })
 
   it('a middleware declares the locals its steps derived — what `toNext` really copies', () => {
@@ -240,15 +231,22 @@ describe('a mount takes a scope written for ITS carrier, and no other', () => {
 
 describe('two message-gates never meet on one argument', () => {
   it('answers with a message where intersecting them would collapse to `never`', () => {
-    // Both the answer gate and the path gate fail here. Intersected side by
-    // side their literals give `'⛔ A' & '⛔ B'`, which is `never`, and the
-    // error becomes "not assignable to parameter of type 'never'" with nothing
-    // left to read. Chained, the outer link answers — pinned because the shape
-    // that breaks it compiles just as well.
-    const unsendable = scope(expressCarrier<{ id: string }>()).step(async () => ({ ok: true }))
+    // `mw` is where two message-gates still both apply: this scope derives
+    // `res` (StripGate) AND hands back a value Express will never send
+    // (AnswerGate). Intersected side by side their literals give `'⛔ A' & '⛔
+    // B'`, which is `never`, and the error becomes "not assignable to parameter
+    // of type 'never'" with nothing left to read. Chained, the outer link
+    // answers — pinned because the shape that breaks it compiles just as well.
+    //
+    // The pair that found the invariant was AnswerGate + the route's own
+    // PathGate (§44); with the pattern gate gone (§53) this is the pair that
+    // remains, and the invariant is the same one.
+    const unsendable = scope(expressCarrier())
+      .step(async (_app: {}, _ctx, next: Next<{ res: string }>) => next({ res: 'mine' }))
+      .step(async () => ({ ok: true }))
 
-    // @ts-expect-error ⛔ a route answers on `res`
-    route('/posts', unsendable)
+    // @ts-expect-error ⛔ answer on `res`
+    mw(unsendable)
   })
 })
 

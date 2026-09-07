@@ -2084,8 +2084,16 @@ how the invariant was found. So each message-gate takes what to check NEXT
 failure is not a literal — `DepGuard`'s branded object, the contravariant
 carrier gate — cannot collapse and stays out of the chain.
 
-**`route` is the checked verb; `handler` is the escape hatch.** It was one verb
-with two forms:
+**`route` is the checked verb; `handler` is the escape hatch.**
+
+> **RETIRED ON EXPRESS (§53).** The pattern gate that made `route` the CHECKED
+> verb went with the carrier declaration it compared against, so on Express the
+> two verbs are now typed identically and what separates them is where the
+> pattern is written. The naming argument below still decides Hono, whose gate
+> stands, and the invariant about message-gates above is untouched — its
+> surviving Express pair is `AnswerGate` + `StripGate` on `mw`.
+
+It was one verb with two forms:
 
 ```ts
 route(scope)                 // the bare handler, nothing checked
@@ -2172,6 +2180,15 @@ at every scope, keeping it aligned with the carrier's by discipline. The factory
 is that shape with the host's half filled in.
 
 **The pattern gate runs ONE direction: the scope DEMANDS, the route SUPPLIES.**
+
+> **RETIRED (§53).** This paragraph and the two traps under it describe
+> `PathGate`, removed from `@lntt/scope/express` together with
+> `expressCarrier<Params>`, the declaration it compared a pattern against. The
+> READING stays right and is worth keeping: the one direction, the superset
+> verdict, the reversed vacuous-truth test and optionality-as-meaning are what
+> any pattern gate has to get right, and Hono's — which survives, §53 — gets
+> them the same way. What went is the SOURCE it read the demand from.
+
 A param the scope reads and the pattern does not supply is `undefined` at
 runtime against a type saying `string`; a param supplied and never read is
 nothing at all. A SUPERSET passes, which is the verdict `DepGuard` gives the
@@ -2217,7 +2234,7 @@ several non-obvious type shapes are for — each pinned in a `*.test-d.ts`:
 | Hono | `hc<typeof app>()` | what the SCOPE returned, so `c.json(v)`'s `TypedResponse` survives — declaring `Promise<Response>` leaves the client with `unknown` |
 | React Router | `useLoaderData<typeof loader>()`, RR7 typegen | `ResultOf`, or the whole route's data type is silently `unknown` |
 | tRPC | `inferRouterOutputs`, `.output(schema)` | `R` kept generic through `procedure`; and `middleware`'s return type WRITTEN OUT, since `t.middleware` reads `$ContextOverrides` off the declared return and an inferred one grows the context by nothing |
-| Express | the params, and `LocalsOf` | `RequestHandler<ParamsOf<S>>` from `route`, the derived locals from `mw` |
+| Express | the params, and `LocalsOf` | `RequestHandler<ParamsOf<S>>` from `route`, the derived locals from `mw` — the params half went with §53, the locals half stands |
 
 A wrapper that declares the widest thing that compiles costs none of these at
 its own call site and all of them at everyone else's.
@@ -2670,10 +2687,94 @@ mechanism**: `withId = scope(expressCarrier()).extend(guards).step(params)
 `examples/two-chains`'s admin gate uses on a whole product, here on one
 shared param instead.
 
-**#97 tracks going further**: dropping `expressCarrier<Params>`'s generic (and
-`PathGate` with it) from the core entirely, so `.step(params).validate(...)`
-is the ONE way to read a route param on Express, not one of two — and
-extending the same question to Hono's own (differently-shaped) mechanism,
-`honoCarrier<'/posts/:id'>()`. Deliberately a separate session: it ripples
-into `route`/`handler`'s own gate comparison and several `.test-d.ts` cases
-built specifically around `PathGate`.
+**#97 went further, and §53 is where it landed**: `expressCarrier<Params>`'s
+generic and `PathGate` with it are gone, so `.step(params).validate(...)` is
+the ONE way to read a route param on Express rather than one of two. The
+paragraph above — "not replaced, and not lost" — describes a state that
+lasted one PR; what it says about the two guarantees is still the reasoning
+that decided which one to keep.
+
+### 53. The carrier declares no route params: `.step(params).validate(…)` is the one way, and `PathGate` goes with the declaration
+
+**Decision.** `expressCarrier` loses its type parameter and `ExpressCarrier` is
+bare. The whole route gate goes with it — `Opaque`, `Readable<Path>`,
+`Req`/`Opt`, `DemandedReq`/`DemandedOpt`, `Unsupplied`, `PathGate`, and
+`ParamsOf<S>` that fed them, some sixty lines — and `route`/`handler` are left
+typed IDENTICALLY. A scope that wants to know what the URL carries reads it with
+`.step(params)` and checks it with `.validate('params', schema, onError)` (§52),
+which is now the only way to say it on Express.
+
+**Why: two ways to say one thing, and they are not the same claim.** §52 landed
+`params` next to a carrier declaration that had done the job since §45, and
+measured both. The carrier form refuses a mismatched pattern AT COMPILE TIME,
+naming the missing param; the schema form compiles regardless and answers 400 on
+the first real request — but it checks the VALUE, which is where a bad `:id`
+actually goes wrong. Stacking both means naming `id` in three places (carrier,
+schema, pattern) for one param, and §52 already set that aside. One guarantee per
+param, and the one that reads what actually arrived is the one that survives
+(principle 5).
+
+**What is given up, plainly.** `route('/posts/:postId', byId)` against a scope
+reading `req.params.id` now COMPILES. It used to be
+
+```
+⛔ this route does not supply a param the scope reads: id
+```
+
+and the same mistake is now a 400 from `.validate` on the first request, or —
+where nobody validates — `undefined` reaching the domain, which is where it was
+before §45 built the gate. That is a real loss and this entry does not dress it
+up: the check moved from the mount to the request.
+
+**And a narrowing given up with it, which is the honest half.** The declaration
+typed `req.params.id` as `string` on the strength of a NAME check. Read off
+Express's own dictionary it is `string | string[] | undefined`, and every part of
+that union is something the router really produces — a repeated param, a pattern
+that never carried the name. The old `string` was a promise made by a check that
+never looked at a value. `.validate('params', schema, …)` narrows it by having
+looked, which is the only reason a narrower type is true.
+
+**`route` and `handler` after.** Same gates, same handler type; the pattern is
+the whole difference and it is ERGONOMIC now, not a claim: `route` carries the
+path into the tuple Express spreads, so it is written once and cannot drift from
+its handler, and `handler` leaves the pattern to the caller for the case where it
+is not ours to write. §44's "the CHECKED verb has the short name" is retired for
+Express and decides Hono unchanged, where the gate stands. §44's other half —
+two message-gates may never meet on one argument — is untouched; the pair that
+FOUND it was `AnswerGate` + `PathGate`, and the pair that pins it now is
+`AnswerGate` + `StripGate` on `mw`, where both can still fail on one scope.
+
+**The other three carriers keep what they have, and for a reason each.** The
+coherence #97 asked for is "one way to say a thing", not "one shape everywhere":
+
+- **Hono keeps `honoCarrier<'/posts/:id'>()`.** Its type argument is not a
+  restatement of what the framework knows — it IS the framework's knowledge:
+  `Context<Env, Path>` is parameterised by the pattern natively, so the carrier
+  passes Hono's own type through and `c.req.param('id')` is typed by Hono with
+  no step of ours. There is nothing to remove that would not have to be added
+  back as a `params` step, and the gate compares a declared PATTERN against a
+  mounted one — two things `ParamKeys` reads, never a hand-written declaration
+  against a pattern. A scope that wants the FORMAT checked on Hono validates it
+  there too; the two do not compete the way Express's pair did.
+- **React Router keeps `reactRouterCarrier<Par>()`.** Its argument is
+  `Route.LoaderArgs['params']`, generated by RR7's typegen from `routes.ts` —
+  again the framework's own type, threaded through. No gate was ever built on it.
+- **tRPC is not in scope at all.** It has no URL and no params; `input` is a
+  different axis, read and validated by `.input(schema)` before a resolver runs,
+  and checked against the carrier by contravariance.
+
+**Alternatives.** *Keep both mechanisms* — measured in §52 and set aside there;
+nothing new since. *Keep the gate and change what it reads*: compare the mounted
+pattern against the keys of the `validate('params', schema, …)` SCHEMA, which is
+what `docs/design/scope-api.md`'s "bridges into each framework's own knowledge"
+describes and what the pre-#30 branch built. That is a genuinely better gate than
+the one removed — it compares two things that both mean something, instead of a
+declaration whose only job was to be compared — and it is NOT built here: the
+gate has to find that call among a scope's others (a scope validating both
+`query` and `params` is ordinary), read a schema's key set through zod's types,
+and have no opinion where either side is unreadable. Its own work, and the
+reading in §45 above is what it inherits.
+
+**What this does not touch.** `query`, `headers`, `cookies` and `body` are
+unchanged, and so is everything §45 says about transparent mounts except the
+params half of the Express row.

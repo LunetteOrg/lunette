@@ -11,7 +11,7 @@
 // contravariance.
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
-import type { ParamsDictionary, RouteParameters } from 'express-serve-static-core'
+import type { ParamsDictionary } from 'express-serve-static-core'
 import type { DepGuard, Next, Passed, ResultOf, Scope, State } from '../index.ts'
 import type { StandardIssue } from '../guard/index.ts'
 import {
@@ -33,22 +33,26 @@ import {
   type Query,
 } from '../reads.ts'
 
-// `Params` is what the scope says the URL carries. It defaults to Express's own
-// wide dictionary — a scope that names nothing reads `string | undefined` and
-// mounts anywhere.
-export interface ExpressCarrier<Params = ParamsDictionary> {
+// A carrier is `__args` alone: the shape of a run's second argument, and
+// nothing else. It takes no type argument — what a scope reads OF the URL is
+// not declared here (§53). `req.params` is Express's own wide dictionary, the
+// width its router really hands back, and a scope that wants a narrower one
+// reads it through `.step(params).validate('params', schema, onError)`, where
+// the check is on the VALUE and not merely on a key's presence (§52).
+export interface ExpressCarrier {
   readonly __args?: {
-    readonly req: Request<Params>
+    readonly req: Request
     readonly res: Response
     readonly next?: NextFunction
   }
 }
 
-// PURE DECLARATION — the returned object carries nothing; the type argument is
-// the whole point of the call. `expressCarrier()` reads the wide dictionary;
-// `expressCarrier<{ id: string }>()` says which params the scope reads, and
-// `route(path, …)` can then check a pattern against it.
-export const expressCarrier = <Params = ParamsDictionary>(): ExpressCarrier<Params> => ({})
+// PURE DECLARATION — the returned object carries nothing, and there is no type
+// argument left for the call to make a claim with. It stays a CALL rather than
+// a bare exported value for one reason: `honoCarrier` and `reactRouterCarrier`
+// still take theirs, and a vocabulary where one carrier is invoked and the next
+// is not costs more than the parentheses do.
+export const expressCarrier = (): ExpressCarrier => ({})
 
 // Whatever a middleware's steps derive lands on `res.locals` before Express's
 // own `next()` runs — the leaf every `mw()` chain ends on, appended by `mw`
@@ -99,66 +103,6 @@ const toNext = async (
   return undefined
 }
 
-// ── the route gate: what the scope READS against what the pattern SUPPLIES ───
-// WE WRITE NO PARSER. `RouteParameters` is Express's own reader, so this cannot
-// drift from the router that matches paths at runtime — it understands `*path`
-// and `{/:id}`, cases a parser of ours would have to bail on.
-declare const OPAQUE: unique symbol
-type Opaque = typeof OPAQUE
-
-// A NON-LITERAL pattern resolves to `ParamsDictionary`, whose `keyof` is the
-// wide `string`. That must read as "cannot read this pattern", never as "every
-// name is missing": catching less is fine, rejecting a valid route is not.
-type Readable<Path extends string> = string extends keyof RouteParameters<Path>
-  ? Opaque
-  : keyof RouteParameters<Path>
-
-// OPTIONALITY IS MEANING, and Express's own reader already carries it: an
-// optional group builds as `Partial<…>`, so `RouteParameters<'/posts{/:id}'>`
-// says `id?: string` where `/posts/:id` says `id: string`. Read with a bare
-// `keyof` the two look alike — and they are not, because `/posts{/:id}` matches
-// `/posts` too, where the param is `undefined` against a step whose type says
-// `string`. So the two key sets are split and compared by kind: a REQUIRED
-// demand takes only a required supply, an OPTIONAL one takes either, since the
-// step already reads `string | undefined`. This is Hono's `Unmet` in the shape
-// an object's keys take, and still no parser of ours.
-type Req<P> = { [K in keyof P]-?: {} extends Pick<P, K> ? never : K }[keyof P]
-type Opt<P> = { [K in keyof P]-?: {} extends Pick<P, K> ? K : never }[keyof P]
-
-// ONE DIRECTION, and which one is the point. The scope DEMANDS — it reads
-// `req.params.id` — and the route SUPPLIES. A param the scope reads and the
-// pattern does not supply is `undefined` at runtime; a param the pattern
-// supplies and nobody reads is nothing at all, which is the same verdict
-// `DepGuard` gives the chain (a superset passes) and what lets one scope mount
-// under a nested route.
-//
-// The test is REVERSED on purpose: a param-less pattern's real key set is
-// `never`, and `never extends Opaque` is VACUOUSLY TRUE — written the natural
-// way round, the gate would silently skip every param-less route.
-// The same reading on the DEMAND side: a scope started on the bare
-// `expressCarrier()` holds Express's wide dictionary, whose `keyof` is `string`
-// — which says "names nothing", not "reads every possible name". Without this
-// such a scope would be refused by every pattern.
-type DemandedReq<Par> = string extends keyof Par ? never : Req<Par>
-type DemandedOpt<Par> = string extends keyof Par ? never : Opt<Par>
-
-type Unsupplied<Path extends string, Par> = Opaque extends Readable<Path>
-  ? never
-  :
-      | Exclude<DemandedReq<Par>, Req<RouteParameters<Path>>>
-      | Exclude<DemandedOpt<Par>, keyof RouteParameters<Path>>
-
-// GATES THAT CAN BOTH FAIL ARE CHAINED, never intersected side by side: two
-// message literals meeting on one argument give `'⛔ A' & '⛔ B'`, which is
-// `never`, and TypeScript then reports "not assignable to parameter of type
-// 'never'" with both messages gone — measured on exactly this pair. So each
-// message-gate takes what to check NEXT, and only one of them can be the answer.
-// A gate whose failure is not a literal — `DepGuard`'s branded object, the
-// contravariant `ArgsGate` — cannot collapse and needs no place in the chain.
-type PathGate<Path extends string, Par, Then = unknown> = [Unsupplied<Path, Par>] extends [never]
-  ? Then
-  : `⛔ this route does not supply a param the scope reads: ${Unsupplied<Path, Par> & string}`
-
 // ── gate: what a MIDDLEWARE derives, against what the run itself brought ─────
 // `toNext` — and Hono's and tRPC's twins — strips the run's own args back off
 // by NAME, because the fold hands it one merged object and a name is all there
@@ -191,9 +135,8 @@ type StripGate<S extends State> = [Strips<S>] extends [never]
 // itself and has nothing to hand back says exactly that.
 type Unsendable<S extends State> = Exclude<ResultOf<Scope<S>>, Response | undefined>
 
-// The OUTER link of the chain: a leaf Express cannot send is wrong under every
-// pattern and on either mount, so it is answered before asking which pattern
-// this is, or which key the middleware derived.
+// The OUTER link of the chain: a leaf Express cannot send is wrong on either
+// mount, so it is answered before asking which key the middleware derived.
 //
 // It rides `mw` as well, where the SAME mistake ends worse than on a route.
 // Under the library's error convention a RETURNED error is a domain value (§3),
@@ -221,18 +164,15 @@ type AnswerGate<S extends State, Then = unknown> = [Unsendable<S>] extends [neve
 // It is a FUNCTION rather than a conditional yielding a message on purpose. Two
 // message-gates failing on the same argument intersect their literals, `'⛔ A' &
 // '⛔ B'` is `never`, and TypeScript then reports "not assignable to parameter
-// of type 'never'" with both messages gone — measured, and the exact trap the
-// route gate's own note describes. A function member cannot collapse that way.
-type RouteBrings<S extends State> = {
-  readonly req: Request<ParamsOf<S>>
+// of type 'never'" with both messages gone — measured, and the invariant §44
+// states. A function member cannot collapse that way.
+type RouteBrings = {
+  readonly req: Request
   readonly res: Response
 }
-type MwBrings<S extends State> = RouteBrings<S> & { readonly next: NextFunction }
+type MwBrings = RouteBrings & { readonly next: NextFunction }
 
 type ArgsGate<Brings> = (app: never, args: Brings) => unknown
-
-// What the scope says it reads, taken off the carrier it was started on.
-type ParamsOf<S extends State> = S['args'] extends { readonly req: Request<infer P> } ? P : never
 
 // What a middleware's steps populated — exactly what `toNext` copies onto
 // `res.locals`, so the type and the runtime say the same thing.
@@ -265,37 +205,43 @@ export const express = <App extends object>(deps: App) => {
   // returned rejection on its own, Express 4 does not, and this says the same
   // thing on both.
   const handlerFor =
-    <S extends State>(sc: unknown): RequestHandler<ParamsOf<S>> =>
+    (sc: unknown): RequestHandler =>
     (req, res, next) => {
       void (sc as (app: App, args: object) => Promise<unknown>)(deps, { req, res }).catch(next)
     }
 
   return {
-    // TWO VERBS, and the CHECKED one has the short name.
+    // TWO VERBS, TYPED IDENTICALLY, and what separates them is where the
+    // PATTERN is written:
     //
-    //   app.get(...route('/posts/:id', scope))     the pattern checked
-    //   app.get('/posts/:id', handler(scope))      the bare handler, nothing checked
+    //   app.get(...route('/posts/:id', scope))     the pair, pattern written once
+    //   app.get('/posts/:id', handler(scope))      the handler, pattern Express's
     //
-    // Which one is called `route` is the whole point. Written as one verb with
-    // two forms, the shorter and more natural call — `route(scope)` — was the
-    // one that checks NOTHING, so the library's own principle 1 cost an extra
-    // argument and a spread while the mistake was free. The adjective belongs
-    // on whoever gives something up, not on whoever keeps it, so the escape
-    // hatch is the one that has to be named — and `handler` says what it hands
-    // back rather than what it skips.
+    // `route` carries the path INTO its own return — the tuple Express spreads
+    // — so the pattern is written once and cannot drift from the handler it
+    // belongs to; `handler` hands back the handler alone and leaves the pattern
+    // to the caller, which is the form to reach for where the path is not ours
+    // to write (a router assembled from a table, a host that supplies it).
     //
-    // `handler` is not a shortcut kept for comfort: the pattern is Express's
-    // own argument there, so it never reaches a type of ours and nothing can
-    // compare it. That is a fact about Express rather than a choice — its
-    // `P = RouteParameters<Route>` is a DEFAULT, used only where inference
-    // found no candidate, and a handler we return always offers one, its own
-    // `req`. Making it generic does not help: TypeScript instantiates the
-    // variable to whatever keeps the call compatible, so a gate written inside
-    // is never evaluated against the pattern. Measured across seven handler
-    // shapes — concrete, generic, generic-constrained, `NoInfer`, and the gate
-    // placed on the parameter, on `res`, or on the return type — and none
-    // reaches it. A pattern reaches a type of ours only by being an ARGUMENT to
-    // one, which is what `route` is for.
+    // NEITHER CHECKS THE PATTERN, and neither can. `route` did, while a scope
+    // declared its params on the carrier (`expressCarrier<{ id: string }>()`)
+    // and `PathGate` compared the two — a check on a param's NAME, never on its
+    // value, and one of two ways to say the same thing. It went with the
+    // generic (§53): a route param is read by `.step(params)` and checked by
+    // `.validate('params', …)`, where the check is on what actually arrived.
+    // With nothing left declaring what the scope reads there is nothing for a
+    // pattern to be compared against, so `route` keeps the ergonomics and drops
+    // the claim.
+    //
+    // That the pattern cannot reach a gate from `handler`'s side is a fact
+    // about Express and stays true: its `P = RouteParameters<Route>` is a
+    // DEFAULT, used only where inference found no candidate, and a handler we
+    // return always offers one, its own `req`. Making it generic does not help:
+    // TypeScript instantiates the variable to whatever keeps the call
+    // compatible, so a gate written inside is never evaluated against the
+    // pattern. Measured across seven handler shapes — concrete, generic,
+    // generic-constrained, `NoInfer`, and the gate placed on the parameter, on
+    // `res`, or on the return type — and none reaches it.
     //
     // Both carry `DepGuard` and the carrier gate: the deps were curried at
     // `express(deps)`, so a mount hands them to the scope exactly as a direct
@@ -304,18 +250,13 @@ export const express = <App extends object>(deps: App) => {
     route: <Path extends string, S extends State>(
       path: Path,
       // The gates ride the SCOPE argument: intersected onto the path, a failing
-      // gate collapses to `never` and the message is lost. `AnswerGate` and
-      // `PathGate` are CHAINED for the same reason — two message literals side
-      // by side reduce to `never` between themselves.
-      sc: Scope<S> &
-        ArgsGate<RouteBrings<S>> &
-        DepGuard<App, S['need']> &
-        AnswerGate<S, PathGate<Path, ParamsOf<S>>>,
-    ): readonly [Path, RequestHandler<ParamsOf<S>>] => [path, handlerFor<S>(sc)],
+      // gate collapses to `never` and the message is lost.
+      sc: Scope<S> & ArgsGate<RouteBrings> & DepGuard<App, S['need']> & AnswerGate<S>,
+    ): readonly [Path, RequestHandler] => [path, handlerFor(sc)],
 
     handler: <S extends State>(
-      sc: Scope<S> & ArgsGate<RouteBrings<S>> & DepGuard<App, S['need']> & AnswerGate<S>,
-    ): RequestHandler<ParamsOf<S>> => handlerFor<S>(sc),
+      sc: Scope<S> & ArgsGate<RouteBrings> & DepGuard<App, S['need']> & AnswerGate<S>,
+    ): RequestHandler => handlerFor(sc),
 
     // Express has no middleware the scope could return a value TO: a middleware
     // either answers on `res` or calls `next()`. So `mw` appends `toNext` as the
@@ -327,7 +268,7 @@ export const express = <App extends object>(deps: App) => {
         // CHAINED, not intersected: `AnswerGate` and `StripGate` are both
         // message literals and both can fail here, and side by side they would
         // collapse to `never` with nothing left to read.
-        sc: Scope<S> & ArgsGate<MwBrings<S>> & DepGuard<App, S['need']> & AnswerGate<S, StripGate<S>>,
+        sc: Scope<S> & ArgsGate<MwBrings> & DepGuard<App, S['need']> & AnswerGate<S, StripGate<S>>,
         // `Request['query']` rather than naming `ParsedQs`: that type lives in
         // `qs`, which is not a dependency here, and the query slot has to be
         // filled to reach the locals one.
@@ -399,7 +340,7 @@ export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from
 // cookies do — Express's own router already hands back a plain string-keyed
 // record.
 //
-// FIXED shape, not generic over what a carrier declared. A generic
+// FIXED shape, not generic over a declared param set. A generic
 // `params = async <P>(...) => next({ params: req.params as P })` was tried
 // and REFUSED silently: passed to `.step()`, a generic function argument
 // does not get its type parameter inferred through `.step()`'s own
@@ -407,13 +348,14 @@ export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from
 // compiles and adds NOTHING. Measured, minimized to exactly this shape.
 //
 // So `ctx.params` starts WIDE (`ParamsDictionary`), exactly the way
-// `body('json')` starts `unknown` — trusted from the framework's own
-// router, refined by `.validate('params', schema, onError)` when a route
-// wants a real check on the VALUE, not just the key's presence (decision
-// 52). `expressCarrier<{ id: string }>()`'s compile-time route-pattern
-// check (§45) is a DIFFERENT guarantee this does not replace and does not
-// need: reading `req.params` directly, outside this step, still sees
-// whatever the carrier declared.
+// `body('json')` starts `unknown` — trusted from the framework's own router,
+// refined by `.validate('params', schema, onError)` where a route wants a
+// check on the VALUE. It is now the ONE way a scope says what it reads of the
+// URL: the carrier's own `expressCarrier<{ id: string }>()` declaration, and
+// the route-pattern check `route` built on it, are gone (§53). What their
+// removal costs is a compile-time refusal of a pattern missing a NAME; what
+// they never gave is the FORMAT, which is where a bad `:id` actually goes
+// wrong (§52).
 export const params = async (
   _app: {},
   { req }: { readonly req: Request },

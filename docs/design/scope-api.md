@@ -718,6 +718,16 @@ legitimate" still holds.
 
 ## The bridges into each framework's own knowledge
 
+> **Status (decision 53).** What SHIPPED on Express was a different gate from
+> the one below: it compared the pattern against a declaration on the carrier
+> (`expressCarrier<{ id: string }>()`), not against the `params` SCHEMA — and
+> that gate is now removed, since the declaration duplicated what
+> `.validate('params', …)` says better. Hono's survives, comparing a declared
+> pattern against a mounted one. THE SECTION BELOW IS STILL UNBUILT and is the
+> better shape: a gate over the schema compares two things that each mean
+> something on their own. Its reading — one direction, no parser of ours, no
+> opinion on a pattern it cannot read — is what any revival inherits.
+
 The route pattern and the `params` schema are two declarations, and nothing
 kept them aligned: renaming `:postId` to `:wrongName` produced no error at any
 mount and failed at runtime with a 422 (verified). The gate compares them — and

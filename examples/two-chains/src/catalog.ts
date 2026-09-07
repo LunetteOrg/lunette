@@ -54,9 +54,16 @@ export const listScope = scope(expressCarrier()).step(
   async (deps: { catalog: { list(): Item[] } }, { res }) => res.json({ items: deps.catalog.list() }),
 )
 
-export const itemScope = scope(expressCarrier<{ itemId: string }>()).step(
+// `req.params` is Express's own dictionary, so `itemId` arrives as
+// `string | string[] | undefined` — a repeated param, or a pattern that never
+// carried the name. The carrier declares nothing about it (§53), and where the
+// FORMAT matters the answer is `.step(params).validate('params', schema, …)`,
+// which `examples/express` shows. Here the id is a lookup key and nothing more,
+// so the narrowing is a `typeof` and the miss is the 404 this route already has.
+export const itemScope = scope(expressCarrier()).step(
   async (deps: { catalog: { byId(id: string): Item | undefined } }, { req, res }) => {
-    const item = deps.catalog.byId(req.params.itemId)
+    const itemId = req.params.itemId
+    const item = typeof itemId === 'string' ? deps.catalog.byId(itemId) : undefined
     return item ? res.json({ item }) : res.status(404).json({ error: 'not found' })
   },
 )
