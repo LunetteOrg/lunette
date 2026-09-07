@@ -24,50 +24,97 @@ core stays dependency-free for anyone importing it:
 tRPC's carrier comes OUT of the factory rather than being imported beside it,
 because its context is the APPLICATION's type and `t` already holds it: pass the
 builder and the context is inferred, written nowhere. What a scope reads of the
-INPUT it declares itself — `carrier<{ id: string }>()` — and that is checked
-against the procedure it mounts on:
+INPUT it says in the SCHEMA — the same way it says what it reads of a URL — and
+that is checked against the procedure it mounts on:
 
 ```ts
-const byId = scope(carrier<{ id: string }>()).step(
-  async ({ posts }: Deps, { input }) => posts.getPost(input.id),   // typed, no cast
-)
+const Id = z.object({ id: z.string() })
 
-t.procedure.input(z.object({ id: z.string() })).query(procedure(byId))   // ✓
+const byId = scope(carrier())
+  .extend(guards)
+  .validate('input', Id, onError)
+  .step(async ({ posts }: Deps, { input }) => posts.getPost(input.id))   // typed, no cast
+
+t.procedure.input(Id).query(procedure(byId))                             // ✓
 t.procedure.input(z.object({ slug: z.string() })).query(procedure(byId)) // refused
 t.procedure.query(procedure(byId))                                       // refused
 ```
 
-There is no gate of ours behind that: tRPC hands a resolver the schema's OUTPUT,
-so a scope reading what the schema does not supply is refused at the argument by
+There is no gate of ours behind that: `procedure` puts what the scope validated
+in the RESOLVER'S PARAMETER, tRPC hands that resolver the schema's OUTPUT, and a
+resolver demanding what the schema does not supply is refused at the argument by
 contravariance — the same mechanism `DepGuard` relies on. `.output(schema)` is
-checked the other way round, against what the leaf returned.
+checked the other way round, against what the leaf returned. One schema value,
+referenced twice; nothing declared twice.
+
+A tRPC MIDDLEWARE cannot validate the input — its leaf strips `input` by name
+before `next({ ctx })`, so the narrowed value would never reach the procedure
+downstream, and the mount says so. A middleware that must read the input narrows
+it by hand.
+
+**No carrier declares what a scope reads**, on any of the four. A carrier's type
+arguments are for what the run BRINGS — Hono's env is the only one left — and
+what a scope reads of an entry is the schema's to say.
+
+The reason is not tidiness: a type argument is fixed at `scope(carrier<X>())`,
+the first call, so every branch inherits it and one base value could not serve
+two routes reading different params. **A verb is per branch; a type argument is
+per scope** — and a base value others extend is the unit this library is built
+around.
+
+```ts
+const base   = scope(carrier()).extend(guards).step(shared)   // one gate, one set of reads
+const byId   = base.validate('params', z.object({ id:   z.string() }), onErr)
+const bySlug = base.validate('params', z.object({ slug: z.string() }), onErr)
+```
+
+On React Router, where no pattern ever reaches a mount, the same schema rides
+the mount's own parameter — so a route module's
+`satisfies (a: Route.LoaderArgs) => unknown` refuses a route supplying something
+else, which is a check it never had.
 
 On Express and Hono a scope is a VALUE and the mount is the host's own call:
 
 ```ts
-export const showPost = scope(expressCarrier<{ id: string }>())
-  .step(async ({ posts }: Deps, { req, res }) => res.json(posts.getPost(req.params.id)))
+export const showPost = scope(expressCarrier())
+  .extend(guards)
+  .step(params)
+  .validate('params', z.object({ id: z.string().regex(/^\d+$/) }), (issues, { res }) =>
+    res.status(400).json({ issues }),
+  )
+  .step(async ({ posts }: Deps, { params, res }) => res.json(posts.getPost(params.id)))
 
-app.get('/posts/:id', route(showPost))         // the handler, nothing checked
 app.get(...route('/posts/:id', showPost))      // the pair, pattern CHECKED
+app.get('/posts/:postId', handler(showPost))   // the bare handler, nothing checked
 ```
 
-The carrier says which params the scope reads (`expressCarrier<{ id: string }>()`
-on Express, the pattern itself on Hono: `honoCarrier<'/posts/:id'>()`), and that
-is what types `req.params.id` / `c.req.param('id')` with nothing annotated on
-the step. Give `route` the pattern as well and it is compared against that
-declaration:
+**What the URL carries is said once, in the schema**, and the same schema does
+two jobs: it validates the value at runtime, and it is what `route` compares the
+mounted pattern against.
 
 ```
-⛔ this route does not supply a param the scope reads: id
+⛔ this route does not supply a param the scope validates: id
 ```
 
 The comparison runs in ONE direction — the scope demands, the route supplies —
-so a route supplying MORE than the scope reads passes, which is the verdict
+so a route supplying MORE than the schema demands passes, which is the verdict
 `DepGuard` already gives the chain and what lets one scope mount under a nested
-route. On a pattern neither reader can read (a non-literal string) the gate has
-no opinion. The reading is each framework's own: Express's `RouteParameters`,
-Hono's `ParamKeys` — never a parser of ours.
+route. Optionality counts on both sides: `/posts{/:id}` (Express) and
+`/posts/:id?` (Hono) also match WITHOUT the param, so they do not satisfy a
+schema that demands it. On a pattern it cannot read (a non-literal string), or a
+scope that validates no params, the gate has NO OPINION. The reading is each
+framework's own — Express's `RouteParameters`, Hono's `ParamKeys` — never a
+parser of ours.
+
+Hono says all of it the same way, with `honoCarrier()` and its own `params`:
+
+```ts
+export const showPost = scope(honoCarrier())
+  .extend(guards)
+  .step(params)
+  .validate('params', IdParam, (issues, { c }) => c.json({ issues }, 400))
+  .step(async ({ posts }: Deps, { params, c }) => c.json(posts.getPost(params.id)))
+```
 
 The one-argument form cannot check anything, and that is a fact about the hosts
 rather than a choice: a handler we return always tells Express what its params
@@ -98,7 +145,7 @@ with what the scope knows filled in, never the widest thing that compiles.
 
 | subpath | what the mount carries through |
 |---|---|
-| express | the params a route declares; the LOCALS a middleware derives (`LocalsOf<typeof mw>`) |
+| express | the LOCALS a middleware derives (`LocalsOf<typeof mw>`) |
 | hono | what the leaf returned, value and status, for `hc<typeof app>()` |
 | trpc | the resolver's return type (`inferRouterOutputs`, and what `.output(schema)` checks), the INPUT a scope declares (checked against `.input(schema)`), and a middleware's CONTEXT OVERRIDE — what its steps derived reaches every procedure that `.use`s it |
 | react-router | what the loader or action returned, which is `useLoaderData<typeof loader>()` |

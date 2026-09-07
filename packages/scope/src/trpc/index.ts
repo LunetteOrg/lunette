@@ -12,7 +12,8 @@
 // `res.locals` copy or a `c.set` (§45).
 
 import type { TRPCMiddlewareFunction, TRPCRootObject } from '@trpc/server'
-import type { DepGuard, Scope, State } from '../index.ts'
+import type { DepGuard, ResultOf, Scope, State } from '../index.ts'
+import type { Validated } from '../route-gate.ts'
 
 // The context is the APPLICATION's — a session, a tenant, an actor id — so the
 // carrier is generic over it where the other three publish types their
@@ -29,14 +30,16 @@ import type { DepGuard, Scope, State } from '../index.ts'
 // is whatever sits under `ctx` — and a constraint here would force the
 // inference below to be widened to satisfy it, which is a type the steps would
 // then read.
-// `In` is what the scope says it reads of the input. It defaults to `unknown`
-// — a scope that declares nothing reads it at that width and casts, and mounts
-// on any procedure. Declaring it (`carrier<{ id: string }>()`) types `input`
-// inside every step AND makes `.input(schema)` checkable against it: the
-// resolver tRPC expects takes the schema's OUTPUT, so contravariance refuses a
-// scope reading something the schema does not supply.
-export interface TrpcCarrier<Ctx, In = unknown> {
-  readonly __args?: { readonly input: In; readonly ctx: Ctx }
+// `input` is FIXED at `unknown`, and that is the whole of what a run brings
+// here: the raw value tRPC hands a resolver, already read and validated by
+// `.input(schema)`. The carrier used to take an `In` saying which shape the
+// scope reads of it, and it went the way Express's and Hono's params
+// declarations went (§53) — what a scope reads of an entry is said by
+// `.validate('input', schema, onError)`, once, and `procedure` puts THAT in the
+// resolver's parameter so `.input(schema)` is still checked against it by
+// contravariance.
+export interface TrpcCarrier<Ctx> {
+  readonly __args?: { readonly input: unknown; readonly ctx: Ctx }
 }
 
 // What the app's context IS, read off the tRPC builder the app already made.
@@ -89,7 +92,8 @@ const toNext =
 // transport made both, and the request that carried them is gone by the time a
 // resolver sees them. There is nothing for a `body` step to read, and offering
 // one would be a name over an empty box. `.input(schema)` has already read AND
-// validated it, which is why this carrier declares `In` instead.
+// validated it, and `validate('input', schema, onError)` is how a scope says
+// what it reads of the result.
 //
 // THE URL IS RIGHT THERE, and that refusal is ADVISORY. A tRPC transport does
 // have a URL, and a step could parse one by hand off whatever the app put on its
@@ -110,13 +114,13 @@ const toNext =
 // `strictFunctionTypes` does the refusing; the reasoning is in the Express
 // carrier.
 //
-// `input` is taken FROM THE SCOPE rather than fixed at `unknown`: what a
-// middleware is handed depends on where it sits in the chain, and `.input`'s
-// own check rides `procedure`. What this member states is the CONTEXT, which is
-// the app's and is the same for every middleware it mounts.
-type ArgsGate<T, S extends State> = (
+// `input` is `unknown`, which is what a run really brings (the carrier's own
+// note): what a scope reads OF it is the resolver's parameter's business, over
+// on `procedure`. What this member states is the CONTEXT, which is the app's
+// and is the same for every mount it takes.
+type ArgsGate<T> = (
   app: never,
-  args: { readonly input: S['args'] extends { readonly input: infer I } ? I : unknown; readonly ctx: CtxOf<T> },
+  args: { readonly input: unknown; readonly ctx: CtxOf<T> },
 ) => unknown
 
 // ── gate: what a MIDDLEWARE derives, against what the run itself brought ─────
@@ -135,19 +139,29 @@ type StripGate<S extends State> = [Strips<S>] extends [never]
 export const trpc = <T, App extends object>(_t: T, deps: App) => ({
   // PURE DECLARATION — the object carries nothing at all; what it is FOR is the
   // type it hands the scope.
-  carrier: <In = unknown>(): TrpcCarrier<CtxOf<T>, In> => ({}),
+  carrier: (): TrpcCarrier<CtxOf<T>> => ({}),
 
-  // `In` is inferred FROM THE SCOPE, and that is what puts `.input(schema)`
-  // under a check: the resolver tRPC expects is handed the schema's output, so
-  // a scope reading `{ id: string }` mounted on a procedure whose schema
-  // supplies `{ slug: string }` is refused at the argument by contravariance —
-  // no gate of ours, the same shape `DepGuard` relies on. `R` stays generic so
-  // the resolver's return survives, which is what `.output(schema)` and
-  // `inferRouterOutputs` both read.
+  // WHAT `.input(schema)` IS CHECKED AGAINST IS THE SCHEMA THE SCOPE VALIDATED
+  // WITH — `Validated<S, 'input'>`, the same source the two pattern hosts read
+  // for their route gate (§53). It sits in the RESOLVER'S PARAMETER, so the
+  // check is tRPC's own and not a gate of ours: the resolver tRPC expects is
+  // handed `.input(schema)`'s OUTPUT, and a resolver demanding `{ id: string }`
+  // does not accept a procedure supplying `{ slug: string }` — nor one
+  // supplying nothing, whose resolver is handed `undefined`. A scope that
+  // validates no input demands `unknown` and mounts on any procedure.
+  //
+  // `Scope<S>` rather than a plain function shape, which is what reading the
+  // state costs: `DepGuard` and the carrier gate came free from a
+  // `(app: App, args) => R` parameter and are written out now. `ResultOf` keeps
+  // the leaf's value, which is what `.output(schema)` and `inferRouterOutputs`
+  // both read.
   procedure:
-    <In, R>(sc: (app: App, args: { readonly input: In; readonly ctx: CtxOf<T> }) => R) =>
-    (args: { readonly input: In; readonly ctx: CtxOf<T> }): R =>
-      sc(deps, args),
+    <S extends State>(sc: Scope<S> & ArgsGate<T> & DepGuard<App, S['need']>) =>
+    (args: {
+      readonly input: Validated<S, 'input'>
+      readonly ctx: CtxOf<T>
+    }): Promise<ResultOf<Scope<S>>> =>
+      (sc as unknown as (app: App, a: object) => Promise<ResultOf<Scope<S>>>)(deps, args),
 
   // A scope as a tRPC MIDDLEWARE: `t.middleware(middleware(scope))`. The
   // transparency that matters here is the CONTEXT OVERRIDE — tRPC reads what a
@@ -158,7 +172,7 @@ export const trpc = <T, App extends object>(_t: T, deps: App) => ({
   // verdict for free — its plain `(app: App, …) => R` shape puts the deps under
   // contravariance. A `Scope<S>` argument does not, so the gate is written.
   middleware: <S extends State>(
-    sc: Scope<S> & ArgsGate<T, S> & DepGuard<App, S['need']> & StripGate<S>,
+    sc: Scope<S> & ArgsGate<T> & DepGuard<App, S['need']> & StripGate<S>,
   ): TRPCMiddlewareFunction<
     CtxOf<T>,
     MetaOf<T>,

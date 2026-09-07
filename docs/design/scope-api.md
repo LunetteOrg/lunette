@@ -718,6 +718,15 @@ legitimate" still holds.
 
 ## The bridges into each framework's own knowledge
 
+> **Status: BUILT (decision 53).** This is the gate that ships, on Express and
+> Hono, with the comparison shared in `src/route-gate.ts` and each subpath
+> contributing only its framework's reader. One difference from the sketch
+> below: the gate does not have to FIND the `validate('params', …)` call among a
+> scope's others — the state already carries what that call produced, so the
+> demand is read off `S['acc']['params']` and a scope validating both `query`
+> and `params` needs no disambiguation. React Router still has no gate, for the
+> reason the table gives: its pattern never reaches a mount.
+
 The route pattern and the `params` schema are two declarations, and nothing
 kept them aligned: renaming `:postId` to `:wrongName` produced no error at any
 mount and failed at runtime with a 422 (verified). The gate compares them — and

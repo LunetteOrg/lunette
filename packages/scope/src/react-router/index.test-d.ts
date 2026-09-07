@@ -2,6 +2,8 @@ import { data, redirect } from 'react-router'
 import { describe, expectTypeOf, it } from 'vitest'
 import { scope } from '../index.ts'
 import { reactRouter, reactRouterCarrier } from './index.ts'
+import { guards } from '../guard/index.ts'
+import { z } from 'zod'
 
 // THE TYPE CONTRACT: the mount is TRANSPARENT. React Router reads a route
 // module's types off what its loader and action RETURN —
@@ -10,14 +12,24 @@ import { reactRouter, reactRouterCarrier } from './index.ts'
 
 const { loader: mountLoader, action: mountAction } = reactRouter({})
 
-// The params a route supplies, declared on the carrier. In an RR7 app this is
-// `Route.LoaderArgs['params']`, straight from its own typegen.
-const carrier = reactRouterCarrier<{ id: string }>()
+// The carrier declares nothing about the params (§53): they arrive at React
+// Router's own width, and a scope that wants a narrower one says so in a schema
+// — per BRANCH, which is what lets one base value serve two routes.
+const carrier = reactRouterCarrier()
+
+// `onError` THROWS, which is React Router's own door for a step that stops (a
+// thrown `data(...)` reaches the ErrorBoundary where a returned one renders
+// normally) — and it keeps the mount's return type the leaf's alone.
+const byId = scope(carrier)
+  .extend(guards)
+  .validate('params', z.object({ id: z.string() }), (issues) => {
+    throw data({ issues }, { status: 400 })
+  })
 
 describe('what a route module sees', () => {
   it('carries the leaf\'s value through the loader', () => {
     const loader = mountLoader(
-      scope(carrier).step(async (_app: {}, { params }) => ({ id: params.id, title: 'x' })),
+      byId.step(async (_app: {}, { params }) => ({ id: params.id, title: 'x' })),
     )
 
     expectTypeOf<Awaited<ReturnType<typeof loader>>>().toEqualTypeOf<{
@@ -28,7 +40,7 @@ describe('what a route module sees', () => {
 
   it('carries a UNION when the steps answer in more than one way', () => {
     const action = mountAction(
-      scope(carrier)
+      byId
         .step(async (_app: {}, { params }) =>
           params.id === '' ? data({ error: 'bad' }, { status: 422 }) : redirect('/posts'),
         ),
@@ -38,11 +50,55 @@ describe('what a route module sees', () => {
     expectTypeOf<Answered>().toEqualTypeOf<ReturnType<typeof data<{ error: string }>> | Response>()
   })
 
-  it('types `params` off the carrier, so a step needs no `!` and no annotation', () => {
-    scope(carrier).step(async (_app: {}, { params }) => {
+  it('types `params` off the SCHEMA, so a step needs no `!` and no annotation', () => {
+    byId.step(async (_app: {}, { params }) => {
       expectTypeOf(params.id).toEqualTypeOf<string>()
       return params.id
     })
+
+    // and without one it is React Router's own width, which is what a route
+    // really hands a loader
+    scope(carrier).step(async (_app: {}, { params }) => {
+      expectTypeOf(params.id).toEqualTypeOf<string | undefined>()
+      return params.id
+    })
+  })
+
+  it('a BASE scope serves two routes reading DIFFERENT params', () => {
+    // THE REASON THE DECLARATION WENT (§53). A type argument is fixed at
+    // `scope(carrier<X>())`, so every branch inherits it and this could not be
+    // written: one base, two schemas, two routes.
+    const base = scope(carrier).extend(guards)
+
+    const one = base.validate('params', z.object({ id: z.string() }), () => data(null))
+    const two = base.validate('params', z.object({ slug: z.string() }), () => data(null))
+
+    one.step(async (_app: {}, { params }) => params.id)
+    two.step(async (_app: {}, { params }) => params.slug)
+  })
+})
+
+describe('the params a scope VALIDATED ride the mount, so RR7\'s typegen checks them', () => {
+  // React Router hands us no pattern — `routes.ts` owns that mapping — so the
+  // check is the route module's own `satisfies`, and contravariance does it.
+  type LoaderArgs = { request: Request; params: { id: string }; context: unknown }
+  type OtherArgs = { request: Request; params: { slug: string }; context: unknown }
+
+  it('accepts a route whose generated params supply what the schema demands', () => {
+    const loader = mountLoader(byId.step(async (_app: {}, { params }) => params.id))
+    void (loader satisfies (args: LoaderArgs) => unknown)
+  })
+
+  it('refuses a route whose generated params supply something else', () => {
+    const loader = mountLoader(byId.step(async (_app: {}, { params }) => params.id))
+    // @ts-expect-error — the route supplies `slug`, the scope validated `id`
+    void (loader satisfies (args: OtherArgs) => unknown)
+  })
+
+  it('a scope validating nothing fits any route', () => {
+    const anyRoute = mountLoader(scope(carrier).step(async () => 'ok'))
+    void (anyRoute satisfies (args: LoaderArgs) => unknown)
+    void (anyRoute satisfies (args: OtherArgs) => unknown)
   })
 })
 

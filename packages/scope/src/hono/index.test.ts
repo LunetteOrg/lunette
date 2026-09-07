@@ -3,7 +3,9 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { scope, type Next } from '../index.ts'
-import { hono, honoCarrier } from './index.ts'
+import { z } from 'zod'
+import { guards } from '../guard/index.ts'
+import { hono, honoCarrier, params } from './index.ts'
 
 // A guard, written here rather than imported: what a guard IS belongs to no
 // carrier (§43). It stops the way Hono stops — `throw new HTTPException(…)`.
@@ -21,8 +23,8 @@ describe('the Hono carrier: what a run brings', () => {
   it('hands the step `c`, and the app the deps it was curried with', async () => {
     const { handler } = hono({ greeting: 'hello' })
 
-    // A SCOPE IS A VALUE, and it names the pattern it reads.
-    const greet = scope(honoCarrier<'/greet/:name'>()).step(
+    // A SCOPE IS A VALUE — declared once, mounted wherever.
+    const greet = scope(honoCarrier()).step(
       async ({ greeting }: { readonly greeting: string }, { c }) =>
         c.json({ said: `${greeting} ${c.req.param('name')}` }),
     )
@@ -50,7 +52,7 @@ describe('the Hono carrier: what a run brings', () => {
 describe('the Hono carrier: `route(path, scope)`', () => {
   const { route } = hono({})
 
-  const showPost = scope(honoCarrier<'/posts/:id'>()).step(async (_app: {}, { c }) =>
+  const showPost = scope(honoCarrier()).step(async (_app: {}, { c }) =>
     c.json({ id: c.req.param('id') }),
   )
 
@@ -168,5 +170,46 @@ describe('the Hono carrier: `mw` hands back a step\'s own response', () => {
     const res = await app.request('/', { headers: { 'x-actor-id': 'u1' } })
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ actor: 'u1' })
+  })
+})
+
+describe('`params` on Hono: WIDE from `c.req.param()`, refined by `.validate`', () => {
+  const IdParam = z.object({ id: z.string().regex(/^\d+$/, 'must be numeric') })
+
+  const showPost = scope(honoCarrier())
+    .extend(guards)
+    .step(params)
+    .validate('params', IdParam, (issues, { c }) => c.json({ issues }, 400))
+    .step(async (_a: {}, { params: p, c }) => c.json({ id: p.id }))
+
+  it('a well-formed id passes through, VALIDATED — not merely read', async () => {
+    const app = new Hono().get(...hono({}).route('/posts/:id', showPost))
+
+    const res = await app.request('/posts/7')
+    expect(await res.json()).toEqual({ id: '7' })
+  })
+
+  it('a malformed id never reaches the leaf: `.validate` answers 400', async () => {
+    const app = new Hono().get(...hono({}).route('/posts/:id', showPost))
+
+    const res = await app.request('/posts/not-a-number')
+    expect(res.status).toBe(400)
+  })
+
+  // `route('/posts', showPost)` does not compile: the gate reads this scope's
+  // schema and the pattern supplies no `id` (§53, pinned in `index.test-d.ts`).
+  // Past the gate, through the escape hatch, the same mistake reaches the
+  // request — and `.validate` is what stands between it and the leaf.
+  it('mounted past the gate with `handler`, a missing param is `.validate`\'s 400', async () => {
+    const app = new Hono().get('/posts', hono({}).handler(showPost))
+
+    const res = await app.request('/posts')
+    expect(res.status).toBe(400)
+  })
+
+  it('reads what Hono\'s own router matched, on a nested pattern too', async () => {
+    const app = new Hono().get(...hono({}).route('/tenants/:tenant/posts/:id', showPost))
+
+    expect(await (await app.request('/tenants/acme/posts/9')).json()).toEqual({ id: '9' })
   })
 })
