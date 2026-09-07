@@ -149,18 +149,23 @@ describe('the extension is added, never stepped', () => {
   })
 })
 
-describe('`BodyOf` does not distribute, so a generic caller keeps its narrowing', () => {
-  it('a wrapper over `body(encoding, onError)` still types the entry', () => {
-    // `E` is inferred as the whole `'json' | 'form'` here, which is what happens
-    // the moment anyone wraps the factory in a helper of their own. A NAKED
-    // conditional would distribute and give `unknown | Record<…>` — which
-    // collapses to `unknown`, losing the narrowing with nothing failing.
+describe('`BodyOf` says what the encoding was, and `unknown` when it was not said', () => {
+  it('narrows on a literal', () => {
     expectTypeOf<BodyOf<'json'>>().toEqualTypeOf<unknown>()
     expectTypeOf<BodyOf<'form'>>().toEqualTypeOf<Record<string, string | File>>()
+  })
 
-    // and the honest answer for a caller that really is generic: both, not
-    // whichever one the distribution happened to swallow
-    expectTypeOf<BodyOf<'json' | 'form'>>().not.toEqualTypeOf<never>()
-    expectTypeOf<Record<string, string | File>>().toMatchTypeOf<BodyOf<'json' | 'form'>>()
+  it('is `unknown` for a caller that did not say which — the lattice, not a bug', () => {
+    // A wrapper over `body(encoding, onError)` infers `E` as the whole union, and
+    // gets `unknown`. That is not a narrowing lost to a distributing conditional:
+    // `unknown` IS the json branch, and a union containing `unknown` is
+    // `unknown`, whatever the conditional does. Distributing and tupling give the
+    // same answer — measured, both forms.
+    //
+    // Written as an equality on purpose. The assertions this replaced were
+    // `not.toEqualTypeOf<never>()` and a `toMatchTypeOf`, and both hold for
+    // `unknown` — they passed for the type they were written to catch, which is
+    // the one thing a type test must not do.
+    expectTypeOf<BodyOf<'json' | 'form'>>().toEqualTypeOf<unknown>()
   })
 })

@@ -2398,7 +2398,19 @@ entry; a verb is what may REPLACE one, because `.extend`'s wrapper pushes its
 step past the ctx gate. The line falls exactly where the gate already is.
 
 **Only `body` takes an `onError`**, because it is the only one carrying a payload
-that can be malformed. A query string does not fail to parse, a malformed cookie
+that can be malformed.
+
+**`BodyOf<E>` is `unknown` for a caller that did not say which encoding**, and
+that is the lattice rather than a defect. `unknown` IS the json branch, so any
+union containing it is `unknown` — distributing and tupling the conditional give
+the same six answers, measured both ways. A generic caller could only do better
+if the json branch were narrower than `unknown`, which is a design decision this
+issue took the other way on purpose: the entry holds what it holds before anyone
+validates it, and a type that forces the validation is the point. Worth recording
+because the first attempt at this "fixed" a distribution that was not the cause,
+and the type tests that accompanied it — `not.toEqualTypeOf<never>()` and a
+`toMatchTypeOf` — hold for `unknown` too, so they passed for the very type they
+were written to catch. A query string does not fail to parse, a malformed cookie
 is skipped, headers do not fail.
 
 **The encoding a step asked for is REQUIRED, on every path.** It was checked only

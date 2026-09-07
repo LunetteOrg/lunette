@@ -22,6 +22,7 @@ import {
   isMultipart,
   parseBody,
   queryFrom,
+  wrongEncoding,
   type BodyOf,
   type Cookies,
   type Encoding,
@@ -488,11 +489,7 @@ export const body =
       // A real value, then: there are no bytes left to check it against, so the
       // claim rides the only evidence remaining, the header the client sent.
       if (!encodingMatches(sent, encoding)) {
-        // `||` and not `??`: a header that is PRESENT AND EMPTY is `''`.
-        return onError(
-          [{ message: `the body was sent as ${sent || 'nothing'}, not ${encoding}` }],
-          ctx,
-        ) as Awaited<R>
+        return onError([wrongEncoding(sent, encoding)], ctx) as Awaited<R>
       }
 
       if (isMultipart(sent)) {

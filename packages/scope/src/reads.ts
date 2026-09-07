@@ -29,18 +29,19 @@ export type Headers_ = Record<string, string>
 // the shape difference lives in the SCHEMA, the encoding at the wiring.
 export type Encoding = 'json' | 'form'
 
-// `[E]` and not `E`: a NAKED conditional distributes over a union, so an `E`
-// inferred as the whole `'json' | 'form'` — which is what happens the moment a
-// caller wraps `body(encoding, onError)` in a helper of their own — would give
-// `unknown | Record<…>`, and that collapses to `unknown`. The narrowing would be
-// gone with nothing failing anywhere. Tupled, the union is matched as a whole
-// and a caller who really is generic gets the union of both, which is the
-// truthful answer.
-export type BodyOf<E extends Encoding> = [E] extends ['json']
-  ? unknown
-  : [E] extends ['form']
-    ? Record<string, string | File>
-    : unknown | Record<string, string | File>
+// A CALLER WHO HAS NOT SAID WHICH ENCODING GETS `unknown`, and that is the
+// truthful answer rather than a narrowing lost. `unknown` IS the json branch, and
+// a union containing `unknown` is `unknown` — every time, by the shape of the
+// type lattice and not by anything this conditional does. Distributing or
+// tupling gives the same six answers (measured, both forms, literals and union),
+// so the plain one is written.
+//
+// The only way a generic caller could get something useful is for the json
+// branch to be narrower than `unknown` — a `JsonValue`, say. #62 chose `unknown`
+// deliberately: what the entry HOLDS before anyone validates it, and a type that
+// forces a validation is the point. Changing that is a design decision, not a
+// repair to this line.
+export type BodyOf<E extends Encoding> = E extends 'json' ? unknown : Record<string, string | File>
 
 // ── the readers, over the two shapes every Fetch-based host really has ───────
 // `URLSearchParams` and `Headers` are what Hono and React Router both hold, and
@@ -136,6 +137,16 @@ export const encodingMatches = (contentType: string | undefined, encoding: Encod
 export const isMultipart = (contentType: string | undefined): boolean =>
   mediaTypeOf(contentType) === 'multipart/form-data'
 
+// ONE WORDING, reached from two places: the bytes are checked here, and a body
+// someone else already parsed is checked where it is found, since there are no
+// bytes left to check it against. Two copies of a sentence drift.
+//
+// `||` and not `??`: a header that is PRESENT AND EMPTY is `''`, which `??`
+// passes straight through into the message.
+export const wrongEncoding = (contentType: string | undefined, encoding: Encoding): StandardIssue => ({
+  message: `the body was sent as ${contentType || 'nothing'}, not ${encoding}`,
+})
+
 // THE BYTES ARE THE INPUT, not a request, and that is what lets Express reach
 // this without building a throwaway `Request` around a buffer it already holds.
 // Only the `form` branch needs one, and only because `formData()` is the
@@ -155,10 +166,7 @@ export const parseBody = (
   contentType: string | undefined,
   encoding: Encoding,
 ): Read | Promise<Read> => {
-  if (!encodingMatches(contentType, encoding)) {
-    // `||` and not `??`: a header that is PRESENT AND EMPTY is `''`.
-    return { issues: [{ message: `the body was sent as ${contentType || 'nothing'}, not ${encoding}` }] }
-  }
+  if (!encodingMatches(contentType, encoding)) return { issues: [wrongEncoding(contentType, encoding)] }
 
   if (encoding === 'json') {
     // `fatal: true`, and the default is why: a non-fatal decoder REPLACES every

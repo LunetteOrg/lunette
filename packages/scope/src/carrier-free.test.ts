@@ -23,6 +23,15 @@ import { trpc } from './trpc/index.ts'
 // least that, and a superset passes — the verdict `DepGuard` gives the chain
 // and `PathGate` gives the params, on the third axis.
 //
+// THE MIDDLE THIS FILE ONCE SAID DID NOT EXIST NOW DOES, and it is worth reading
+// the two together. What is pinned below is the WIDEST portable shape: a scope
+// that reads nothing of the request at all. The four hosts still share no
+// argument name, so a step annotating `c` or `req` still belongs to one host —
+// but a step annotating `{ query: Query }` belongs to none, because the read
+// extensions (#62) confine the host knowledge to one step and everything after
+// it is carrier-free. So there IS a partly-portable middle now; it is built, not
+// given, and `reads.test.ts` pins it by reading one step on three hosts.
+//
 // WHAT TRAVELS IS WHAT A STEP DERIVES, NOT WHEN ITS CODE RUNS. The unit that
 // moves between hosts is really the STEP — a plain function reading no ctx goes
 // into an Express scope and a Hono one unchanged — and there is exactly one
@@ -36,7 +45,8 @@ import { trpc } from './trpc/index.ts'
 // guard reading a header has to name a carrier, and from there it belongs to
 // one host. The four share no arg name (`req`/`res`, `c`, `input`/`ctx`,
 // `request`/`params`), so there is no partly-portable middle: a scope reads
-// nothing of the run, or it reads one host's.
+// nothing of the run, or it reads one host's — or it reads an ENTRY, which is
+// the third answer #62 added and the reason the paragraph above exists.
 const stamp = scope().step(
   async ({ rid }: { readonly rid: string }, _ctx, next: Next<{ rid: string }>) => next({ rid }),
 )
