@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { describe, expectTypeOf, it } from 'vitest'
-import { scope, type Next } from '../index.ts'
+import { scope } from '../index.ts'
 import { fail, guards, type StandardSchemaV1 } from './index.ts'
 import type { BodyOf } from '../reads.ts'
 
@@ -141,11 +141,26 @@ describe('the inlined spec is satisfied structurally', () => {
 })
 
 describe('the extension is added, never stepped', () => {
-  it('a verb call is what grows the fold', () => {
-    const bare = scope<{}>().extend(guards)
-    expectTypeOf(bare.guard).toBeFunction()
-    // pinned at runtime in `index.test.ts`: `.extend` adds no step
-    void (async (_a: {}, _c: {}, next: Next<{}>) => next({}))
+  // What this claims is that `.extend` acts on the BUILDER and the CALL acts on
+  // the fold — so it has to be read where the fold is, which is what the scope
+  // yields. Asserting that the verb is a function said nothing: it holds
+  // whatever `.extend` did.
+  const bare = scope<{ readonly token: string }>()
+  const extended = bare.extend(guards)
+
+  it('extending changes nothing the fold hands back', () => {
+    expectTypeOf(extended).returns.resolves.toEqualTypeOf<
+      Awaited<ReturnType<typeof bare>>
+    >()
+  })
+
+  it('and calling a verb is what changes it', () => {
+    const grown = extended.guard(
+      (_a: {}, { token }) => (token ? { actor: token } : fail()),
+      () => 'stopped' as const,
+    )
+
+    expectTypeOf(grown).returns.resolves.toEqualTypeOf<'stopped'>()
   })
 })
 
