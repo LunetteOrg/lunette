@@ -428,3 +428,86 @@ describe('Express `body`: what a pre-parsed body cannot carry', () => {
     expect(res.body.m).toBe('the body was sent as nothing, not form')
   })
 })
+
+describe('what a body must be called, and must actually be', () => {
+  const action = rr.reactRouter({}).action(
+    scope(rr.reactRouterCarrier())
+      .step(rr.body('json', (issues) => ({ error: issues[0]?.message })))
+      .step(async (_a: {}, { body }) => ({ got: body })),
+  )
+
+  it('refuses JSON bytes sent under a content-type the step did not ask for', async () => {
+    // `text/plain` is one of the three content-types a browser may send
+    // cross-origin with NO preflight, so a JSON endpoint accepting it is
+    // reachable by a forged cross-site request that `application/json` would
+    // have stopped. Bytes that happen to parse are not a licence.
+    const out = await action({
+      request: new Request('http://h/', {
+        method: 'POST',
+        headers: { 'content-type': 'text/plain' },
+        body: '{"title":"hello"}',
+      }),
+      params: {},
+    })
+
+    expect(out).toEqual({ error: 'the body was sent as text/plain, not json' })
+  })
+
+  it('refuses bytes that are not valid UTF-8, rather than decoding them to mojibake', async () => {
+    // A non-fatal decoder REPLACES every invalid byte with U+FFFD and hands back
+    // a string: the payload arrived damaged and failed later, as a parse error
+    // if it was lucky and as silently wrong data if the damage was inside a
+    // string.
+    const invalid = new Uint8Array([0x7b, 0x22, 0x61, 0x22, 0x3a, 0x22, 0xff, 0xfe, 0x22, 0x7d])
+
+    const out = await action({
+      request: new Request('http://h/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: invalid,
+      }),
+      params: {},
+    })
+
+    expect(out).toEqual({ error: 'the body is not valid UTF-8' })
+  })
+})
+
+describe('Express `body`: a pre-parsed body may not be parsed at all', () => {
+  it('parses the BYTES `express.raw()` left behind, instead of forwarding a Buffer', async () => {
+    // `express.raw()` and `express.text()` leave the bytes on `req.body`, which
+    // is exactly what this step wanted. Reading them as a value handed a
+    // `Buffer` on as if it were JSON, and every field access downstream failed
+    // for no stated reason.
+    const app = expressLib()
+    app.use(expressLib.raw({ type: 'application/json' }))
+    app.post(
+      '/',
+      ex.express({}).handler(
+        scope(ex.expressCarrier())
+          .step(ex.body('json', (issues, ctx) => ctx.res.status(422).json({ m: issues[0]?.message })))
+          .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
+      ),
+    )
+
+    const res = await request(app).post('/').set('content-type', 'application/json').send('{"a":1}')
+    expect(res.body).toEqual({ got: { a: 1 } })
+  })
+
+  it('and still reports a malformed one through `onError`', async () => {
+    const app = expressLib()
+    app.use(expressLib.text({ type: 'application/json' }))
+    app.post(
+      '/',
+      ex.express({}).handler(
+        scope(ex.expressCarrier())
+          .step(ex.body('json', (issues, ctx) => ctx.res.status(422).json({ m: issues[0]?.message })))
+          .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
+      ),
+    )
+
+    const res = await request(app).post('/').set('content-type', 'application/json').send('nope')
+    expect(res.status).toBe(422)
+    expect(res.body.m).toBe('the body is not valid JSON')
+  })
+})

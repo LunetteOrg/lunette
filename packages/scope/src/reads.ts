@@ -136,18 +136,51 @@ export const encodingMatches = (contentType: string | undefined, encoding: Encod
 export const isMultipart = (contentType: string | undefined): boolean =>
   mediaTypeOf(contentType) === 'multipart/form-data'
 
-export const readBody = async (request: Request, encoding: Encoding): Promise<Read> => {
-  const bytes = await request.arrayBuffer()
+// THE BYTES ARE THE INPUT, not a request, and that is what lets Express reach
+// this without building a throwaway `Request` around a buffer it already holds.
+// Only the `form` branch needs one, and only because `formData()` is the
+// platform's own multipart reader and there is no other door to it.
+//
+// The CONTENT-TYPE is checked FIRST, on every path. It used to be checked only
+// where a parser had run before us, on the reasoning that elsewhere a mismatch
+// fails in the parse itself — true for form, and NOT true for json: bytes that
+// happen to parse were accepted whatever the client called them. That gap has a
+// name, and it is not tidiness. `text/plain` is one of the three content-types a
+// browser may send cross-origin with NO preflight, so a JSON endpoint that
+// accepts it is reachable by a forged cross-site request that
+// `application/json` would have stopped at the preflight. Requiring the encoding
+// the step asked for is the cheap half of CSRF that costs nothing to hold.
+export const parseBody = (
+  bytes: ArrayBuffer | Uint8Array,
+  contentType: string | undefined,
+  encoding: Encoding,
+): Read | Promise<Read> => {
+  if (!encodingMatches(contentType, encoding)) {
+    // `||` and not `??`: a header that is PRESENT AND EMPTY is `''`.
+    return { issues: [{ message: `the body was sent as ${contentType || 'nothing'}, not ${encoding}` }] }
+  }
 
   if (encoding === 'json') {
-    // UTF-8, and any `charset` on the request is deliberately ignored: RFC 8259
-    // requires JSON exchanged between systems to be encoded in UTF-8, so a
-    // payload in anything else is malformed at the protocol level and "not valid
-    // JSON" is the truthful answer rather than a false one. Decoding whatever a
-    // client claims would be implementing a violation. The `form` branch needs
-    // none of this — it hands the bytes back to the platform's own reader with
-    // the original content-type, charset included.
-    const text = new TextDecoder().decode(bytes)
+    // `fatal: true`, and the default is why: a non-fatal decoder REPLACES every
+    // invalid byte with U+FFFD and hands back a string, so a payload that is not
+    // UTF-8 arrived as mojibake and failed later — as a parse error if it was
+    // lucky, and as silently wrong data if the damage happened inside a string.
+    // The comment below used to claim the refusal that the decoder was not
+    // performing.
+    //
+    // Any `charset` the client names is ignored on purpose: RFC 8259 requires
+    // JSON exchanged between systems to be UTF-8, so a payload in anything else
+    // is malformed at the protocol level and "not valid JSON" is the truthful
+    // answer. Decoding whatever a client claims would be implementing a
+    // violation. The `form` branch needs none of this — the bytes go back to the
+    // platform's own reader with the content-type intact, charset included.
+    let text: string
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    } catch {
+      return { issues: [{ message: 'the body is not valid UTF-8' }] }
+    }
+
     try {
       return { value: JSON.parse(text) }
     } catch {
@@ -155,20 +188,36 @@ export const readBody = async (request: Request, encoding: Encoding): Promise<Re
     }
   }
 
-  try {
-    const form = await new Request('http://body.invalid', {
-      method: 'POST',
-      headers: { 'content-type': request.headers.get('content-type') ?? '' },
-      body: bytes,
-    }).formData()
-
-    const out = bag<string | File>()
-    for (const [name, value] of form) out[name] = value
-    return { value: out }
-  } catch {
-    return { issues: [{ message: 'the body is not a valid form payload' }] }
-  }
+  return new Request('http://body.invalid', {
+    method: 'POST',
+    headers: { 'content-type': contentType ?? '' },
+    body: bytes,
+  })
+    .formData()
+    .then(
+      (form) => {
+        const out = bag<string | File>()
+        for (const [name, value] of form) out[name] = value
+        return { value: out } as Read
+      },
+      () => ({ issues: [{ message: 'the body is not a valid form payload' }] }) as Read,
+    )
 }
+
+export const readBody = async (request: Request, encoding: Encoding): Promise<Read> =>
+  parseBody(await request.arrayBuffer(), request.headers.get('content-type') ?? undefined, encoding)
+
+// The tail every `body` step ends on, shared so the two families cannot answer
+// a read differently.
+export const finishRead = async <E extends Encoding, Ctx, R>(
+  read: Read,
+  ctx: Ctx,
+  onError: (issues: readonly StandardIssue[], ctx: Ctx) => R,
+  next: Next<{ body: BodyOf<E> }>,
+): Promise<Passed | Awaited<R>> =>
+  'issues' in read
+    ? ((await onError(read.issues, ctx)) as Awaited<R>)
+    : next({ body: read.value as BodyOf<E> })
 
 // ── the four steps, built ONCE for the whole Fetch family ────────────────────
 // Hono and React Router differ in exactly one thing: where the `Request` is
@@ -198,9 +247,6 @@ export const fetchReads = <Args extends object>(requestOf: (ctx: Args) => Reques
       encoding: E,
       onError: (issues: readonly StandardIssue[], ctx: Args) => R,
     ) =>
-    async (_app: {}, ctx: Args, next: Next<{ body: BodyOf<E> }>): Promise<Passed | Awaited<R>> => {
-      const read = await readBody(requestOf(ctx), encoding)
-      if ('issues' in read) return onError(read.issues, ctx) as Awaited<R>
-      return next({ body: read.value as BodyOf<E> })
-    },
+    async (_app: {}, ctx: Args, next: Next<{ body: BodyOf<E> }>): Promise<Passed | Awaited<R>> =>
+      finishRead<E, Args, R>(await readBody(requestOf(ctx), encoding), ctx, onError, next),
 })

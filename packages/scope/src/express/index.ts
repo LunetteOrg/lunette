@@ -17,10 +17,11 @@ import type { StandardIssue } from '../guard/index.ts'
 import {
   cookiesFrom,
   encodingMatches,
+  finishRead,
   headersFrom,
   isMultipart,
+  parseBody,
   queryFrom,
-  readBody,
   type BodyOf,
   type Cookies,
   type Encoding,
@@ -462,17 +463,32 @@ export const body =
     ctx: { readonly req: Request; readonly res: Response },
     next: Next<{ body: BodyOf<E> }>,
   ): Promise<Passed | Awaited<R>> => {
-    if (ctx.req.body !== undefined) {
-      // A PARSED BODY DOES NOT SAY WHAT PARSED IT. `express.json()` mounted
-      // app-wide leaves an object behind whatever the route asked for, so
-      // `body('form')` would hand a JSON payload on as form fields — no error,
-      // no `onError`, wrong data. The header the client sent is the only
-      // evidence left once the stream is gone, so it is what gets checked.
-      const sent = ctx.req.headers['content-type']
+    const sent = ctx.req.headers['content-type']
 
+    if (ctx.req.body !== undefined) {
+      // A PARSED BODY DOES NOT SAY WHAT PARSED IT, and it may not be parsed at
+      // all: `express.raw()` and `express.text()` leave the BYTES behind, which
+      // is exactly the input this step wanted. So the shape decides. Bytes go
+      // through the same parse as a stream we read ourselves — reading them as a
+      // value would have handed a `Buffer` on as if it were JSON, with every
+      // field access downstream failing for no stated reason.
+      if (typeof ctx.req.body === 'string' || ctx.req.body instanceof Uint8Array) {
+        return finishRead<E, typeof ctx, R>(
+          await parseBody(
+            typeof ctx.req.body === 'string' ? new TextEncoder().encode(ctx.req.body) : ctx.req.body,
+            sent,
+            encoding,
+          ),
+          ctx,
+          onError,
+          next,
+        )
+      }
+
+      // A real value, then: there are no bytes left to check it against, so the
+      // claim rides the only evidence remaining, the header the client sent.
       if (!encodingMatches(sent, encoding)) {
-        // `||` and not `??`: a header that is PRESENT AND EMPTY is `''`, which
-        // `??` passes straight through into the message.
+        // `||` and not `??`: a header that is PRESENT AND EMPTY is `''`.
         return onError(
           [{ message: `the body was sent as ${sent || 'nothing'}, not ${encoding}` }],
           ctx,
@@ -497,15 +513,9 @@ export const body =
     const chunks: Buffer[] = []
     for await (const chunk of ctx.req) chunks.push(chunk as Buffer)
 
-    const read = await readBody(
-      new globalThis.Request('http://body.invalid', {
-        method: 'POST',
-        headers: { 'content-type': ctx.req.headers['content-type'] ?? '' },
-        body: Buffer.concat(chunks),
-      }),
-      encoding,
-    )
+    // The bytes go straight in: `parseBody` takes bytes, so nothing is wrapped
+    // in a throwaway `Request` here just to be unwrapped there.
+    const read = await parseBody(Buffer.concat(chunks), sent, encoding)
 
-    if ('issues' in read) return onError(read.issues, ctx) as Awaited<R>
-    return next({ body: read.value as BodyOf<E> })
+    return finishRead<E, typeof ctx, R>(read, ctx, onError, next)
   }

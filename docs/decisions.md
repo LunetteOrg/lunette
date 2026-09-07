@@ -2401,6 +2401,23 @@ step past the ctx gate. The line falls exactly where the gate already is.
 that can be malformed. A query string does not fail to parse, a malformed cookie
 is skipped, headers do not fail.
 
+**The encoding a step asked for is REQUIRED, on every path.** It was checked only
+where a parser had run before us, on the reasoning that elsewhere a mismatch
+fails in the parse itself. True for `form`, and false for `json`: bytes that
+happen to parse were accepted whatever the client called them. The gap has a
+name — `text/plain` is one of the three content-types a browser may send
+cross-origin with NO preflight, so a JSON endpoint accepting it is reachable by a
+forged cross-site request that `application/json` would have stopped at the
+preflight. Requiring what the step asked for is the cheap half of CSRF, and it
+costs nothing to hold.
+
+**A pre-parsed body may not be parsed at all**, so the SHAPE decides and not the
+header alone. `express.raw()` and `express.text()` leave the BYTES on `req.body`,
+which is exactly this step's input, so they go through the same parse as a stream
+read here; only a real value falls back to the header, since there is nothing
+left to check it against. Read as a value, `express.raw()`'s `Buffer` was handed
+on as if it were JSON.
+
 **Reading and parsing fail for OPPOSITE reasons**, so they are written apart
 rather than under one `try`: `arrayBuffer()` is I/O and its rejection is
 infrastructure, left to propagate; parsing bytes in hand is the client's mistake
