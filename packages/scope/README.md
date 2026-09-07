@@ -15,10 +15,11 @@ core stays dependency-free for anyone importing it:
 
 | subpath | the mount factory | it hands back |
 |---|---|---|
-| `@lntt/scope/express` | `express(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it |
-| `@lntt/scope/hono` | `hono(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it |
+| `@lntt/scope/express` | `express(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it — plus `query`, `cookies`, `headers`, `body(encoding, onError)` |
+| `@lntt/scope/hono` | `hono(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it — plus `query`, `cookies`, `headers`, `body(encoding, onError)` |
 | `@lntt/scope/trpc` | `trpc(t, deps)` | `{ carrier, procedure, middleware }` — a resolver and a middleware, the two tRPC has |
-| `@lntt/scope/react-router` | `reactRouter(deps)` | `{ loader, action }` — two shapes, never a middleware |
+| `@lntt/scope/react-router` | `reactRouter(deps)` | `{ loader, action }` — two shapes, never a middleware — plus `query`, `cookies`, `headers`, `body(encoding, onError)` |
+| `@lntt/scope/guard` | — | `{ guards, fail }` — the extension: `.guard(check, onError)` adds an entry, `.refine(name, check, onError)` replaces one, `.validate(name, schema, onError)` is refine with the check given by a Standard Schema |
 
 tRPC's carrier comes OUT of the factory rather than being imported beside it,
 because its context is the APPLICATION's type and `t` already holds it: pass the
@@ -121,17 +122,36 @@ The fold produces nothing of its own on top of that: a scope hands back what its
 leaf RETURNED, and whether that went well is the carrier's statement, not the
 core's (§42). There is no `Outcome`, no `Abort`, and no branch to unwrap.
 
+## Reading a request, and refining what was read
+
+The two halves are deliberately apart. An **extension EXTRACTS**: it populates a
+ctx entry from the host's own request, with the right encoding, and it knows
+which host it is on. A **verb REFINES**: it replaces an entry with a narrower
+one, and knows nothing about any host.
+
+```ts
+scope(expressCarrier())
+  .extend(guards)
+  .step(body('json', (issues, { res }) => res.status(400).json({ issues })))
+  .validate('body', postSchema, (issues, { res }) => res.status(422).json({ issues }))
+  .step(async (_app: {}, { body, res }) => res.status(201).json({ title: body.title }))
+```
+
+The extraction is per host; **everything downstream of it is not**. A step
+annotating `{ query: Query }` names no carrier, so it mounts wherever a `query`
+entry was populated — which is the only way a request-reading step travels
+between hosts.
+
+`onError` is mandatory and there is no default, because the only carrier-free
+one would be to throw, and a thrown error means infrastructure. What it returns
+joins what the scope can yield, so a mount refuses at compile time an `onError`
+building something its host will never send.
+
 ## Not here yet
 
-Two things the carriers deliberately leave out, so that neither is designed
-against a surface still in motion:
-
-- **guards** as a named shape, beyond "a step that stops" — #67. Every test in
-  this package writes its own guard inline for exactly that reason.
-- **validation**, and with it the input contract — #64. It comes back as a step
-  factory, per entry rather than per carrier.
-
-Extensions and the worked examples come back after those, on the settled core.
+- **composable scopes** — a guard reusable across carriers as a unit, rather
+  than a step at a time (#67).
+- **the worked examples** (#59), which come last and are the real proof.
 
 ## Status
 

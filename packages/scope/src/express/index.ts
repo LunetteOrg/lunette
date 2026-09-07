@@ -12,7 +12,23 @@
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
 import type { ParamsDictionary, RouteParameters } from 'express-serve-static-core'
-import type { DepGuard, ResultOf, Scope, State } from '../index.ts'
+import type { DepGuard, Next, Passed, ResultOf, Scope, State } from '../index.ts'
+import type { StandardIssue } from '../guard/index.ts'
+import {
+  cookiesFrom,
+  encodingMatches,
+  finishRead,
+  headersFrom,
+  isMultipart,
+  parseBody,
+  queryFrom,
+  wrongEncoding,
+  type BodyOf,
+  type Cookies,
+  type Encoding,
+  type Headers_ as HeaderRecord,
+  type Query,
+} from '../reads.ts'
 
 // `Params` is what the scope says the URL carries. It defaults to Express's own
 // wide dictionary — a scope that names nothing reads `string | undefined` and
@@ -364,3 +380,157 @@ export const express = <App extends object>(deps: App) => {
       },
   }
 }
+
+// ── the read extensions ──────────────────────────────────────────────────────
+// PLAIN STEPS, not verbs: these ADD a ctx entry, and a verb is what may REPLACE
+// one (`@lntt/scope/guard`). The reasoning is written out in the Hono carrier.
+//
+// Express is its own family: `req` is a Node message, not a Fetch `Request`, so
+// the readers are handed the two shapes they really need — a `URLSearchParams`
+// and header pairs — and the adaptation happens here, in two lines, rather than
+// a Fetch shim being built around a Node stream.
+export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from '../reads.ts'
+
+// `req.originalUrl` rather than `req.url`: under a mounted router the second is
+// rewritten relative to the mount, and the query string survives both — but the
+// first is what the client actually sent, which is what a step reading `query`
+// means. The base is a placeholder; only the search part is read.
+export const query = async (
+  _app: {},
+  { req }: { readonly req: Request },
+  next: Next<{ query: Query }>,
+) => next({ query: queryFrom(new URL(req.originalUrl ?? req.url, 'http://host.invalid').searchParams) })
+
+export const headers = async (
+  _app: {},
+  { req }: { readonly req: Request },
+  next: Next<{ headers: HeaderRecord }>,
+) =>
+  next({
+    headers: headersFrom(
+      Object.entries(req.headers).map(
+        ([name, value]) => [name, Array.isArray(value) ? value.join(', ') : (value ?? '')] as const,
+      ),
+    ),
+  })
+
+export const cookies = async (
+  _app: {},
+  { req }: { readonly req: Request },
+  next: Next<{ cookies: Cookies }>,
+) => next({ cookies: cookiesFrom(req.headers.cookie) })
+
+// TWO WORLDS, and the branch is unavoidable rather than a shortcut. If a body
+// parser is already mounted — `express.json()` app-wide is the common case — it
+// has CONSUMED the stream, so reading it again yields nothing; its result is
+// what the route really has, and using it is the only correct answer. With no
+// parser mounted the stream is ours, and then the read and the parse are split
+// the way they are everywhere else: collecting the chunks is I/O and throws,
+// parsing the bytes in hand comes back as issues.
+//
+// WHOEVER PARSES FIRST OWNS THE ERROR PATH, and that is the whole of what a
+// mounted parser changes. Measured, and pinned in `reads.test.ts`:
+//
+//                        with `express.json()`        without
+//   valid JSON           the leaf, from `req.body`     the leaf, read here
+//   INVALID JSON         Express's own 400 — this      this `onError`, 422
+//                        `onError` never runs, the
+//                        parser threw before the
+//                        scope existed
+//   EMPTY body           the leaf, with `{}`           this `onError`, 422
+//   wrong encoding       this `onError` (below)        this `onError`
+//
+// So DO NOT MOUNT A BODY PARSER on a route whose scope reads the body. Express
+// scopes middleware to a path, so a legacy route can keep `express.json()` while
+// one with a scope does not — and then this carrier behaves as the other three
+// do, with `onError` as the single error path. Mounted anyway, nothing is
+// unsafe: the encoding check below closes the case where the data would be
+// WRONG, and what is left is which of two correct answers the client gets.
+//
+// WITH ONE COST STILL OWED, and it is not `express.json()`'s: the read below has
+// no size limit, where that parser has 100kB by default. Node has no default of
+// its own either, so following the advice above today means an unbounded read.
+// A limit with a default is #91.
+export const body =
+  <E extends Encoding, R>(
+    encoding: E,
+    onError: (
+      issues: readonly StandardIssue[],
+      ctx: { readonly req: Request; readonly res: Response },
+    ) => R,
+  ) =>
+  async (
+    _app: {},
+    ctx: { readonly req: Request; readonly res: Response },
+    next: Next<{ body: BodyOf<E> }>,
+  ): Promise<Passed | Awaited<R>> => {
+    const sent = ctx.req.headers['content-type']
+
+    if (ctx.req.body !== undefined) {
+      // A PARSED BODY DOES NOT SAY WHAT PARSED IT, and it may not be parsed at
+      // all: `express.raw()` and `express.text()` leave the BYTES behind, which
+      // is exactly the input this step wanted. So the shape decides. Bytes go
+      // through the same parse as a stream we read ourselves — reading them as a
+      // value would have handed a `Buffer` on as if it were JSON, with every
+      // field access downstream failing for no stated reason.
+      if (typeof ctx.req.body === 'string' || ctx.req.body instanceof Uint8Array) {
+        return finishRead<E, typeof ctx, R>(
+          await parseBody(
+            typeof ctx.req.body === 'string' ? new TextEncoder().encode(ctx.req.body) : ctx.req.body,
+            sent,
+            encoding,
+          ),
+          ctx,
+          onError,
+          next,
+        )
+      }
+
+      // A real value, then: there are no bytes left to check it against, so the
+      // claim rides the only evidence remaining, the header the client sent.
+      if (!encodingMatches(sent, encoding)) {
+        return onError([wrongEncoding(sent, encoding)], ctx) as Awaited<R>
+      }
+
+      if (isMultipart(sent)) {
+        return onError(
+          [
+            {
+              message:
+                'a multipart body was parsed by other middleware: its files are not on `req.body`, so this entry would be half the payload',
+            },
+          ],
+          ctx,
+        ) as Awaited<R>
+      }
+
+      return next({ body: ctx.req.body as BodyOf<E> })
+    }
+
+    // A NODE STREAM IS READ ONCE, and `req.body === undefined` does not say WHY.
+    // No parser mounted is one reason; another step of this same scope having
+    // read `ctx.req` itself — a signature check over the raw bytes, say, that
+    // never wrote a body back — is the other, and there the stream is exhausted.
+    // Iterating it then yields zero chunks and the parse reports "not valid
+    // JSON": the author's composition mistake dressed as the client's.
+    //
+    // It THROWS rather than reaching `onError`. Under the error convention a
+    // returned value is the client's business and a thrown one is the
+    // infrastructure's — and a body read twice in one scope is neither the
+    // client's fault nor anything they can fix. The author needs a 500 and a
+    // sentence, not a 400 blaming the payload.
+    if (ctx.req.readableDidRead) {
+      throw new Error(
+        'the request stream was already read: something earlier in this scope consumed `req` without leaving a body, so there is nothing left for `body()` to parse',
+      )
+    }
+
+    const chunks: Buffer[] = []
+    for await (const chunk of ctx.req) chunks.push(chunk as Buffer)
+
+    // The bytes go straight in: `parseBody` takes bytes, so nothing is wrapped
+    // in a throwaway `Request` here just to be unwrapped there.
+    const read = await parseBody(Buffer.concat(chunks), sent, encoding)
+
+    return finishRead<E, typeof ctx, R>(read, ctx, onError, next)
+  }

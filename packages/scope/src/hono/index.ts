@@ -7,6 +7,7 @@
 import type { Context, Next } from 'hono'
 import type { BlankEnv, Env, ParamKeys } from 'hono/types'
 import type { DepGuard, ResultOf, Scope, State } from '../index.ts'
+import { fetchReads } from '../reads.ts'
 
 // `Path` is the ROUTE PATTERN the scope is written for, and it is what makes
 // `c.req.param('id')` typed — Hono's own `Context<Env, Path>` does the reading,
@@ -230,3 +231,26 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
     },
   }
 }
+
+// ── the read extensions ──────────────────────────────────────────────────────
+// PLAIN STEPS, not verbs: these ADD a ctx entry, and a verb is what may REPLACE
+// one (`@lntt/scope/guard`). The line falls where the core's own gate already
+// is, so it is not a matter of taste.
+//
+// They live here, in the host's own subpath, because there is no generic way to
+// read a request. What is generic is the ENTRY they populate: a step annotating
+// `{ query: Query }` names no carrier and mounts wherever a `query` was
+// populated, which is what these exist to make possible.
+
+export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from '../reads.ts'
+
+// `c.req.raw` is the Fetch `Request` Hono is built on, so these read the same
+// source React Router's do — ONE implementation for the whole Fetch family, in
+// `reads.ts`, and this subpath passes the one line that differs: where the
+// request is found.
+const reads = fetchReads((ctx: { readonly c: Context<any, any> }) => ctx.c.req.raw)
+
+export const query = reads.query
+export const headers = reads.headers
+export const cookies = reads.cookies
+export const body = reads.body

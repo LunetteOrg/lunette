@@ -12,6 +12,7 @@
 
 import type { Params } from 'react-router'
 import type { DepGuard, ResultOf, Scope, State } from '../index.ts'
+import { fetchReads } from '../reads.ts'
 
 // `Par` is what the scope says the route supplies. It defaults to React
 // Router's own `Params`, whose values are `string | undefined`; a route module
@@ -52,3 +53,21 @@ export const reactRouter = <App extends object>(deps: App) => {
 
   return { loader: mount, action: mount }
 }
+
+// ── the read extensions ──────────────────────────────────────────────────────
+// PLAIN STEPS, not verbs: these ADD a ctx entry, and a verb is what may REPLACE
+// one (`@lntt/scope/guard`). The reasoning is written out in the Hono carrier;
+// these two are the SAME FAMILY — both read a Fetch `Request` — so what differs
+// is only where the request is found, and the readers themselves are shared.
+export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from '../reads.ts'
+
+// ONE implementation for the whole Fetch family, in `reads.ts` — Hono reads the
+// same source through `c.req.raw`. This subpath passes the one line that
+// differs. A loader has no body; an ACTION does, and the same factory serves
+// both since the step reads whichever request the run brought.
+const reads = fetchReads((ctx: { readonly request: Request }) => ctx.request)
+
+export const query = reads.query
+export const headers = reads.headers
+export const cookies = reads.cookies
+export const body = reads.body

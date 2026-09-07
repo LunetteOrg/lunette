@@ -398,7 +398,17 @@ export type ResultOf<Sc> = ValueOf<StateOf<Sc>['returns']>
 // type, so a BASE — steps with no leaf, the shape a shared `gated()` has —
 // swallows it and surfaces it in whichever file finally uses the scope, naming
 // a step its author never wrote. That trade is worse than this hole.
-type CtxGate<S extends State, Add, U = Extract<keyof Add, keyof S['acc']>> = [U] extends [never]
+// EXPORTED because an extension owes the same verdict on its own adding verbs:
+// a verb goes PAST this gate — that bypass is what lets one replace an entry —
+// so a verb that only adds has to say it itself, and saying it with a second
+// copy of the formula would be two things to keep aligned. The MESSAGE stays the
+// caller's, since a verb can point at its own sibling; the comparison is here.
+//
+// The `Add = any` limit above is inherited with it, and cannot be closed there
+// either: assignability short-circuits before an intersected gate is read.
+export type Collides<S extends State, Add> = Extract<keyof Add, keyof S['acc']>
+
+type CtxGate<S extends State, Add, U = Collides<S, Add>> = [U] extends [never]
   ? unknown
   : `⛔ this ctx key is already populated: ${U & string} — an extension may REPLACE it, a step may not`
 
