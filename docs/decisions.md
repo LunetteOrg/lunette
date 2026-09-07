@@ -2613,3 +2613,43 @@ Each carries the same pre-#60 hand-rolled carrier and needs the same treatment;
 they land as their own slices of #59 rather than in this one, for the reason
 `docs/design/scope-api.md` gives for slicing at all — reviewing four hosts'
 worth of changes as one PR is the shape to avoid.
+
+### 52. Route params via `guard`, not the carrier's type argument — a compile-time check traded for a runtime one, deliberately
+
+**Decision.** `examples/express`'s `getPost`/`publishPost` read `:id` with a
+`guard`-based `readId` (a Zod schema over `req.params`), not
+`expressCarrier<{ id: string }>()`. This is the SHARED pattern going forward
+for a param that also wants a real format check, not merely a name.
+
+**Both forms were measured, side by side, before choosing.** A route
+mounted on a pattern that does not supply the param the scope reads:
+
+| | `expressCarrier<{ id: string }>()` + `route`'s `PathGate` | `guard(readId, onError)` |
+|---|---|---|
+| wrong/missing pattern | refused AT COMPILE TIME, naming the missing param | compiles; the FIRST request answers 400 |
+| the param's FORMAT (e.g. must be numeric) | unchecked — a bare `string` cast, `/posts/abc` reached the domain lookup | checked, by the schema |
+| where "id" is written | the carrier's type argument (type-only, no runtime cost) | the check function (real parse, every request) |
+
+Verified both directions: a pattern-vs-declaration mismatch WAS caught at
+compile time by the carrier form (measured: `route('/posts/:postId', sc)`
+against a scope declaring `{ id: string }` — refused, `⛔ this route does
+not supply a param the scope reads: id`); the SAME mismatch, with a bare
+`expressCarrier()` and `readId` instead, compiles and answers 400 on the
+first real request, because the schema fails to find `id` in `req.params` at
+all — a different failure than the "wrong format" case, same status.
+
+**Chosen because the format check is the more useful of the two guarantees
+for a param actually worth validating**, and the two are not exclusive in
+principle — a scope could carry both the carrier's declared `Params` AND a
+`guard`-based schema, at the cost of naming `id` in three places (the
+carrier, the schema, the route pattern) instead of two. Not done here: this
+example's `:id` is a plain string in the domain layer, and the schema's
+format check is the property worth having; a route with no schema-worthy
+param keeps the carrier form (`createPost`'s `expressCarrier()`, bare,
+carries none).
+
+**`guard` here is the reusable UNIT #67 already established**, not a new
+mechanism: `withId = scope(expressCarrier()).extend(guards).guard(readId,
+onError)` is built once, and `getPost` and `publishPost` both branch from it
+with `.step(...)` — the same shape `examples/two-chains`' admin gate uses on
+a whole product, here on one shared param instead.

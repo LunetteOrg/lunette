@@ -9,9 +9,23 @@ import { withRequestId } from './request-id.ts'
 
 const { route, mw } = express(deps)
 
-// The SHARED guard: carrier-free, reading only what `headers` (#62) already
-// populated. `guard`'s check DERIVES; `onError` STOPS, and is this host's own
-// answer (§47 — the same split every host's own gate takes).
+// The SHARED guards: carrier-free where they can be. `guard`'s check DERIVES;
+// `onError` STOPS, and is this host's own answer (§47 — the same split every
+// host's own gate takes).
+//
+// `readId` REPLACES the compile-time route ⟷ pattern check
+// (`expressCarrier<{ id: string }>()` + `route`'s `PathGate`) with a
+// RUNTIME one, deliberately: a route mounted with no `:id` at all now fails
+// the FIRST request with 400 instead of being refused at compile time — but
+// the schema also checks the param's FORMAT, which the carrier's bare
+// `string` cast never did (`/posts/abc` reached the domain lookup before;
+// now it never does). Traded, not lost; see the comparison this carried
+// before landing, `docs/decisions.md` decision 52.
+const readId = (_app: {}, { req }: { readonly req: { params: unknown } }) => {
+  const result = z.object({ id: z.string().regex(/^\d+$/, 'must be numeric') }).safeParse(req.params)
+  return result.success ? result.data : fail(result.error.issues.map((i) => ({ message: i.message })))
+}
+
 const findActor = (_app: {}, { headers: h }: { readonly headers: HeaderEntries }) =>
   h['x-actor-id'] ? { actor: h['x-actor-id'] } : fail([{ message: 'unauthorized' }])
 
@@ -20,10 +34,18 @@ const CreatePostSchema = z.object({
   content: z.string().min(1),
 })
 
+// A SCOPE VALUE IS THE RECYCLABLE UNIT (#67, `docs/design/scope-api.md`):
+// `withId` is built once, and both routes below branch from it — the same
+// pattern `examples/two-chains`' admin gate uses, here on a route rather
+// than a whole product.
+const withId = scope(expressCarrier())
+  .extend(guards)
+  .guard(readId, (issues, { res }) => res.status(400).json({ issues }))
+
 export const getPost = route(
   '/posts/:id',
-  scope(expressCarrier<{ id: string }>()).step(async ({ posts }: Deps, { req, res }) => {
-    const result = posts.getPost(req.params.id)
+  withId.step(async ({ posts }: Deps, { id, res }) => {
+    const result = posts.getPost(id)
     if ('notFound' in result) return res.status(404).json({ error: 'not found' })
     return res.json(result)
   }),
@@ -31,12 +53,11 @@ export const getPost = route(
 
 export const publishPost = route(
   '/posts/:id/publish',
-  scope(expressCarrier<{ id: string }>())
-    .extend(guards)
+  withId
     .step(headers)
     .guard(findActor, (issues, { res }) => res.status(401).json({ issues }))
-    .step(async ({ posts }: Deps, { req, res }) => {
-      const result = posts.publishPost(req.params.id)
+    .step(async ({ posts }: Deps, { id, res }) => {
+      const result = posts.publishPost(id)
       if ('notFound' in result) return res.status(404).json({ error: 'not found' })
       // `res.redirect` itself returns `void`, not `Response` — returning its
       // call directly would leave this branch `void`, and `AnswerGate`
