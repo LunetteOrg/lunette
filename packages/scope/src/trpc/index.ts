@@ -92,7 +92,8 @@ const toNext =
 // transport made both, and the request that carried them is gone by the time a
 // resolver sees them. There is nothing for a `body` step to read, and offering
 // one would be a name over an empty box. `.input(schema)` has already read AND
-// validated it, which is why this carrier declares `In` instead.
+// validated it, and `validate('input', schema, onError)` is how a scope says
+// what it reads of the result.
 //
 // THE URL IS RIGHT THERE, and that refusal is ADVISORY. A tRPC transport does
 // have a URL, and a step could parse one by hand off whatever the app put on its

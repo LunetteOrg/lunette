@@ -52,9 +52,26 @@ before `next({ ctx })`, so the narrowed value would never reach the procedure
 downstream, and the mount says so. A middleware that must read the input narrows
 it by hand.
 
-**No carrier declares what a scope reads.** A carrier's type arguments are for
-what the run BRINGS — Hono's env, React Router's typegen params — and what a
-scope reads of an entry is the schema's to say, on every host.
+**No carrier declares what a scope reads**, on any of the four. A carrier's type
+arguments are for what the run BRINGS — Hono's env is the only one left — and
+what a scope reads of an entry is the schema's to say.
+
+The reason is not tidiness: a type argument is fixed at `scope(carrier<X>())`,
+the first call, so every branch inherits it and one base value could not serve
+two routes reading different params. **A verb is per branch; a type argument is
+per scope** — and a base value others extend is the unit this library is built
+around.
+
+```ts
+const base   = scope(carrier()).extend(guards).step(shared)   // one gate, one set of reads
+const byId   = base.validate('params', z.object({ id:   z.string() }), onErr)
+const bySlug = base.validate('params', z.object({ slug: z.string() }), onErr)
+```
+
+On React Router, where no pattern ever reaches a mount, the same schema rides
+the mount's own parameter — so a route module's
+`satisfies (a: Route.LoaderArgs) => unknown` refuses a route supplying something
+else, which is a check it never had.
 
 On Express and Hono a scope is a VALUE and the mount is the host's own call:
 

@@ -2705,11 +2705,12 @@ schema and now serves both hosts.
 
 ### 53. The route gate reads the SCHEMA, and no carrier declares params
 
-**Decision.** NO CARRIER DECLARES WHAT A SCOPE READS OF AN ENTRY any more.
-`expressCarrier()` has no type argument at all, `honoCarrier<E>()` keeps only
-the env, `trpc().carrier()` loses its `In` — and in each case what the scope
-reads is said once, by `.validate(name, schema, onError)`, and THAT is what the
-mount is checked against. On Express and Hono the check is `route`'s pattern
+**Decision.** NO CARRIER DECLARES WHAT A SCOPE READS OF AN ENTRY any more, on
+any of the four. `expressCarrier()` and `reactRouterCarrier()` have no type
+argument at all, `honoCarrier<E>()` keeps only the env, `trpc().carrier()` loses
+its `In` — and in each case what the scope reads is said once, by
+`.validate(name, schema, onError)`, and THAT is what the mount is checked
+against. On Express and Hono the check is `route`'s pattern
 gate, re-pointed from the declaration to the schema; on tRPC it is the
 resolver's own parameter, refused by contravariance exactly as before. ONE
 comparison serves the two pattern hosts (`src/route-gate.ts`), each subpath
@@ -2727,12 +2728,35 @@ scope(carrier()).extend(guards).step(params)
   .validate('params', z.object({ id: z.string() }), onError)   …  route('/posts/:id', sc)
 ```
 
-**Why the declaration goes.** It was a SECOND way to say what the schema already
-says (principle 5), and the weaker of the two: it checked a param's NAME where
-the schema checks its value. Stacking both means naming `id` in three places for
-one param, which §52 had already set aside. On Hono it was worse than redundant
-— the pattern was written out TWICE by hand, once on the carrier and once at the
-mount, with the gate existing to keep the two copies honest.
+**Why the declaration goes, and the first reason is not the duplication.** A
+type argument is fixed at `scope(carrier<X>())` — the FIRST call — so every
+branch of a scope inherits it. A base value cannot then serve two routes reading
+different params, and a BASE VALUE IS THE REUSABLE UNIT (#67, §52): the thing
+this library says you build once and branch. The declaration and the reusable
+base are in direct conflict, and the base wins.
+
+```ts
+// the declaration, and the branch that cannot be written
+const pinned = scope(carrier<{ id: string }>()).step(…)
+pinned.step(async (_a, { params }) => params.slug)   // ⛔ 'slug' does not exist on '{ id: string }'
+
+// the verb, and the two that can
+const base   = scope(carrier()).extend(guards).step(shared)
+const byId   = base.validate('params', z.object({ id:   z.string() }), onErr)
+const bySlug = base.validate('params', z.object({ slug: z.string() }), onErr)
+```
+
+A VERB IS PER BRANCH; A TYPE ARGUMENT IS PER SCOPE. That is the whole of it, and
+it generalises past params: anything a scope says about what it READS belongs to
+a verb, because a scope is a value others extend.
+
+*Then* the duplication, which is the symptom: the declaration was a second way to
+say what the schema already says (principle 5), and the weaker of the two — it
+checked a param's NAME where the schema checks its value. Stacking both means
+naming `id` in three places for one param, which §52 had already set aside. On
+Hono it was worse than redundant — the pattern was written out TWICE by hand,
+once on the carrier and once at the mount, with the gate existing to keep the two
+copies honest.
 
 **And it asserted more than it checked, which is what makes the loss cheap.**
 Measured on the pre-#97 code: `route('/posts/*id', sc)` against a carrier
@@ -2794,12 +2818,16 @@ Every type argument on every carrier, decided:
 |---|---|---|---|
 | Express | — | | none left |
 | Hono | `E` | the env the run brings: `Variables` a foreign middleware set, and bindings | **stays** — supply, and measured to have no other door: a step annotating a richer `Context` than the carrier publishes is refused by contravariance |
-| React Router | `Par` | the params the loader is HANDED, from RR7's typegen | **stays** — supply, generated from `routes.ts`, not written by hand, and there is no mount where a pattern could be compared |
+| React Router | — | | none left: `Par` was a demand like the rest, and the one with NO check on it at all — it narrowed `params.id` to `string` on the strength of nothing |
 | tRPC | `In` | what the scope reads of the input | **removed** — demand, and the same shape the two params declarations were |
 
-React Router is the one host with no gate, and it is not missing one: its
-pattern never reaches a mount, because `routes.ts` owns that mapping and the
-typegen carries it into the loader's own type.
+React Router never hands us a pattern — `routes.ts` owns that mapping — so it
+gets the tRPC treatment rather than a gate: `loader`/`action` put
+`Validated<S, 'params'>` in the MOUNT'S OWN PARAMETER, and a route module's
+`satisfies (a: Route.LoaderArgs) => unknown` refuses a mismatch by
+contravariance. That is a check RR7 never had — the declaration it replaces was
+compared against nothing — and it needs no read extension either, since `params`
+is already what a run brings there.
 
 **A note on Hono's `E`, since the rule invites the question.** It stays for the
 `Variables` — what a Hono middleware outside this library put on `c`. A BINDING

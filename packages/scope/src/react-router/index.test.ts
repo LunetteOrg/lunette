@@ -49,7 +49,7 @@ describe('the React Router carrier: what a run brings', () => {
     // The params the route supplies, declared on the carrier — RR7's typegen
     // hands this in as `Route.LoaderArgs['params']`, and then no `!` is needed.
     const loader = mount(
-      scope(reactRouterCarrier<{ id: string }>()).step(
+      scope(reactRouterCarrier()).step(
         async ({ greeting }: { readonly greeting: string }, { params }) => ({
           said: `${greeting} ${params.id}`,
         }),
