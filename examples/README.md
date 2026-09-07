@@ -38,7 +38,7 @@ own routes with that host's `@lntt/scope/<host>` carrier.
 
 | entry | host | what it demonstrates beyond routing |
 |---|---|---|
-| [`express/`](./express) | Express | `.step(headers).guard(...)` (the shared gate, #67's pattern again — here on a route rather than a whole product), `body('json', onError)` + `.validate(...)` with NO `express.json()` mounted (decision 48 + 49), and `AnswerGate` catching a real bug: `res.redirect(...)` returns `void`, not `Response` |
+| [`express/`](./express) | Express | route params VALIDATED with `.step(params).validate(...)` (a fifth read extension, decision 52), not merely typed by the carrier; `.step(headers).guard(...)` for the shared actor gate (#67's pattern again — here on a route rather than a whole product); `body('json', onError)` + `.validate(...)` with NO `express.json()` mounted (decision 48 + 49); and `AnswerGate` catching a real bug: `res.redirect(...)` returns `void`, not `Response` |
 
 More entries (Hono, React Router, tRPC) land as their own slices.
 

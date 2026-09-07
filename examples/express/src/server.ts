@@ -1,7 +1,7 @@
 import expressLib from 'express'
 import { z } from 'zod'
 import { scope } from '@lntt/scope'
-import { body, express, expressCarrier, headers, type HeaderEntries } from '@lntt/scope/express'
+import { body, express, expressCarrier, headers, params, type HeaderEntries } from '@lntt/scope/express'
 import { fail, guards } from '@lntt/scope/guard'
 import type { Deps } from '@lntt/example-app'
 import { deps } from './bootstrap/index.ts'
@@ -9,9 +9,11 @@ import { withRequestId } from './request-id.ts'
 
 const { route, mw } = express(deps)
 
-// The SHARED guard: carrier-free, reading only what `headers` (#62) already
-// populated. `guard`'s check DERIVES; `onError` STOPS, and is this host's own
-// answer (§47 — the same split every host's own gate takes).
+// `id` is VALIDATED, not merely cast — `/posts/abc` never reaches the domain
+// lookup. See decision 52 for why `.validate('params', ...)` over the
+// carrier's type argument.
+const IdParam = z.object({ id: z.string().regex(/^\d+$/, 'must be numeric') })
+
 const findActor = (_app: {}, { headers: h }: { readonly headers: HeaderEntries }) =>
   h['x-actor-id'] ? { actor: h['x-actor-id'] } : fail([{ message: 'unauthorized' }])
 
@@ -20,10 +22,17 @@ const CreatePostSchema = z.object({
   content: z.string().min(1),
 })
 
+// A scope value is the recyclable unit (#67): built once, both routes below
+// branch from it.
+const withId = scope(expressCarrier())
+  .extend(guards)
+  .step(params)
+  .validate('params', IdParam, (issues, { res }) => res.status(400).json({ issues }))
+
 export const getPost = route(
   '/posts/:id',
-  scope(expressCarrier<{ id: string }>()).step(async ({ posts }: Deps, { req, res }) => {
-    const result = posts.getPost(req.params.id)
+  withId.step(async ({ posts }: Deps, { params: { id }, res }) => {
+    const result = posts.getPost(id)
     if ('notFound' in result) return res.status(404).json({ error: 'not found' })
     return res.json(result)
   }),
@@ -31,30 +40,23 @@ export const getPost = route(
 
 export const publishPost = route(
   '/posts/:id/publish',
-  scope(expressCarrier<{ id: string }>())
-    .extend(guards)
+  withId
     .step(headers)
     .guard(findActor, (issues, { res }) => res.status(401).json({ issues }))
-    .step(async ({ posts }: Deps, { req, res }) => {
-      const result = posts.publishPost(req.params.id)
+    .step(async ({ posts }: Deps, { params: { id }, res }) => {
+      const result = posts.publishPost(id)
       if ('notFound' in result) return res.status(404).json({ error: 'not found' })
-      // `res.redirect` itself returns `void`, not `Response` — returning its
-      // call directly would leave this branch `void`, and `AnswerGate`
-      // refuses a leaf whose answer is not `Response | undefined` (a bare
-      // `void` is not `undefined`, the same distinction `ReturnGate` draws
-      // for a forgotten `next(...)`). `return undefined` says explicitly
-      // that this leaf answered by writing to `res` and has nothing to hand
-      // back.
+      // `res.redirect` returns `void`, not `Response` — returning it
+      // directly fails `AnswerGate` (decision 51). `return undefined` says
+      // explicitly that this leaf answered by writing to `res`.
       res.redirect(303, `/posts/${result.id}`)
       return undefined
     }),
 )
 
-// NO `express.json()` mounted anywhere in this file — decision 48's own
-// recommendation, now that the reader it used to leave unbounded carries a
-// default size limit of its own (decision 49). `body('json', onError)` reads
-// the stream itself and is the single error path for a malformed, oversized
-// or wrongly-encoded payload, on every route that calls it.
+// NO `express.json()` mounted anywhere in this file (decision 48 + 49):
+// `body('json', onError)` reads the stream itself and is the single error
+// path for a malformed, oversized or wrongly-encoded payload.
 export const createPost = route(
   '/posts',
   scope(expressCarrier())
