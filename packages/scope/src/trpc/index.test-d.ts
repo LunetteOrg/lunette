@@ -3,7 +3,7 @@ import type { inferRouterOutputs } from '@trpc/server'
 import { describe, expectTypeOf, it } from 'vitest'
 import { scope, type Next } from '../index.ts'
 import { trpc } from './index.ts'
-import { guards } from '../guard/index.ts'
+import { fail, guards } from '../guard/index.ts'
 import { z } from 'zod'
 import { honoCarrier } from '../hono/index.ts'
 
@@ -199,12 +199,17 @@ describe('`middleware` takes a scope written for ITS carrier, and no other', () 
   })
 
   it('REFUSES a middleware that validates the input — the leaf would strip it', () => {
-    // A LIMIT WORTH NAMING, and it falls out of `StripGate` rather than being
-    // written for this: `validate('input', …)` replaces the `input` entry, and
-    // a middleware's leaf strips `input` by name before `next({ ctx })`, so the
-    // narrowed value would never reach the procedure downstream. On `procedure`
-    // the same call is the whole mechanism; here it has nowhere to go, and a
-    // middleware that must read the input narrows it by hand.
+    // It falls out of `StripGate` rather than being written for this:
+    // `validate('input', …)` replaces the `input` entry, and a middleware's
+    // leaf strips `input` by name before `next({ ctx })`, so the narrowed value
+    // would never reach the procedure downstream.
+    //
+    // AND IT IS THE RIGHT PLACE TO LOSE IT. `opts.input` inside
+    // `t.middleware(…)` is `unknown` in tRPC's own typings — only a resolver
+    // after `.input(schema)` gets the parsed shape — because a middleware is
+    // SHARED across procedures whose inputs differ. A middleware that must read
+    // the input parses it into a key of its own (the case below), which is what
+    // its context override is for.
     const { carrier, middleware } = trpc(t, {})
 
     const narrowsInput = scope(carrier())
@@ -214,5 +219,26 @@ describe('`middleware` takes a scope written for ITS carrier, and no other', () 
 
     // @ts-expect-error ⛔ this middleware derives a ctx key the run itself brought: input
     middleware(narrowsInput)
+  })
+
+  it('and the door that IS open: parse it into a key of its own', () => {
+    // What a middleware derives becomes the CONTEXT OVERRIDE, which reaches
+    // every procedure that `.use`s it — so a middleware needing the input reads
+    // the raw `unknown` and puts what it made under its own name. Nothing is
+    // stripped, because nothing collides with what the run brought.
+    const { carrier, middleware } = trpc(t, {})
+
+    middleware(
+      scope(carrier())
+        .extend(guards)
+        .guard(
+          (_app: {}, { input }) => {
+            const parsed = z.object({ postId: z.string() }).safeParse(input)
+            return parsed.success ? { postId: parsed.data.postId } : fail([])
+          },
+          () => null,
+        )
+        .step(async (_app: {}, ctx, next: Next<{ owner: string }>) => next({ owner: ctx.postId })),
+    )
   })
 })

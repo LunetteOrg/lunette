@@ -2865,15 +2865,24 @@ read from a different place. One schema VALUE is referenced twice (tRPC
 validates with it, the scope types itself from it), which is not two
 declarations to keep aligned.
 
-*What it costs, and it is not nothing.* Reading the state means `procedure`
-takes a `Scope<S>` instead of a plain function, so `DepGuard` and the carrier
-gate — free from a `(app: App, args) => R` parameter — are written out. And
-tRPC's `middleware` can no longer read a typed input at all: `validate('input',
-…)` is REFUSED there by `StripGate`, because a middleware's leaf strips `input`
-by name before `next({ ctx })` and the narrowed value would never reach the
-procedure downstream. That refusal is correct and falls out of a gate that
-already existed, but it means a middleware needing the input narrows it by hand.
-Discovered by implementing, pinned in `trpc/index.test-d.ts`.
+*What it costs.* Reading the state means `procedure` takes a `Scope<S>` instead
+of a plain function, so `DepGuard` and the carrier gate — free from a
+`(app: App, args) => R` parameter — are written out.
+
+*And what looked like a second cost is mostly the removal of an over-promise.*
+`validate('input', …)` is REFUSED on `middleware` by `StripGate`, because a
+middleware's leaf strips `input` by name before `next({ ctx })` and the narrowed
+value would never reach the procedure downstream — so a middleware cannot type
+its input through this library at all. That reads as a loss until you measure
+what tRPC itself does there: **`opts.input` inside `t.middleware(…)` is
+`unknown`**, and only a resolver after `.input(schema)` gets the parsed shape.
+The old `In` was handing a middleware a type its own framework declines to give
+it. And the reason is not an accident of tRPC's typings: a middleware is SHARED
+across procedures whose inputs differ, so pinning it to one input's shape is the
+same mistake as pinning a base scope — in miniature. A middleware that really
+must read the input parses it into a key OF ITS OWN, which becomes the context
+override and reaches every procedure downstream, which is what a tRPC middleware
+is for. Refusal and door both pinned in `trpc/index.test-d.ts`.
 
 **Alternatives.** *Keep both mechanisms* — measured in §52 and set aside there.
 *Keep the carrier declaration and add value validation beside it* — three names
