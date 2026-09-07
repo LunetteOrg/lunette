@@ -32,9 +32,6 @@ importers:
       '@lntt/scope':
         specifier: workspace:*
         version: link:../../packages/scope
-      '@lntt/wire':
-        specifier: workspace:*
-        version: link:../../packages/wire
       express:
         specifier: 5.2.1
         version: 5.2.1
