@@ -507,6 +507,24 @@ export const body =
       return next({ body: ctx.req.body as BodyOf<E> })
     }
 
+    // A NODE STREAM IS READ ONCE, and `req.body === undefined` does not say WHY.
+    // No parser mounted is one reason; another step of this same scope having
+    // read `ctx.req` itself — a signature check over the raw bytes, say, that
+    // never wrote a body back — is the other, and there the stream is exhausted.
+    // Iterating it then yields zero chunks and the parse reports "not valid
+    // JSON": the author's composition mistake dressed as the client's.
+    //
+    // It THROWS rather than reaching `onError`. Under the error convention a
+    // returned value is the client's business and a thrown one is the
+    // infrastructure's — and a body read twice in one scope is neither the
+    // client's fault nor anything they can fix. The author needs a 500 and a
+    // sentence, not a 400 blaming the payload.
+    if (ctx.req.readableDidRead) {
+      throw new Error(
+        'the request stream was already read: something earlier in this scope consumed `req` without leaving a body, so there is nothing left for `body()` to parse',
+      )
+    }
+
     const chunks: Buffer[] = []
     for await (const chunk of ctx.req) chunks.push(chunk as Buffer)
 

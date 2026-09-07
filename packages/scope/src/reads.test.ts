@@ -511,3 +511,64 @@ describe('Express `body`: a pre-parsed body may not be parsed at all', () => {
     expect(res.body.m).toBe('the body is not valid JSON')
   })
 })
+
+describe('a duplicated cookie name keeps the FIRST', () => {
+  it('reads what `cookie-parser` would, not the opposite value', async () => {
+    // RFC 6265 does not settle the order, and every neighbour does the same
+    // thing: the `cookie` package Express is built on keeps the first, and
+    // browsers send the more specific cookie first — usually the one meant to
+    // win. Keeping the last meant code moved off `cookie-parser` read the OTHER
+    // value for a session cookie, silently.
+    const loader = rr.reactRouter({}).loader(
+      scope(rr.reactRouterCarrier())
+        .step(rr.cookies)
+        .step(async (_a: {}, { cookies }) => cookies.session),
+    )
+
+    const out = await loader({
+      request: new Request('http://h/', { headers: { cookie: 'session=first; session=second' } }),
+      params: {},
+    })
+
+    expect(out).toBe('first')
+  })
+})
+
+describe('Express `body`: a stream already read says so', () => {
+  it('throws the author\'s mistake instead of blaming the client\'s payload', async () => {
+    // A Node stream is read once, and `req.body === undefined` does not say why.
+    // A step that consumed `req` itself — a signature check over the raw bytes,
+    // say — leaves it exhausted, and iterating it yields zero chunks: the parse
+    // then reported "not valid JSON", which is the author's composition mistake
+    // dressed as the client's.
+    let onErrorRan = false
+
+    const app = expressLib()
+    app.post(
+      '/',
+      ex.express({}).handler(
+        scope(ex.expressCarrier())
+          .step(async (_a: {}, ctx, next: Parameters<typeof rr.query>[2]) => {
+            for await (const _chunk of ctx.req) void _chunk
+            return next({} as never)
+          })
+          .step(
+            ex.body('json', (_i, ctx) => {
+              onErrorRan = true
+              return ctx.res.status(400).json({ error: 'invalid' })
+            }),
+          )
+          .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
+      ),
+    )
+    app.use((err: unknown, _q: Request, res: Response, _n: () => void) =>
+      res.status(500).json({ message: String((err as Error).message).slice(0, 40) }),
+    )
+
+    const res = await request(app).post('/').set('content-type', 'application/json').send('{"a":1}')
+
+    expect(res.status).toBe(500)
+    expect(res.body.message).toContain('already read')
+    expect(onErrorRan).toBe(false)
+  })
+})

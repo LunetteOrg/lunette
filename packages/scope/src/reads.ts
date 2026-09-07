@@ -76,6 +76,13 @@ export const headersFrom = (headers: Iterable<readonly [string, string]>): Heade
 // `decodeURIComponent` and a malformed escape does not throw the request away:
 // a cookie is client-controlled, so a broken one is skipped rather than being
 // allowed to end the run.
+//
+// A DUPLICATED NAME KEEPS THE FIRST, which RFC 6265 does not settle and every
+// neighbour does: the `cookie` package — what Express and `cookie-parser` are
+// built on — keeps the first (verified: `parse('a=1; a=2')` is `{ a: '1' }`),
+// and browsers send the more specific cookie first, which is usually the one
+// meant to win. Keeping the last, as this did, meant code moved off
+// `cookie-parser` read the OTHER value for a session or auth cookie, silently.
 export const cookiesFrom = (header: string | null | undefined): Cookies => {
   const out = bag<string>()
   if (!header) return out
@@ -84,6 +91,7 @@ export const cookiesFrom = (header: string | null | undefined): Cookies => {
     const eq = pair.indexOf('=')
     if (eq < 1) continue
     const name = pair.slice(0, eq).trim()
+    if (name in out) continue
     const raw = pair.slice(eq + 1).trim()
     try {
       out[name] = decodeURIComponent(raw)
