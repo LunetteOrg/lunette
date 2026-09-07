@@ -590,7 +590,7 @@ describe('`body`: a size limit, decision 49', () => {
     const res = await request(app).post('/').set('content-type', 'application/json').send(oversized)
 
     expect(res.status).toBe(413)
-    expect(res.body.issues[0].message).toBe('the body exceeds the 100000 byte limit')
+    expect(res.body.issues[0].message).toBe('the body exceeds the 102400 byte limit')
   })
 
   it('Express: an explicit `limit` is honoured, in both directions', async () => {
@@ -668,7 +668,7 @@ describe('`body`: a size limit, decision 49', () => {
       params: {},
     })
 
-    expect(out).toEqual({ error: 'the body exceeds the 100000 byte limit' })
+    expect(out).toEqual({ error: 'the body exceeds the 102400 byte limit' })
   })
 
   it('React Router: an explicit `limit` is honoured', async () => {

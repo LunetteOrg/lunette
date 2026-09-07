@@ -126,12 +126,15 @@ export type Read = { readonly value: unknown } | { readonly issues: readonly Sta
 // at the platform. A body reader that trusts the client's own idea of "small
 // enough" is a DoS vector regardless of which host it runs on.
 //
-// 100 kB, aligned with `express.json()`'s own default: a caller who has never
-// thought about this gets the same ceiling they would have had with Express, and
-// a route that genuinely needs more raises it explicitly — `body('json',
+// 102400 bytes — `'100kb'` the way Express's own `bytes` package parses it
+// (`bytes.parse('100kb') === 102400`, verified against the dependency
+// `express.json()` actually uses), not the decimal 100_000 the "100 kB" name
+// suggests. A caller who has never thought about this gets the SAME ceiling
+// they would have had with Express, not one a few percent stricter, and a
+// route that genuinely needs more raises it explicitly — `body('json',
 // onError, { limit })` — which is also where the encoding already lives, a
 // per-route choice from #62.
-export const DEFAULT_BODY_LIMIT = 100_000
+export const DEFAULT_BODY_LIMIT = 102_400
 
 export const tooLarge = (limit: number): StandardIssue => ({
   message: `the body exceeds the ${limit} byte limit`,
