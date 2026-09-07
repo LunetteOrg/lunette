@@ -2669,3 +2669,11 @@ mechanism**: `withId = scope(expressCarrier()).extend(guards).step(params)
 `publishPost` both branch from it with `.step(...)` — the same shape
 `examples/two-chains`'s admin gate uses on a whole product, here on one
 shared param instead.
+
+**#97 tracks going further**: dropping `expressCarrier<Params>`'s generic (and
+`PathGate` with it) from the core entirely, so `.step(params).validate(...)`
+is the ONE way to read a route param on Express, not one of two — and
+extending the same question to Hono's own (differently-shaped) mechanism,
+`honoCarrier<'/posts/:id'>()`. Deliberately a separate session: it ripples
+into `route`/`handler`'s own gate comparison and several `.test-d.ts` cases
+built specifically around `PathGate`.
