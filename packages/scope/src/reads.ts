@@ -120,6 +120,73 @@ export const cookiesFrom = (header: string | null | undefined): Cookies => {
 // is already here.
 export type Read = { readonly value: unknown } | { readonly issues: readonly StandardIssue[] }
 
+// ── the size cap, decision 49 ─────────────────────────────────────────────────
+// NO READER SHIPS WITHOUT A CEILING. Node has no default of its own — unlike
+// Express's `express.json()` (100 kB) and unlike Cloudflare, which enforces one
+// at the platform. A body reader that trusts the client's own idea of "small
+// enough" is a DoS vector regardless of which host it runs on.
+//
+// 100 kB, aligned with `express.json()`'s own default: a caller who has never
+// thought about this gets the same ceiling they would have had with Express, and
+// a route that genuinely needs more raises it explicitly — `body('json',
+// onError, { limit })` — which is also where the encoding already lives, a
+// per-route choice from #62.
+export const DEFAULT_BODY_LIMIT = 100_000
+
+export const tooLarge = (limit: number): StandardIssue => ({
+  message: `the body exceeds the ${limit} byte limit`,
+})
+
+// `content-length` is the client's OWN CLAIM and can lie — a request can name
+// 10 bytes and stream forever — so this is a fast path, never the check.
+// Skipped rather than failed on anything that does not parse as a number: an
+// absent or malformed header is common (chunked transfer-encoding has none at
+// all) and is not itself grounds to refuse the request.
+export const contentLengthExceeds = (contentLength: string | undefined, limit: number): boolean => {
+  if (contentLength === undefined) return false
+  const n = Number(contentLength)
+  return Number.isFinite(n) && n > limit
+}
+
+// Reads a Fetch `Request` body up to `limit` bytes, stopping AS SOON AS it is
+// exceeded rather than buffering the whole payload first — the same shape
+// Express's own loop takes below. The running total is what decides; the
+// `content-length` fast path above only skips a read already known to be too
+// large, it never stands in for this.
+export const readLimitedBody = async (
+  request: Request,
+  limit: number,
+): Promise<{ readonly bytes: Uint8Array } | { readonly tooLarge: true }> => {
+  if (contentLengthExceeds(request.headers.get('content-length') ?? undefined, limit)) {
+    return { tooLarge: true }
+  }
+
+  const body = request.body
+  if (!body) return { bytes: new Uint8Array(0) }
+
+  const reader = body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > limit) {
+      await reader.cancel()
+      return { tooLarge: true }
+    }
+    chunks.push(value)
+  }
+
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return { bytes }
+}
+
 // Does what the client SAID match what the step asked for? Only the pre-parsed
 // path needs this: where the bytes are ours, a mismatch fails in the parse
 // itself — `JSON.parse` over a form payload throws, `formData()` over
@@ -220,8 +287,17 @@ export const parseBody = (
     )
 }
 
-export const readBody = async (request: Request, encoding: Encoding): Promise<Read> =>
-  parseBody(await request.arrayBuffer(), request.headers.get('content-type') ?? undefined, encoding)
+// `arrayBuffer()` READS THE WHOLE PAYLOAD BEFORE RETURNING, which is exactly
+// the shape decision 49 closes: a 5 GB body would sit in memory before a single
+// byte was checked. `readLimitedBody` stops as soon as `limit` is crossed, so a
+// too-large body never accumulates past it — and its own verdict, not
+// `content-length`, is what decides.
+export const readBody = async (request: Request, encoding: Encoding, limit: number): Promise<Read> => {
+  const read = await readLimitedBody(request, limit)
+  return 'tooLarge' in read
+    ? { issues: [tooLarge(limit)] }
+    : parseBody(read.bytes, request.headers.get('content-type') ?? undefined, encoding)
+}
 
 // The tail every `body` step ends on, shared so the two families cannot answer
 // a read differently.
@@ -257,12 +333,21 @@ export const fetchReads = <Args extends object>(requestOf: (ctx: Args) => Reques
   // A FACTORY, because a populated `ctx.body` has already been parsed and the
   // encoding is a per-route choice. It takes an `onError` where the other three
   // do not, and the asymmetry has a reason: `body` is the only one carrying a
-  // payload that can be malformed.
+  // payload that can be malformed. `limit` rides the same options bag rather
+  // than a fourth positional argument, since it is the one caller in three who
+  // will ever touch it — `DEFAULT_BODY_LIMIT` (decision 49) covers everyone
+  // else.
   body:
     <E extends Encoding, R>(
       encoding: E,
       onError: (issues: readonly StandardIssue[], ctx: Args) => R,
+      options?: { readonly limit?: number },
     ) =>
     async (_app: {}, ctx: Args, next: Next<{ body: BodyOf<E> }>): Promise<Passed | Awaited<R>> =>
-      finishRead<E, Args, R>(await readBody(requestOf(ctx), encoding), ctx, onError, next),
+      finishRead<E, Args, R>(
+        await readBody(requestOf(ctx), encoding, options?.limit ?? DEFAULT_BODY_LIMIT),
+        ctx,
+        onError,
+        next,
+      ),
 })

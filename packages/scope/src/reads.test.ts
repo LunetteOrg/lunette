@@ -1,3 +1,4 @@
+import http from 'node:http'
 import { describe, expect, it } from 'vitest'
 import expressLib from 'express'
 import type { Request, Response } from 'express'
@@ -570,5 +571,122 @@ describe('Express `body`: a stream already read says so', () => {
     expect(res.status).toBe(500)
     expect(res.body.message).toContain('already read')
     expect(onErrorRan).toBe(false)
+  })
+})
+
+describe('`body`: a size limit, decision 49', () => {
+  it('Express: the DEFAULT limit reaches `onError`, not a throw', async () => {
+    const app = expressLib()
+    app.post(
+      '/',
+      ex.express({}).handler(
+        scope(ex.expressCarrier())
+          .step(ex.body('json', (issues, ctx) => ctx.res.status(413).json({ issues })))
+          .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
+      ),
+    )
+
+    const oversized = JSON.stringify({ a: 'x'.repeat(200_000) })
+    const res = await request(app).post('/').set('content-type', 'application/json').send(oversized)
+
+    expect(res.status).toBe(413)
+    expect(res.body.issues[0].message).toBe('the body exceeds the 100000 byte limit')
+  })
+
+  it('Express: an explicit `limit` is honoured, in both directions', async () => {
+    const app = expressLib()
+    app.post(
+      '/',
+      ex.express({}).handler(
+        scope(ex.expressCarrier())
+          .step(ex.body('json', (issues, ctx) => ctx.res.status(413).json({ issues }), { limit: 10 }))
+          .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
+      ),
+    )
+
+    const tooBig = await request(app)
+      .post('/')
+      .set('content-type', 'application/json')
+      .send({ a: 1, b: 2 })
+    expect(tooBig.status).toBe(413)
+
+    const fits = await request(app).post('/').set('content-type', 'application/json').send({ a: 1 })
+    expect(fits.body).toEqual({ got: { a: 1 } })
+  })
+
+  it('Express: chunked transfer — no `content-length` at all — is still caught by the running total', async () => {
+    // The fast path only fires when a `content-length` is PRESENT. Chunked
+    // transfer-encoding sends none, so the only thing standing between this
+    // request and an unbounded read is the count kept while accumulating.
+    const app = expressLib()
+    app.post(
+      '/',
+      ex.express({}).handler(
+        scope(ex.expressCarrier())
+          .step(ex.body('json', (issues, ctx) => ctx.res.status(413).json({ issues }), { limit: 10 }))
+          .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
+      ),
+    )
+    const server = app.listen(0)
+    const { port } = server.address() as { port: number }
+
+    try {
+      const res = await new Promise<{ status: number }>((resolve, reject) => {
+        const req = http.request(
+          { host: '127.0.0.1', port, method: 'POST', path: '/', headers: { 'content-type': 'application/json' } },
+        )
+        req.on('response', (r) => {
+          r.resume()
+          resolve({ status: r.statusCode ?? 0 })
+        })
+        req.on('error', reject)
+        // No `content-length` header set above: Node writes this as chunked.
+        req.write('{"a":"this is well over ten bytes"}')
+        req.end()
+      })
+
+      expect(res.status).toBe(413)
+    } finally {
+      server.close()
+    }
+  })
+
+  it('React Router (the Fetch family): the DEFAULT limit reaches `onError`', async () => {
+    const action = rr.reactRouter({}).action(
+      scope(rr.reactRouterCarrier())
+        .step(rr.body('json', (issues) => ({ error: issues[0]?.message })))
+        .step(async (_a: {}, { body }) => ({ got: body })),
+    )
+
+    const oversized = JSON.stringify({ a: 'x'.repeat(200_000) })
+    const out = await action({
+      request: new Request('http://h/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: oversized,
+      }),
+      params: {},
+    })
+
+    expect(out).toEqual({ error: 'the body exceeds the 100000 byte limit' })
+  })
+
+  it('React Router: an explicit `limit` is honoured', async () => {
+    const action = rr.reactRouter({}).action(
+      scope(rr.reactRouterCarrier())
+        .step(rr.body('json', (issues) => ({ error: issues[0]?.message }), { limit: 10 }))
+        .step(async (_a: {}, { body }) => ({ got: body })),
+    )
+
+    const out = await action({
+      request: new Request('http://h/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ a: 1, b: 2 }),
+      }),
+      params: {},
+    })
+
+    expect(out).toEqual({ error: 'the body exceeds the 10 byte limit' })
   })
 })
