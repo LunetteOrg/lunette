@@ -267,9 +267,14 @@ describe('`params`: a fifth read extension, WIDE, refined by `.validate`', () =>
     expect(res.status).toBe(400)
   })
 
-  it('a route with NO :id at all: still compiles — `params` is fixed-shape, not tied to a pattern — and 400s at runtime', async () => {
+  // `route('/posts', showPost)` does not compile: the gate reads this scope's
+  // schema and the pattern supplies no `id` (§53, pinned in `index.test-d.ts`).
+  // The runtime answer below is what the ESCAPE HATCH gets — `handler` never
+  // sees the pattern, so the same mistake reaches the request there, and
+  // `.validate` is what stands between it and the leaf.
+  it('mounted past the gate with `handler`, a missing param is `.validate`\'s 400', async () => {
     const app = expressLib()
-    app.get(...express({}).route('/posts', showPost))
+    app.get('/posts', express({}).handler(showPost))
 
     const res = await request(app).get('/posts')
     expect(res.status).toBe(400)

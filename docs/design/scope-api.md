@@ -718,15 +718,14 @@ legitimate" still holds.
 
 ## The bridges into each framework's own knowledge
 
-> **Status (decision 53).** What SHIPPED on Express was a different gate from
-> the one below: it compared the pattern against a declaration on the carrier
-> (`expressCarrier<{ id: string }>()`), not against the `params` SCHEMA — and
-> that gate is now removed, since the declaration duplicated what
-> `.validate('params', …)` says better. Hono's survives, comparing a declared
-> pattern against a mounted one. THE SECTION BELOW IS STILL UNBUILT and is the
-> better shape: a gate over the schema compares two things that each mean
-> something on their own. Its reading — one direction, no parser of ours, no
-> opinion on a pattern it cannot read — is what any revival inherits.
+> **Status: BUILT (decision 53).** This is the gate that ships, on Express and
+> Hono, with the comparison shared in `src/route-gate.ts` and each subpath
+> contributing only its framework's reader. One difference from the sketch
+> below: the gate does not have to FIND the `validate('params', …)` call among a
+> scope's others — the state already carries what that call produced, so the
+> demand is read off `S['acc']['params']` and a scope validating both `query`
+> and `params` needs no disambiguation. React Router still has no gate, for the
+> reason the table gives: its pattern never reaches a mount.
 
 The route pattern and the `params` schema are two declarations, and nothing
 kept them aligned: renaming `:postId` to `:wrongName` produced no error at any

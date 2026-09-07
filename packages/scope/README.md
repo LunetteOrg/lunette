@@ -53,30 +53,37 @@ export const showPost = scope(expressCarrier())
   )
   .step(async ({ posts }: Deps, { params, res }) => res.json(posts.getPost(params.id)))
 
-app.get('/posts/:id', handler(showPost))     // the handler, the pattern is Express's
-app.get(...route('/posts/:id', showPost))    // the pair, the pattern written once
+app.get(...route('/posts/:id', showPost))      // the pair, pattern CHECKED
+app.get('/posts/:postId', handler(showPost))   // the bare handler, nothing checked
 ```
 
-On Express the two are typed identically and the pattern is the only difference:
-`route` carries it into the tuple, so it cannot drift from the handler it belongs
-to. **What the URL carries is read by `params` and checked by `validate`** — on
-the VALUE, not merely on a key's presence — and the carrier declares nothing
-about it (§53).
-
-Hono says it the other way round, because its `Context` is parameterised by the
-pattern natively: `honoCarrier<'/posts/:id'>()` types `c.req.param('id')` with
-nothing annotated on the step, and `route` compares the declared pattern against
-the mounted one:
+**What the URL carries is said once, in the schema**, and the same schema does
+two jobs: it validates the value at runtime, and it is what `route` compares the
+mounted pattern against.
 
 ```
-⛔ this route does not supply a param the scope reads: id
+⛔ this route does not supply a param the scope validates: id
 ```
 
 The comparison runs in ONE direction — the scope demands, the route supplies —
-so a route supplying MORE than the scope reads passes, which is the verdict
+so a route supplying MORE than the schema demands passes, which is the verdict
 `DepGuard` already gives the chain and what lets one scope mount under a nested
-route. On a pattern it cannot read (a non-literal string) the gate has no
-opinion. The reading is Hono's own `ParamKeys` — never a parser of ours.
+route. Optionality counts on both sides: `/posts{/:id}` (Express) and
+`/posts/:id?` (Hono) also match WITHOUT the param, so they do not satisfy a
+schema that demands it. On a pattern it cannot read (a non-literal string), or a
+scope that validates no params, the gate has NO OPINION. The reading is each
+framework's own — Express's `RouteParameters`, Hono's `ParamKeys` — never a
+parser of ours.
+
+Hono says all of it the same way, with `honoCarrier()` and its own `params`:
+
+```ts
+export const showPost = scope(honoCarrier())
+  .extend(guards)
+  .step(params)
+  .validate('params', IdParam, (issues, { c }) => c.json({ issues }, 400))
+  .step(async ({ posts }: Deps, { params, c }) => c.json(posts.getPost(params.id)))
+```
 
 The one-argument form cannot check anything, and that is a fact about the hosts
 rather than a choice: a handler we return always tells Express what its params

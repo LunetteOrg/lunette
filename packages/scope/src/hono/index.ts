@@ -6,31 +6,34 @@
 
 import type { Context, Next } from 'hono'
 import type { BlankEnv, Env, ParamKeys } from 'hono/types'
-import type { DepGuard, ResultOf, Scope, State } from '../index.ts'
+import type { DepGuard, Next as StepNext, ResultOf, Scope, State } from '../index.ts'
+import type { Opaque, Supply } from '../route-gate.ts'
+import type { PathGate, ValidatedParams } from '../route-gate.ts'
 import { fetchReads } from '../reads.ts'
 
-// `Path` is the ROUTE PATTERN the scope is written for, and it is what makes
-// `c.req.param('id')` typed — Hono's own `Context<Env, Path>` does the reading,
-// and there is no parser of ours anywhere. It defaults to the bare `string`: a
-// scope that names no pattern reads `string | undefined` and mounts anywhere.
-//
 // `E` is the app's Hono environment (its bindings and variables). It is a type
 // parameter rather than a fixed `BlankEnv` because a step annotating a richer
 // `Context<MyEnv, …>` than the carrier publishes would be refused at the
 // argument by contravariance — the env has to come in at the carrier or not at
 // all.
-export interface HonoCarrier<Path extends string = string, E extends Env = BlankEnv> {
-  readonly __args?: { readonly c: Context<E, Path> }
+//
+// AND IT IS THE ONLY ONE. The carrier used to take the ROUTE PATTERN too
+// (`honoCarrier<'/posts/:id'>()`), which typed `c.req.param('id')` as `string`
+// and gave `route` something to compare a mounted pattern against. It went with
+// Express's own declaration (§53): the pattern was then written TWICE by hand —
+// once on the carrier, once at the mount — and what the gate compares is now
+// the `.validate('params', …)` schema, which is written once and checks the
+// value rather than the name. `c.req.param('id')` is `string | undefined` here,
+// as it is on any scope that names no pattern; `ctx.params` is where a scope
+// reads a param it has actually checked.
+export interface HonoCarrier<E extends Env = BlankEnv> {
+  readonly __args?: { readonly c: Context<E> }
 }
 
-// PURE DECLARATION — the returned object carries nothing; the type arguments
-// are the whole point of the call. `honoCarrier()` names no pattern;
-// `honoCarrier<'/posts/:id'>()` says which one the scope reads, and
-// `route(path, …)` can then check the mounted pattern against it.
-export const honoCarrier = <Path extends string = string, E extends Env = BlankEnv>(): HonoCarrier<
-  Path,
-  E
-> => ({})
+// PURE DECLARATION — the returned object carries nothing. The type argument is
+// the env, and defaulting it is the ordinary case: an app with no bindings
+// writes `honoCarrier()`.
+export const honoCarrier = <E extends Env = BlankEnv>(): HonoCarrier<E> => ({})
 
 // Whatever a middleware's steps derive lands on `c` (via `c.set`) before Hono's
 // own `next()` runs — the leaf every `mw()` chain ends on, appended by `mw`
@@ -49,54 +52,25 @@ const toNext = async (
   return undefined
 }
 
-// ── the route gate: what the scope READS against what the pattern SUPPLIES ───
-// WE WRITE NO PARSER: `ParamKeys` is Hono's own reader, so this cannot drift
-// from the router that matches paths at runtime — it knows, for one, that a
-// bare wildcard names nothing.
-declare const OPAQUE: unique symbol
-type Opaque = typeof OPAQUE
-
+// ── the route gate's Hono half: what a PATTERN supplies ──────────────────────
+// `ParamKeys` is Hono's own reader and the only thing this file contributes to
+// the gate; the comparison itself is `../route-gate.ts`, shared with Express.
+// No parser of ours anywhere — Hono's knows, for one, that a bare wildcard
+// names nothing.
+//
 // Hono keeps the `?` INSIDE the key for an optional param (`/posts/:id?` →
 // `"id?"`), and it is MEANING, not noise: `/posts/:id?` also matches `/posts`,
-// where `c.req.param('id')` is `undefined`. So both sides keep it and `Unmet`
-// below reads it — stripped on the supply side, an optional param would satisfy
-// a scope that reads a required one, which is the exact mismatch this gate
-// exists to catch.
+// where the param never arrives. So the union is SPLIT on that suffix into the
+// two sides `Supply` names, which is the same distinction Express's reader
+// spells with an optional property.
 //
 // A NON-LITERAL pattern (`string`) means "cannot read this", never "no params":
-// catching less is fine, rejecting a valid route is not. Read on the SUPPLY
-// side as no opinion, and on the DEMAND side as naming nothing.
-type Supplied<Path extends string> = string extends Path ? Opaque : ParamKeys<Path>
-type Demanded<Path extends string> = string extends Path ? never : ParamKeys<Path>
+// catching less is fine, rejecting a valid route is not.
+type Supplied<Path extends string> = string extends Path
+  ? Opaque
+  : Supply<Exclude<ParamKeys<Path>, `${string}?`>, Optional<ParamKeys<Path>>>
 
-// One demanded key against the whole supplied set, DISTRIBUTED over the union.
-// An optional demand (`"id?"`) takes either — the step already reads
-// `string | undefined`. A required one takes only the required supply.
-type Unmet<Demand, Sup> = Demand extends `${infer N}?`
-  ? [Extract<Sup, N | `${N}?`>] extends [never]
-    ? N
-    : never
-  : [Extract<Sup, Demand>] extends [never]
-    ? Demand
-    : never
-
-// ONE DIRECTION: the scope DEMANDS — it reads `c.req.param('id')` — and the
-// route SUPPLIES. A param the scope reads and the pattern does not supply is
-// `undefined` at runtime; a param supplied and never read is nothing at all,
-// the same verdict `DepGuard` gives the chain (a superset passes).
-//
-// The test is REVERSED on purpose: a param-less pattern's real key set is
-// `never`, and `never extends Opaque` is VACUOUSLY TRUE — written the natural
-// way round, the gate would skip every param-less route.
-type Unsupplied<Mounted extends string, Declared extends string> = Opaque extends Supplied<Mounted>
-  ? never
-  : Unmet<Demanded<Declared>, Supplied<Mounted>>
-
-type PathGate<Mounted extends string, Declared extends string> = [
-  Unsupplied<Mounted, Declared>,
-] extends [never]
-  ? unknown
-  : `⛔ this route does not supply a param the scope reads: ${Unsupplied<Mounted, Declared> & string}`
+type Optional<K> = K extends `${infer N}?` ? N : never
 
 // ── gate: the scope was written for THIS carrier ─────────────────────────────
 // NO GATE OF OURS: what the mount brings is written as a FUNCTION the scope
@@ -142,11 +116,6 @@ type StripGate<S extends State> = [Strips<S>] extends [never]
   ? unknown
   : `⛔ this middleware derives a ctx key the run itself brought: ${Strips<S> & string} — the leaf strips those by name, so it would never arrive`
 
-// The pattern the scope was started on, taken off its carrier.
-type PathOf<S extends State> = S['args'] extends { readonly c: Context<any, infer P, any> }
-  ? P & string
-  : never
-
 // What a route mounted from this scope RETURNS. Hono's RPC client reads the
 // handler's return type off `typeof app` — `c.json(v)` gives back a
 // `TypedResponse` carrying `v`, and declaring the mount as `Promise<Response>`
@@ -175,6 +144,13 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
     // adjective belongs on whoever gives something up, so the escape hatch is
     // the one that has to be named.
     //
+    // WHAT `route` COMPARES IS THE SCHEMA (§53), the same on both hosts: a
+    // scope says what the URL carries once, in `.validate('params', schema,
+    // onError)`, and the gate reads that against the mounted pattern. It used
+    // to read a pattern declared on the carrier, which meant writing
+    // `/posts/:id` twice by hand and checking a param's NAME where the schema
+    // checks its value.
+    //
     // WHY `handler` cannot check the pattern differs from Express's, and is
     // worth knowing: the path IS the type parameter of `app.get`, so the
     // expected handler type is concrete — and it STILL does not catch a
@@ -190,7 +166,10 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
       path: Path,
       // The gates ride the SCOPE argument: intersected onto the path, a failing
       // gate collapses to `never` and the message is lost.
-      sc: Scope<S> & ArgsGate<E> & PathGate<Path, PathOf<S>> & DepGuard<App, S['need']>,
+      sc: Scope<S> &
+        ArgsGate<E> &
+        PathGate<Supplied<Path>, ValidatedParams<S>> &
+        DepGuard<App, S['need']>,
     ): readonly [Path, (c: Context<E, any>) => Answered<S>] => [path, handlerFor<S>(sc)],
 
     handler: <S extends State>(
@@ -249,6 +228,22 @@ export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from
 // `reads.ts`, and this subpath passes the one line that differs: where the
 // request is found.
 const reads = fetchReads((ctx: { readonly c: Context<any, any> }) => ctx.c.req.raw)
+
+// `c.req.param()` with no argument is Hono's own way to hand back the whole
+// bag, already a plain string-keyed record — so there is nothing to adapt and
+// this one does not go through `fetchReads`, which reads the Fetch `Request`
+// and knows nothing of a router's matches.
+//
+// FIXED shape, not generic over a pattern: a generic read extension does not
+// get its type parameter inferred through `.step()` and adds NOTHING, silently
+// (measured on Express's twin, §52). So `ctx.params` starts WIDE and
+// `.validate('params', schema, onError)` is what narrows it — and what `route`
+// compares a mounted pattern against (§53).
+export const params = async (
+  _app: {},
+  { c }: { readonly c: Context<any, any> },
+  next: StepNext<{ params: Record<string, string> }>,
+) => next({ params: c.req.param() })
 
 export const query = reads.query
 export const headers = reads.headers

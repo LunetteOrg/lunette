@@ -54,12 +54,17 @@ export const listScope = scope(expressCarrier()).step(
   async (deps: { catalog: { list(): Item[] } }, { res }) => res.json({ items: deps.catalog.list() }),
 )
 
-// `req.params` is Express's own dictionary, so `itemId` arrives as
-// `string | string[] | undefined` — a repeated param, or a pattern that never
-// carried the name. The carrier declares nothing about it (§53), and where the
-// FORMAT matters the answer is `.step(params).validate('params', schema, …)`,
-// which `examples/express` shows. Here the id is a lookup key and nothing more,
-// so the narrowing is a `typeof` and the miss is the 404 this route already has.
+// READ BY HAND, which is the cheap end of a real choice. `req.params` is
+// Express's own dictionary, so `itemId` arrives as `string | string[] |
+// undefined` — a repeated param, or a pattern that never carried the name — and
+// a `typeof` narrows it into the 404 this route already has.
+//
+// What that gives up is the MOUNT check: `route` compares a pattern against the
+// `.validate('params', …)` schema (§53), and a scope that validates nothing
+// leaves it nothing to compare, so `route('/items', itemScope)` would compile
+// here. `examples/express` shows the other end — one schema, the format checked
+// at runtime and the pattern checked at compile time. This product's point is
+// two chains in one process, so its routes stay at the cheap end deliberately.
 export const itemScope = scope(expressCarrier()).step(
   async (deps: { catalog: { byId(id: string): Item | undefined } }, { req, res }) => {
     const itemId = req.params.itemId

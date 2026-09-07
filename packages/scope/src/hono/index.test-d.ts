@@ -2,7 +2,9 @@ import { Hono } from 'hono'
 import { hc } from 'hono/client'
 import { describe, expectTypeOf, it } from 'vitest'
 import { scope, type Next } from '../index.ts'
-import { hono, honoCarrier } from './index.ts'
+import { hono, honoCarrier, params } from './index.ts'
+import { guards } from '../guard/index.ts'
+import { z } from 'zod'
 import { expressCarrier } from '../express/index.ts'
 
 // THE TYPE CONTRACT for the pattern and the route gate — both type-level, so no
@@ -10,73 +12,98 @@ import { expressCarrier } from '../express/index.ts'
 
 const { route, handler } = hono({})
 
-const byId = scope(honoCarrier<'/posts/:id'>()).step(async (_app: {}, { c }) => {
-  expectTypeOf(c.req.param('id')).toEqualTypeOf<string>()
+// Reads the param BY HAND, off Hono's own accessor: nothing declares what it
+// wants, so `c.req.param('id')` is `string | undefined` — the width Hono gives
+// a scope that names no pattern, which is now every scope (§53).
+const byId = scope(honoCarrier()).step(async (_app: {}, { c }) => {
+  expectTypeOf(c.req.param('id')).toEqualTypeOf<string | undefined>()
   return c.json({ id: c.req.param('id') })
 })
 
-// Names no pattern: reads nothing in particular, and mounts anywhere.
-const wide = scope(honoCarrier()).step(async (_app: {}, { c }) => c.text(''))
+// Says what the URL carries, ONCE, in the schema — and that is what `route`
+// compares a mounted pattern against.
+const withId = scope(honoCarrier())
+  .extend(guards)
+  .step(params)
+  .validate('params', z.object({ id: z.string() }), (issues, { c }) => c.json({ issues }, 400))
+  .step(async (_app: {}, { params: p, c }) => c.json({ id: p.id }))
 
-describe('what the declared pattern types', () => {
-  it('refuses a param the declared pattern does not name', () => {
-    scope(honoCarrier<'/posts/:id'>()).step(async (_app: {}, { c }) => {
-      // @ts-expect-error — `author` is not in `/posts/:id`, so it is
-      // `string | undefined` and not usable as a string
-      const author: string = c.req.param('author')
-      return c.text(author)
+describe('what a scope reads of the URL: `params`, then `validate`', () => {
+  it('starts WIDE and is narrowed by the schema', () => {
+    scope(honoCarrier())
+      .extend(guards)
+      .step(params)
+      .step(async (_app: {}, { params: p }) => {
+        expectTypeOf(p).toEqualTypeOf<Record<string, string>>()
+        return undefined
+      })
+
+    withId.step(async (_app: {}, { params: p }) => {
+      expectTypeOf(p.id).toEqualTypeOf<string>()
+      return undefined
     })
   })
 })
 
-describe('`route(path, scope)`: what the scope READS against what the route SUPPLIES', () => {
-  it('accepts the pattern the scope was written for', () => {
-    new Hono().get(...route('/posts/:id', byId))
+describe('`route(path, scope)`: what the scope VALIDATES against what the route SUPPLIES', () => {
+  it('accepts a pattern that supplies what the schema demands', () => {
+    new Hono().get(...route('/posts/:id', withId))
   })
 
   it('rejects a pattern that supplies a different param', () => {
-    // @ts-expect-error ⛔ this route does not supply a param the scope reads: id
-    route('/posts/:postId', byId)
+    // @ts-expect-error ⛔ this route does not supply a param the scope validates: id
+    route('/posts/:postId', withId)
   })
 
   it('rejects a pattern that supplies none', () => {
-    // @ts-expect-error ⛔ this route does not supply a param the scope reads: id
-    route('/posts', byId)
+    // @ts-expect-error ⛔ this route does not supply a param the scope validates: id
+    route('/posts', withId)
   })
 
   it('accepts a DIFFERENT pattern supplying the same param — names, not literals', () => {
-    route('/archive/:id', byId)
+    route('/archive/:id', withId)
   })
 
-  it('ACCEPTS a route supplying more than the scope reads', () => {
-    route('/tenants/:tenant/posts/:id', byId)
-    route('/posts/:id', wide)
+  it('ACCEPTS a route supplying more than the schema demands', () => {
+    route('/tenants/:tenant/posts/:id', withId)
   })
 
   it('has NO OPINION on a pattern it cannot read', () => {
     const dynamic: string = '/posts/:id'
-    route(dynamic, byId)
+    route(dynamic, withId)
+  })
+
+  it('has NO OPINION on a scope that validates nothing', () => {
+    // `byId` reads `c.req.param('id')` by hand, so there is no demand to
+    // compare — and its type says `string | undefined`, which is what keeps
+    // that from being silent.
+    route('/posts/:postId', byId)
+    route('/posts', byId)
   })
 
   it('rejects an OPTIONAL supply for a required demand: `/posts/:id?` also matches `/posts`', () => {
     // Hono keeps the `?` in the key, and it is the whole claim: mounted here
-    // the route answers `/posts` too, where `c.req.param('id')` is `undefined`
-    // against a step whose type says `string`.
-    // @ts-expect-error ⛔ this route does not supply a param the scope reads: id
-    route('/posts/:id?', byId)
+    // the route answers `/posts` too, where the param never arrives and the
+    // schema, which demands it, 400s.
+    // @ts-expect-error ⛔ this route does not supply a param the scope validates: id
+    route('/posts/:id?', withId)
   })
 
-  it('accepts either supply for an OPTIONAL demand — the step already reads undefined', () => {
-    const maybeById = scope(honoCarrier<'/posts/:id?'>()).step(async (_app: {}, { c }) =>
-      c.json({ id: c.req.param('id') ?? null }),
-    )
+  it('accepts either supply for an OPTIONAL demand — the schema admits its absence', () => {
+    const maybeById = scope(honoCarrier())
+      .extend(guards)
+      .step(params)
+      .validate('params', z.object({ id: z.string().optional() }), (i, { c }) =>
+        c.json({ i }, 400),
+      )
+      .step(async (_app: {}, { params: p, c }) => c.json({ id: p.id ?? null }))
 
     route('/posts/:id?', maybeById)
     route('/posts/:id', maybeById)
   })
 
   it('hands back the pattern as its literal, so the mount stays typed', () => {
-    expectTypeOf(route('/posts/:id', byId)[0]).toEqualTypeOf<'/posts/:id'>()
+    expectTypeOf(route('/posts/:id', withId)[0]).toEqualTypeOf<'/posts/:id'>()
   })
 })
 
@@ -84,7 +111,7 @@ describe('`handler(scope)`: the plain handler, with nothing checked', () => {
   it('is a Hono handler, mountable anywhere', () => {
     // Nothing compares the pattern here — including this, which is wrong and
     // compiles. `route(path, scope)` is the form that catches it.
-    new Hono().get('/posts/:postId', handler(byId))
+    new Hono().get('/posts/:postId', handler(withId))
   })
 })
 
@@ -93,7 +120,7 @@ describe('the typed RPC client reads what the scope hands back', () => {
   // the handler's return type. A mount declared `Promise<Response>` erases the
   // last one and the client answers `unknown`, so what the mount hands back is
   // what the SCOPE hands back.
-  const showPost = scope(honoCarrier<'/posts/:id'>()).step(async (_app: {}, { c }) =>
+  const showPost = scope(honoCarrier()).step(async (_app: {}, { c }) =>
     c.json({ id: c.req.param('id'), title: 'x' }),
   )
   const health = scope(honoCarrier()).step(async (_app: {}, { c }) => c.json({ ok: true }, 201))
@@ -107,7 +134,7 @@ describe('the typed RPC client reads what the scope hands back', () => {
 
   it('carries the leaf\'s value through the one-argument form', async () => {
     const res = await client.posts[':id'].$get({ param: { id: '1' } })
-    expectTypeOf(await res.json()).toEqualTypeOf<{ id: string; title: string }>()
+    expectTypeOf(await res.json()).toEqualTypeOf<{ id: string | undefined; title: string }>()
   })
 
   it('carries it through the checked form too, status included', async () => {
@@ -183,7 +210,7 @@ describe('a mount takes a scope written for ITS carrier, and no other', () => {
     // at `hono<typeof deps, MyEnv>(deps)` has to keep passing.
     type MyEnv = { Bindings: { KV: string }; Variables: { rid: string } }
 
-    const reads = scope(honoCarrier<'/p/:id', MyEnv>()).step(async (_app: {}, { c }) =>
+    const reads = scope(honoCarrier<MyEnv>()).step(async (_app: {}, { c }) =>
       c.json({ id: c.req.param('id'), kv: c.env.KV }),
     )
 

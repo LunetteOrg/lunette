@@ -33,27 +33,15 @@ const byId = scope(expressCarrier()).step(async (_app: {}, { req, res }) => {
   return res.json({ id: req.params.id })
 })
 
-describe('`route(path, scope)` and `handler(scope)`: one shape, two places to write the pattern', () => {
-  it('mounts under any pattern — neither verb compares one, and nothing declares params', () => {
-    expressLib().get(...route('/posts/:id', byId))
-    expressLib().get(...route('/tenants/:tenant/posts/:id', byId))
-    // wrong, and it compiles: what `:postId` supplies nobody named, and the
-    // step reads `req.params.id` as `undefined` at runtime. The refusal that
-    // catches THIS is `.validate('params', …)`'s, on the first request (§52) —
-    // no longer a compile-time one, which is the trade §53 records.
-    expressLib().get(...route('/posts/:postId', byId))
-    expressLib().get('/posts/:postId', handler(byId))
-  })
-
-  it('has no opinion on a pattern it cannot read, as it never had', () => {
-    const dynamic: string = '/posts/:id'
-    route(dynamic, byId)
-  })
-
-  it('hands back the pattern as its literal, so the mount stays typed', () => {
-    expectTypeOf(route('/posts/:id', byId)[0]).toEqualTypeOf<'/posts/:id'>()
-  })
-})
+// A scope that says what the URL carries: it says it ONCE, in the schema, and
+// that is what `route` compares a pattern against (§53).
+const withId = scope(expressCarrier())
+  .extend(guards)
+  .step(params)
+  .validate('params', z.object({ id: z.string() }), (issues, { res }) =>
+    res.status(400).json({ issues }),
+  )
+  .step(async (_app: {}, { params: p, res }) => res.json({ id: p.id }))
 
 describe('what a scope reads of the URL: `params`, then `validate`', () => {
   it('starts WIDE and is narrowed by the schema, not by a declaration', () => {
@@ -66,18 +54,86 @@ describe('what a scope reads of the URL: `params`, then `validate`', () => {
         return undefined
       })
 
-    scope(expressCarrier())
+    // and after the schema `id` is `string` because something LOOKED at it:
+    // the narrowing the carrier's declaration used to assert (§53), now earned
+    // rather than asserted — and the SAME schema is what `route` reads below.
+    withId.step(async (_app: {}, { params: p }) => {
+      expectTypeOf(p.id).toEqualTypeOf<string>()
+      return undefined
+    })
+  })
+})
+
+describe('`route(path, scope)`: what the scope VALIDATES against what the route SUPPLIES', () => {
+  it('accepts a pattern that supplies what the schema demands', () => {
+    expressLib().get(...route('/posts/:id', withId))
+  })
+
+  it('rejects a pattern that supplies a different param — every request would 400', () => {
+    // @ts-expect-error ⛔ this route does not supply a param the scope validates: id
+    route('/posts/:postId', withId)
+  })
+
+  it('rejects a pattern that supplies none', () => {
+    // @ts-expect-error ⛔ this route does not supply a param the scope validates: id
+    route('/posts', withId)
+  })
+
+  it('ACCEPTS a route supplying more than the schema demands — a superset passes', () => {
+    // the verdict `DepGuard` already gives the chain, applied to params: one
+    // scope mounts under a nested route, or on a second pattern naming the
+    // same. A param nobody validates is nothing at all — reading it goes
+    // through `ctx.params`, which IS the schema.
+    route('/tenants/:tenant/posts/:id', withId)
+  })
+
+  it('rejects an OPTIONAL supply for a required demand: `{/:id}` also matches `/posts`', () => {
+    // Express's own reader carries this — an optional group builds as
+    // `Partial<…>`, so this pattern's `id` is optional where `/posts/:id`'s is
+    // not. Mounted here the route answers `/posts` too, and the schema, which
+    // demands `id`, 400s on it.
+    // @ts-expect-error ⛔ this route does not supply a param the scope validates: id
+    route('/posts{/:id}', withId)
+  })
+
+  it('accepts either supply for an OPTIONAL demand — the schema already admits its absence', () => {
+    const maybeById = scope(expressCarrier())
       .extend(guards)
       .step(params)
-      .validate('params', z.object({ id: z.string() }), (issues, { res }) =>
-        res.status(400).json({ issues }),
+      .validate('params', z.object({ id: z.string().optional() }), (i, { res }) =>
+        res.status(400).json({ i }),
       )
-      .step(async (_app: {}, { params: p, res }) => {
-        // and here `id` is `string` because something LOOKED at it: this is
-        // the narrowing §53 keeps, in exchange for the one it gave up
-        expectTypeOf(p.id).toEqualTypeOf<string>()
-        return res.json({ id: p.id })
-      })
+      .step(async (_app: {}, { params: p, res }) => res.json({ id: p.id ?? null }))
+
+    route('/posts{/:id}', maybeById)
+    route('/posts/:id', maybeById)
+  })
+
+  it('has NO OPINION on a pattern it cannot read', () => {
+    const dynamic: string = '/posts/:id'
+    route(dynamic, withId)
+  })
+
+  it('has NO OPINION on a scope that validates nothing — there is no demand to read', () => {
+    // `byId` reads `req.params` by hand, so nothing declares what it wants and
+    // the gate has nothing to compare. Its type says `string | string[] |
+    // undefined` there, which is the honest width and what keeps this from
+    // being silent.
+    route('/posts/:postId', byId)
+    route('/posts', byId)
+  })
+
+  it('hands back the pattern as its literal, so the mount stays typed', () => {
+    expectTypeOf(route('/posts/:id', withId)[0]).toEqualTypeOf<'/posts/:id'>()
+  })
+})
+
+describe('`handler(scope)`: the escape hatch, and the pattern is Express\'s', () => {
+  it('mounts anywhere, including where `route` refuses — nothing compares the pattern', () => {
+    // wrong, and it compiles: the pattern is Express's own argument here, so it
+    // never reaches a type of ours. `.validate` still answers 400 on the first
+    // request; what is lost is only the refusal at the mount.
+    expressLib().get('/posts/:postId', handler(withId))
   })
 })
 
@@ -231,22 +287,34 @@ describe('a mount takes a scope written for ITS carrier, and no other', () => {
 
 describe('two message-gates never meet on one argument', () => {
   it('answers with a message where intersecting them would collapse to `never`', () => {
-    // `mw` is where two message-gates still both apply: this scope derives
-    // `res` (StripGate) AND hands back a value Express will never send
-    // (AnswerGate). Intersected side by side their literals give `'⛔ A' & '⛔
-    // B'`, which is `never`, and the error becomes "not assignable to parameter
-    // of type 'never'" with nothing left to read. Chained, the outer link
-    // answers — pinned because the shape that breaks it compiles just as well.
-    //
-    // The pair that found the invariant was AnswerGate + the route's own
-    // PathGate (§44); with the pattern gate gone (§53) this is the pair that
-    // remains, and the invariant is the same one.
+    // THE PAIR THAT FOUND THE INVARIANT (§44): both the answer gate and the
+    // path gate fail here. Intersected side by side their literals give
+    // `'⛔ A' & '⛔ B'`, which is `never`, and the error becomes "not assignable
+    // to parameter of type 'never'" with nothing left to read. Chained, the
+    // outer link answers — pinned because the shape that breaks it compiles
+    // just as well.
     const unsendable = scope(expressCarrier())
+      .extend(guards)
+      .step(params)
+      .validate('params', z.object({ id: z.string() }), (i, { res }) =>
+        res.status(400).json({ i }),
+      )
+      .step(async () => ({ ok: true }))
+
+    // @ts-expect-error ⛔ answer on `res`
+    route('/posts', unsendable)
+  })
+
+  it('holds on `mw`\'s chain too, where the pair is a different one', () => {
+    // `AnswerGate` chained onto `StripGate`: this scope derives `res` AND hands
+    // back a value Express will never send. Same invariant, second chain — the
+    // one the route pair does not cover.
+    const both = scope(expressCarrier())
       .step(async (_app: {}, _ctx, next: Next<{ res: string }>) => next({ res: 'mine' }))
       .step(async () => ({ ok: true }))
 
     // @ts-expect-error ⛔ answer on `res`
-    mw(unsendable)
+    mw(both)
   })
 })
 
