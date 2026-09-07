@@ -1047,10 +1047,9 @@ for the same reason. The graph as it stands:
 
 ```
 #60 carriers ──┬──→ #64 validation         one factory, per-host native shape — no word to refuse WITH any more
-               ├──→ #62 read extensions    the raw-read half only; validation itself is #64's
-               └──→ #67 composable scopes  the DERIVING half of a guard is shareable; the STOPPING half is per host
+               └──→ #62 read extensions    the raw-read half only; validation itself is #64's
 
-#60, #63, #64, #67 ──→ #59 examples        LAST, and the real proof
+#60, #63, #64 ──→ #59 examples        LAST, and the real proof
 ```
 
 `#60` now covers what `#58` tracked: a carrier ships its own mount helper
@@ -1060,9 +1059,52 @@ outbound envelope both needed a vocabulary to translate into or to belong to;
 neither exists, and neither answered a failure composition alone did not
 already close (decision 43).
 
-One ordering is deliberately NOT an edge, because it is a preference and not a
-block: #63 before #67. A partial order is honest where a total one would be
-invented.
+**#67 is CLOSED as not needed, and the graph drops the edge.** Its own "done
+when" allowed exactly this outcome: write here why a sequence does not need
+packaging, instead of building a mechanism nobody has a case for.
+
+The unit that needed reusing already exists — the SCOPE VALUE itself. `.step`,
+`.guard` and `.extend` are immutable: each returns a NEW value and never
+touches the one it was called on, so a shared prefix is a value kept and
+branched from twice, not a mechanism:
+
+    const base = scope(expressCarrier()).extend(guards).step(headers)
+    const authBase = base.guard(findActor, onError)
+
+    const routeA = authBase.step(leafA)
+    const routeB = authBase.step(leafB)
+
+No generic function over an abstract `State`, no new export. `authBase`'s type
+is concrete — inferred once, at that line — and every leaf branching from it is
+an ordinary `.step()` call the builder already offers. Verified running this
+exact shape: two Express routes sharing one `authBase`, independent leaves,
+both correct.
+
+What #90 had rewritten #67 down to — a function generic over "any scope" that
+appends `.step().guard(...)` from OUTSIDE the builder, so the identical
+sequence could be handed to two different hosts at the same call site — hits a
+structural TypeScript limit, and not only for `.guard`. A single generic
+`.step()` over an abstract `S extends State` already fails the moment the step
+reads a concrete field of the ctx: `Ctx<S>`'s `Omit<S['args'], keyof S['acc']>
+& S['acc']` does not reduce for a naked type parameter, so two derivations of
+"the same" type never structurally unify. Measured, minimized to one `.step()`
+call with no `.guard()` in it at all — the failure the issue hit is a shallow
+instance of a wider one.
+
+A raw-function combinator OUTSIDE the builder — generic on its OWN parameters
+rather than on `State` — was found to compile and to run correctly on two real
+hosts (Express, Hono). It is not shipped: it answers a case that does not
+exist. Nothing needs the identical sequence mounted verbatim across carriers —
+a per-host base branches for free within one host, which is the case that is
+real, and the CHECK function alone (`findActor`) was already the shared part
+`guard` exists for (#62 + #64). Packaging the READ step together with it across
+hosts buys nothing a plain per-host `.step(headers)` does not already give.
+
+If a cross-host need for this ever does show up, it is a STEP's job and not a
+new abstraction's: a step already carries the contract this would need — its
+own `Need`/`Add`/`Ret`, checked at the argument like every other step — so a
+bespoke "sequence" type would be a second name for something the primitive
+already is.
 
 Parked, and deliberately unscheduled — neither has a case in hand, which is the
 discipline that removed `validate` from the core:

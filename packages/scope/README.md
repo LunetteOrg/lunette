@@ -149,9 +149,13 @@ building something its host will never send.
 
 ## Not here yet
 
-- **composable scopes** — a guard reusable across carriers as a unit, rather
-  than a step at a time (#67).
 - **the worked examples** (#59), which come last and are the real proof.
+
+A guard reusable across carriers as a packaged unit was considered (#67) and
+closed: a shared prefix is already a scope VALUE kept and branched from twice
+— `const authBase = base.guard(...)`, then `authBase.step(leafA)` and
+`authBase.step(leafB)` — with no mechanism beyond what `.step`/`.guard`
+already are. See decision in `docs/design/scope-api.md`.
 
 ## Status
 
