@@ -31,13 +31,19 @@ the `errore` library (errors as values) applied to DI.
                         was settled on, each carrying its measurement
 ```
 
-**`@lntt/integration` and `examples/` are SET ASIDE**, deliberately, while the
-core is rebuilt (#30). Both live on `origin/story-30/scope-impl` — 27
-integration files, 191 example files, verified present — along with most of the
-extensions, and they come back in that order once the core and its sugars are
-settled. Porting them against a surface still in motion is the work done twice
-that the design document exists to avoid; their last state on THIS branch is in
-the history, one `git show` away.
+**`@lntt/integration` is SET ASIDE**, deliberately, while the core settles
+(#30). It lives on `origin/story-30/scope-impl` — 27 files, verified present —
+along with most of the extensions. Porting it against a surface still in motion
+is the work done twice that the design document exists to avoid; its last state
+on THIS branch is in the history, one `git show` away.
+
+**`examples/` are BACK**, landing one slice at a time under #59: `two-chains`,
+then the shared `app` and its four per-host entries (`express`, `hono`, `trpc`,
+`rr7`), each its own package mounting the SAME chain. They are reviewed as
+DEMONSTRATIONS — the convention is at the end of this file. Still to return:
+`examples/cloudflare-workers/{bare,express,hono}` (only their
+`worker-configuration.d.ts` is here today). `examples/bare-express` does not
+come back at all — decision 50.
 
 The old `@lntt/http` (the `pipe`-based "wire owns the server" posture) was
 superseded by the scope runtime and removed; if the own-the-loop posture is

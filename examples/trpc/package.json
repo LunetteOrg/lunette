@@ -1,0 +1,22 @@
+{
+  "name": "@lntt/example-trpc",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example: the shared app, mounted on tRPC with @lntt/scope/trpc \u2014 one schema value serving both `.input()` and `.validate('input')`, and a middleware that grows the context.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lntt/example-app": "workspace:*",
+    "@lntt/scope": "workspace:*",
+    "@trpc/server": "11.18.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.0"
+  }
+}

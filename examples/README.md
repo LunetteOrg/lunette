@@ -39,13 +39,22 @@ own routes with that host's `@lntt/scope/<host>` carrier.
 | entry | host | what it demonstrates beyond routing |
 |---|---|---|
 | [`express/`](./express) | Express | route params VALIDATED with `.step(params).validate(...)` (a fifth read extension, decision 52), not merely typed by the carrier; `.step(headers).guard(...)` for the shared actor gate (#67's pattern again — here on a route rather than a whole product); `body('json', onError)` + `.validate(...)` with NO `express.json()` mounted (decision 48 + 49); and `AnswerGate` catching a real bug: `res.redirect(...)` returns `void`, not `Response` |
+| [`hono/`](./hono) | Hono | the same `withId` base branched into TWO routes — the shape a carrier type argument made impossible (§53) — with `route` checking BOTH patterns against its schema; and the TYPED RPC CLIENT the transparent mount exists for: `hc<typeof app>()` reads back every answer the scope can give, as a discriminated union, with nothing written down twice |
+| [`trpc/`](./trpc) | tRPC | ONE schema value serving both `.input(schema)` (tRPC reads and validates) and `.validate('input', schema, …)` (the scope types itself, and the mount is checked); a middleware growing the CONTEXT, which is what that unit is for — and where its override actually lands, pinned in both directions |
+| [`rr7/`](./rr7) | React Router 7 | loaders and actions, with `params` refined by a schema and no read extension needed (React Router brings it already); the guard from the other two entries reused character for character; and the check the mount's own parameter makes possible — a route module's `satisfies Route.LoaderArgs` refusing a route whose params say something else |
 
-More entries (Hono, React Router, tRPC) land as their own slices.
+**The same guard, on three hosts.** `findActor` is written identically in
+`express/`, `hono/` and `rr7/`: it names no carrier, only the `headers` entry a
+read extension populates. The extraction is per host; everything downstream of
+it is not, and these three files are the evidence rather than the claim.
 
 ## Run
 
 ```
 pnpm --filter @lntt/example-app test
 pnpm --filter @lntt/example-express test
+pnpm --filter @lntt/example-hono test
+pnpm --filter @lntt/example-trpc test
+pnpm --filter @lntt/example-rr7 test
 pnpm --filter @lntt/example-two-chains test
 ```

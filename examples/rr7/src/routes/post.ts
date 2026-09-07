@@ -1,0 +1,37 @@
+import { data } from 'react-router'
+import { z } from 'zod'
+import { scope } from '@lntt/scope'
+import { reactRouter, reactRouterCarrier } from '@lntt/scope/react-router'
+import { guards } from '@lntt/scope/guard'
+import type { Deps } from '@lntt/example-app'
+import { deps } from '../bootstrap/index.ts'
+
+const { loader: mount } = reactRouter(deps)
+
+// NO READ EXTENSION for the params here, unlike Express and Hono: React Router
+// hands a loader `{ request, params }` already, so `params` is what the run
+// BRINGS and `validate` has an entry to refine on the bare carrier.
+//
+// And refining it is the only way to get a `string`: React Router's own
+// `Params` values are `string | undefined`, so a scope that validates nothing
+// reads `params.id` at that width — which is honest, since a loader really can
+// be called for a route that never carried the name.
+const IdParam = z.object({ id: z.string().regex(/^\d+$/, 'must be numeric') })
+
+// THROWN, not returned: a RETURNED `data(null, { status: 404 })` renders
+// normally, where a thrown one routes to the ErrorBoundary. Nothing in the
+// library guards against writing `return` here by mistake — the two are the
+// same type — so the choice stays the author's, and it is the host's own
+// convention rather than the library's error rule (§3).
+export const loader = mount(
+  scope(reactRouterCarrier())
+    .extend(guards)
+    .validate('params', IdParam, (issues) => {
+      throw data({ issues }, { status: 400 })
+    })
+    .step(async ({ posts }: Deps, { params }) => {
+      const result = posts.getPost(params.id)
+      if ('notFound' in result) throw data({ error: 'not found' }, { status: 404 })
+      return result
+    }),
+)
