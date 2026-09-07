@@ -394,6 +394,32 @@ export const express = <App extends object>(deps: App) => {
 // a Fetch shim being built around a Node stream.
 export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from '../reads.ts'
 
+// THE FIFTH READ EXTENSION, and Express-only: no Fetch-family equivalent
+// ships today, since `req.params` needs no adaptation the way headers or
+// cookies do — Express's own router already hands back a plain string-keyed
+// record.
+//
+// FIXED shape, not generic over what a carrier declared. A generic
+// `params = async <P>(...) => next({ params: req.params as P })` was tried
+// and REFUSED silently: passed to `.step()`, a generic function argument
+// does not get its type parameter inferred through `.step()`'s own
+// inference, and `Add` collapses to the bare `object` constraint — the step
+// compiles and adds NOTHING. Measured, minimized to exactly this shape.
+//
+// So `ctx.params` starts WIDE (`ParamsDictionary`), exactly the way
+// `body('json')` starts `unknown` — trusted from the framework's own
+// router, refined by `.validate('params', schema, onError)` when a route
+// wants a real check on the VALUE, not just the key's presence (decision
+// 52). `expressCarrier<{ id: string }>()`'s compile-time route-pattern
+// check (§45) is a DIFFERENT guarantee this does not replace and does not
+// need: reading `req.params` directly, outside this step, still sees
+// whatever the carrier declared.
+export const params = async (
+  _app: {},
+  { req }: { readonly req: Request },
+  next: Next<{ params: ParamsDictionary }>,
+) => next({ params: req.params })
+
 // `req.originalUrl` rather than `req.url`: under a mounted router the second is
 // rewritten relative to the mount, and the query string survives both — but the
 // first is what the client actually sent, which is what a step reading `query`

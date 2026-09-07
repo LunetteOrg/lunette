@@ -1,7 +1,7 @@
 import expressLib from 'express'
 import { z } from 'zod'
 import { scope } from '@lntt/scope'
-import { body, express, expressCarrier, headers, type HeaderEntries } from '@lntt/scope/express'
+import { body, express, expressCarrier, headers, params, type HeaderEntries } from '@lntt/scope/express'
 import { fail, guards } from '@lntt/scope/guard'
 import type { Deps } from '@lntt/example-app'
 import { deps } from './bootstrap/index.ts'
@@ -9,24 +9,18 @@ import { withRequestId } from './request-id.ts'
 
 const { route, mw } = express(deps)
 
-// The SHARED guards: carrier-free where they can be. `guard`'s check DERIVES;
+// The SHARED reads: carrier-free where they can be. `guard`'s check DERIVES;
 // `onError` STOPS, and is this host's own answer (§47 — the same split every
 // host's own gate takes).
 //
-// `readId` REPLACES the compile-time route ⟷ pattern check
-// (`expressCarrier<{ id: string }>()` + `route`'s `PathGate`) with a
-// RUNTIME one, deliberately: a route mounted with no `:id` at all now fails
-// the FIRST request with 400 instead of being refused at compile time — but
-// the schema also checks the param's FORMAT, which the carrier's bare
-// `string` cast never did (`/posts/abc` reached the domain lookup before;
-// now it never does). Traded, not lost; see the comparison this carried
-// before landing, `docs/decisions.md` decision 52.
+// `id` is VALIDATED, not merely cast: `.step(params)` populates the WIDE
+// `ParamsDictionary` `body('json')` also starts from `unknown` at, and
+// `.validate('params', IdParam, onError)` refines it — the same two-step
+// shape `createPost` already uses below. `/posts/abc` never reaches the
+// domain lookup; decision 52 has the comparison against
+// `expressCarrier<{ id: string }>()`'s compile-time route-pattern check,
+// which this does not replace and does not need.
 const IdParam = z.object({ id: z.string().regex(/^\d+$/, 'must be numeric') })
-
-const readId = (_app: {}, { req }: { readonly req: { params: unknown } }) => {
-  const result = IdParam.safeParse(req.params)
-  return result.success ? result.data : fail(result.error.issues.map((i) => ({ message: i.message })))
-}
 
 const findActor = (_app: {}, { headers: h }: { readonly headers: HeaderEntries }) =>
   h['x-actor-id'] ? { actor: h['x-actor-id'] } : fail([{ message: 'unauthorized' }])
@@ -42,11 +36,12 @@ const CreatePostSchema = z.object({
 // than a whole product.
 const withId = scope(expressCarrier())
   .extend(guards)
-  .guard(readId, (issues, { res }) => res.status(400).json({ issues }))
+  .step(params)
+  .validate('params', IdParam, (issues, { res }) => res.status(400).json({ issues }))
 
 export const getPost = route(
   '/posts/:id',
-  withId.step(async ({ posts }: Deps, { id, res }) => {
+  withId.step(async ({ posts }: Deps, { params: { id }, res }) => {
     const result = posts.getPost(id)
     if ('notFound' in result) return res.status(404).json({ error: 'not found' })
     return res.json(result)
@@ -58,7 +53,7 @@ export const publishPost = route(
   withId
     .step(headers)
     .guard(findActor, (issues, { res }) => res.status(401).json({ issues }))
-    .step(async ({ posts }: Deps, { id, res }) => {
+    .step(async ({ posts }: Deps, { params: { id }, res }) => {
       const result = posts.publishPost(id)
       if ('notFound' in result) return res.status(404).json({ error: 'not found' })
       // `res.redirect` itself returns `void`, not `Response` — returning its

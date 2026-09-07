@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import expressLib from 'express'
 import type { Request, Response } from 'express'
 import request from 'supertest'
+import { z } from 'zod'
 import { scope, type Next } from '../index.ts'
-import { express, expressCarrier } from './index.ts'
+import { guards } from '../guard/index.ts'
+import { express, expressCarrier, params } from './index.ts'
 
 // A guard, written here rather than imported: what a guard IS belongs to no
 // carrier (§43), and the carrier's own claim is only that a step which stops
@@ -237,5 +239,39 @@ describe('the Express carrier: a throw AFTER `next` does not steal the handler\'
     )
 
     expect((await request(app).get('/')).status).toBe(500)
+  })
+})
+
+describe('`params`: a fifth read extension, WIDE, refined by `.validate`', () => {
+  const IdParam = z.object({ id: z.string().regex(/^\d+$/, 'must be numeric') })
+
+  const showPost = scope(expressCarrier())
+    .extend(guards)
+    .step(params)
+    .validate('params', IdParam, (issues, { res }) => res.status(400).json({ issues }))
+    .step(async (_a: {}, { params: p, res }) => res.json({ id: p.id }))
+
+  it('a well-formed id passes through, VALIDATED — not merely cast', async () => {
+    const app = expressLib()
+    app.get(...express({}).route('/posts/:id', showPost))
+
+    const res = await request(app).get('/posts/7')
+    expect(res.body).toEqual({ id: '7' })
+  })
+
+  it('a malformed id never reaches the leaf: `.validate` answers, the SAME path `body` uses', async () => {
+    const app = expressLib()
+    app.get(...express({}).route('/posts/:id', showPost))
+
+    const res = await request(app).get('/posts/not-a-number')
+    expect(res.status).toBe(400)
+  })
+
+  it('a route with NO :id at all: still compiles — `params` is fixed-shape, not tied to a pattern — and 400s at runtime', async () => {
+    const app = expressLib()
+    app.get(...express({}).route('/posts', showPost))
+
+    const res = await request(app).get('/posts')
+    expect(res.status).toBe(400)
   })
 })
