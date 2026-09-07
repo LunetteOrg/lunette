@@ -75,11 +75,21 @@ export interface StandardSchemaV1<Input = unknown, Output = Input> {
   }
 }
 
-// What a schema says it produces. Read off `types`, which is where the spec puts
-// it and what every implementation fills in.
-export type OutputOf<Sch extends StandardSchemaV1> = NonNullable<
-  Sch['~standard']['types']
->['output']
+// What a schema says it produces, read off `validate`'s RETURN and not off
+// `types`. The spec marks `types` OPTIONAL — it is a carrier for the inference,
+// not a requirement — and every real library fills it in, so reading it there
+// works until someone hands over a schema written by hand. Then `types` is
+// absent, `NonNullable<undefined>['output']` is `never`, and the entry stays
+// `unknown`: the validation still runs and refines NOTHING, which is the one
+// thing this verb is for, with nothing failing to say so.
+//
+// `validate` is always present — it is what makes a schema a schema — and its
+// success branch carries the same type. So the answer comes from the member the
+// spec requires rather than the one it suggests.
+export type OutputOf<Sch extends StandardSchemaV1> = Extract<
+  Awaited<ReturnType<Sch['~standard']['validate']>>,
+  { readonly value: unknown }
+>['value']
 
 // ── how a check says it FAILED ───────────────────────────────────────────────
 // A symbol key private to this module, so a failure cannot collide with any
@@ -161,6 +171,12 @@ export interface GuardVerbs {
   // populated is not a refinement — it is an addition, and `guard` is the verb
   // for that. The check returns the VALUE, not `{ [name]: value }`: the name is
   // in the signature already.
+  //
+  // The constraint says less than it looks where the ctx has an INDEX
+  // SIGNATURE, since every name is a key of one. Deliberate rather than
+  // repaired: the ctx really does hold that name at that type, so replacing it
+  // is what happens, and a stricter rule would have to know which keys were
+  // MEANT, which is the thing no type can read.
   refine<S extends State, N extends keyof Ctx<S> & string, Need2 extends object, T, R>(
     this: Scope<S>,
     name: N,

@@ -118,6 +118,39 @@ describe('a guard declares what it needs of the app, as a step does', () => {
 })
 
 describe('the inlined spec is satisfied structurally', () => {
+  it('reads the output off `validate`, so an OPTIONAL `types` may be absent', () => {
+    // The spec marks `types` optional — a carrier for the inference, not a
+    // requirement — and every real library fills it in, so reading it there
+    // worked until a schema written by hand arrived. Then it is absent, and the
+    // entry stayed `unknown`: the validation ran and refined NOTHING, which is
+    // the one thing this verb is for, with nothing failing to say so.
+    const noTypes = {
+      '~standard': {
+        version: 1 as const,
+        vendor: 'handwritten',
+        validate: (value: unknown) => ({ value: value as number }),
+      },
+    }
+
+    scope<{ readonly n: unknown }>()
+      .extend(guards)
+      .validate('n', noTypes, () => null)
+      .step(async (_a: {}, ctx) => {
+        expectTypeOf(ctx.n).toEqualTypeOf<number>()
+        return ctx.n
+      })
+  })
+
+  it('and a real library still reads the same way', () => {
+    scope<{ readonly body: unknown }>()
+      .extend(guards)
+      .validate('body', post, () => null)
+      .step(async (_a: {}, ctx) => {
+        expectTypeOf(ctx.body).toEqualTypeOf<{ title: string; tags: string[] }>()
+        return ctx.body.title
+      })
+  })
+
   it('accepts a hand-written schema, and reads its output type', () => {
     const evenNumber: StandardSchemaV1<unknown, number> = {
       '~standard': {
