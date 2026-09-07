@@ -28,11 +28,11 @@ describe('express + scope: a domain "not found"', () => {
   })
 })
 
-describe('express + scope: the SHARED `id` guard — `guard`, not the carrier', () => {
-  it('a malformed id never reaches the domain lookup: 400, from `readId`', async () => {
+describe('express + scope: `withId` — `.step(params).validate(...)`, not the carrier', () => {
+  it('a malformed id never reaches the domain lookup: 400, from `.validate`', async () => {
     // `/posts/missing` used to reach `posts.getPost('missing')` and answer
     // 404 — a bare `string` cast on `expressCarrier<{ id: string }>()` had
-    // no format to check. `readId`'s schema does: this is now a 400 the
+    // no format to check. `IdParam`'s schema does: this is now a 400 the
     // domain lookup never runs for.
     const res = await request(app).get('/posts/missing')
     expect(res.status).toBe(400)
@@ -43,6 +43,11 @@ describe('express + scope: the SHARED guard, `.step(headers).guard(...)` on this
   it('no actor header: 401, from the guard', async () => {
     const res = await request(app).post('/posts/1/publish')
     expect(res.status).toBe(401)
+  })
+
+  it('a malformed id: 400 from `withId`, before the actor guard even runs', async () => {
+    const res = await request(app).post('/posts/missing/publish').set('x-actor-id', 'u1')
+    expect(res.status).toBe(400)
   })
 
   it('unknown post, well-formed id, authed: 404', async () => {
