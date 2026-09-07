@@ -15,13 +15,16 @@ import type { ParamsDictionary, RouteParameters } from 'express-serve-static-cor
 import type { DepGuard, Next, Passed, ResultOf, Scope, State } from '../index.ts'
 import type { StandardIssue } from '../guard/index.ts'
 import {
+  contentLengthExceeds,
   cookiesFrom,
+  DEFAULT_BODY_LIMIT,
   encodingMatches,
   finishRead,
   headersFrom,
   isMultipart,
   parseBody,
   queryFrom,
+  tooLarge,
   wrongEncoding,
   type BodyOf,
   type Cookies,
@@ -447,10 +450,10 @@ export const cookies = async (
 // unsafe: the encoding check below closes the case where the data would be
 // WRONG, and what is left is which of two correct answers the client gets.
 //
-// WITH ONE COST STILL OWED, and it is not `express.json()`'s: the read below has
-// no size limit, where that parser has 100kB by default. Node has no default of
-// its own either, so following the advice above today means an unbounded read.
-// A limit with a default is #91.
+// THE READ BELOW HAS A CEILING, `DEFAULT_BODY_LIMIT` (decision 49) unless a
+// caller raises it — the recommendation above no longer trades `express.json()`'s
+// 100 kB default for nothing. Node has no size limit of its own, so this is the
+// only one standing on the unparsed path.
 export const body =
   <E extends Encoding, R>(
     encoding: E,
@@ -458,6 +461,7 @@ export const body =
       issues: readonly StandardIssue[],
       ctx: { readonly req: Request; readonly res: Response },
     ) => R,
+    options?: { readonly limit?: number },
   ) =>
   async (
     _app: {},
@@ -465,6 +469,7 @@ export const body =
     next: Next<{ body: BodyOf<E> }>,
   ): Promise<Passed | Awaited<R>> => {
     const sent = ctx.req.headers['content-type']
+    const limit = options?.limit ?? DEFAULT_BODY_LIMIT
 
     if (ctx.req.body !== undefined) {
       // A PARSED BODY DOES NOT SAY WHAT PARSED IT, and it may not be parsed at
@@ -525,8 +530,27 @@ export const body =
       )
     }
 
+    // `content-length` is the CLIENT'S OWN CLAIM and can lie — a fast path that
+    // skips a read already known to be too large, never the check itself.
+    if (contentLengthExceeds(ctx.req.headers['content-length'], limit)) {
+      return onError([tooLarge(limit)], ctx) as Awaited<R>
+    }
+
+    // Summed WHILE ACCUMULATING, and the read is abandoned the moment it is
+    // exceeded — a 5 GB body never sits in memory waiting for the last chunk.
+    // Simply RETURNING stops the `for await`, and that is all this does:
+    // `req.destroy()` was tried and rejected — it tears down the SOCKET the
+    // response has to go out on, and the client saw a hung-up connection
+    // instead of the 413. Leaving the socket alone means whatever the client
+    // still has in flight sits in the kernel's own receive buffer, bounded by
+    // TCP flow control, never by this process's heap.
     const chunks: Buffer[] = []
-    for await (const chunk of ctx.req) chunks.push(chunk as Buffer)
+    let total = 0
+    for await (const chunk of ctx.req) {
+      total += (chunk as Buffer).byteLength
+      if (total > limit) return onError([tooLarge(limit)], ctx) as Awaited<R>
+      chunks.push(chunk as Buffer)
+    }
 
     // The bytes go straight in: `parseBody` takes bytes, so nothing is wrapped
     // in a throwaway `Request` here just to be unwrapped there.
