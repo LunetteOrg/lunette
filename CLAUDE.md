@@ -31,11 +31,11 @@ the `errore` library (errors as values) applied to DI.
                         was settled on, each carrying its measurement
 ```
 
-**`@lntt/integration` is SET ASIDE**, deliberately, while the core settles
-(#30). It lives on `origin/story-30/scope-impl` — 27 files, verified present —
+**`@lntt/integration` is SET ASIDE**, deliberately, while the umbrella work
+on the scope runtime (#30) is open. It lives on `origin/story-30/scope-impl` — 27 files, verified present —
 along with most of the extensions. Porting it against a surface still in motion
-is the work done twice that the design document exists to avoid; its last state
-on THIS branch is in the history, one `git show` away.
+is the work done twice; its last state on THIS branch is in the history, one
+`git show` away.
 
 **`examples/` are BACK**, landing one slice at a time under #59: `two-chains`,
 then the shared `app` and its four per-host entries (`express`, `hono`, `trpc`,

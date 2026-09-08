@@ -2302,7 +2302,9 @@ A sugar available on half the hosts, meaning something different on each half, i
 what principle 5 refuses. Note the lexicon entry that has been describing `guard`
 as "stop with one of the carrier's words" was stale from §43 onward, and is now
 corrected here: a guard is a SHAPE a plain step already has — read the ctx,
-either continue inward or hand something back — and not a verb of its own.
+either continue inward or hand something back — rather than a mechanism of its
+own. The next entry gives it a verb anyway, in an extension, for the ergonomics
+and not for the mechanism.
 
 **What was NOT weighed, and did not need to be.** #63 said `guard`'s case is a
 LEGIBILITY claim, judged on real examples, and named #59 as where it becomes
@@ -2932,7 +2934,8 @@ still said `Capability`/`CarrierGuard` survive for the mount. They exist nowhere
 under `packages/`.
 
 **What the residue turned out to be, measured before deleting.** Of eighteen
-traps, eleven still bind and were already in the code, in the code's own words:
+traps, the ones that still bind were already in the code, in the code's own
+words:
 the gate riding the ARGUMENT and defaulted parameters on the ALIAS
 (`index.ts`), an intersection that cannot refine so `Ctx` uses `Omit`, vacuous
 truth on a param-less pattern (`route-gate.ts`), an invariant phantom blocking
@@ -2948,8 +2951,8 @@ carry a type, and what the reader needs printed is what the scope demands), and
 why intersecting a fresh call signature per step does not rescue `this` (two
 call signatures in an intersection become overloads, and the stale one resolves
 first). The MEASURED section's numbers compare the shipped shape against
-rejected ones, which is this record's job and not a comment's — they are
-below. The rest — intent inference, carrier-and-extension brands, a
+rejected ones, which is this record's job and not a comment's — the ones worth
+carrying are below, and what is not below is about machinery that is gone. The rest — intent inference, carrier-and-extension brands, a
 declaration read by value — is about machinery that is gone. That is
 archaeology, and git keeps it.
 
@@ -2958,14 +2961,18 @@ retired document also held a runtime table, and it is evidence against three
 optimisations someone will propose again. Node, ns per run, warmed, comparisons
 valid only within a run:
 
-| | 5 steps | 20 steps | |
-|---|---|---|---|
-| continuation passing (shipped) | 749 | 4,670 | |
-| composed once, memoised on first call | 700 | 4,522 | −6.5% / −3.2% |
-| ctx merged by spread (shipped) | 1,251 | 6,213 | |
-| ctx as a prototype chain | 3,193 | 12,336 | **+155%** |
-| steps synchronous, no `await` per level | 649 | 3,580 | −48% |
-| generators + an interpreter | 2,210 | 10,637 | **+173%** |
+| run | | 5 steps | 20 steps | |
+|---|---|---|---|---|
+| 1 | continuation passing (shipped) | 749 | 4,670 | |
+| 1 | composed once, memoised on first call | 700 | 4,522 | −6.5% / −3.2% |
+| 2 | ctx merged by spread (shipped) | 1,251 | 6,213 | |
+| 2 | ctx as a prototype chain | 3,193 | 12,336 | **+155%** |
+| 2 | steps synchronous, no `await` per level | 649 | 3,580 | −48% |
+| 3 | continuation passing (the baseline of its own run) | 810 | 4,626 | |
+| 3 | generators + an interpreter | 2,210 | 10,637 | **+173%** |
+
+Each run has its own baseline and only within-run comparisons hold: the
+generators row is 2.7× the 810 above it, not the 749 at the top.
 
 The whole fold is **1–6 µs** against an HTTP request of hundreds of µs to
 milliseconds — under 1% — so pre-composing its closures buys 3–6% of something
@@ -2977,10 +2984,36 @@ an interpreter are **2.7×**, and that is with a simplified interpreter. The
 may throw synchronously, and a plain function would let that escape past the
 promise the callable returns.
 
-**Also inventoried, so it is not lost with the file.** Gating a schema against
-its entry's RAW type was measured in both directions and neither ships; what
-could work is a check reading the schema's OUTPUT, or one a schema opts into,
-and both need a real case — the 422 that stands in for it is not silent.
+**Also inventoried, so it is not lost with the file.**
+
+- **`scope(carrier)` against `.extend(carrier)`**: 636.7 versus 638.5
+  instantiations per scope — **no type-level simplification at all**. What the
+  constructor form buys is a category that cannot be confused and errors that
+  land at the definition rather than at the mount, which is worth having and is
+  not a performance argument.
+- **The check for a step that returns nothing** cost +9.1% as a gate of its own
+  and +7.1% merged with the word check that used to sit beside it, since both
+  asked about the same `Awaited<Ret>`. With the word check gone `ReturnGate`
+  stands alone, so the merged figure is history; what it bought is stated on
+  the gate itself.
+- **A verb's signature DECLARED against computed**, on a workload using no verb
+  at all: 6,637 → 5,056 instantiations (**−23.8%**), types −19.8%. The computed
+  machinery resolved on every `Surface<S>`, so every scope paid for it, verbs
+  or not. That is the other half of the trap on `Extension`: `infer` through a
+  generic factory instantiates to constraints, so the computed form was both
+  slower and wrong.
+- **Effect systems do not discover parallelism either.** `Effect.all([a, b])`
+  is the same authored claim a `.parallel(a, b)` would be, and a program
+  written in sequence stays sequential. What owning a scheduler buys is what
+  happens on FAILURE: `Promise.all` rejects while the losing branch runs to
+  completion, its errors unhandled and its resources unreleased, where an
+  interpreter interrupts it and runs its finalizers. The axis is the quality of
+  concurrency once asked for, never its discovery — the other half of the
+  generators row above, aimed at the same proposal.
+- **Gating a schema against its entry's RAW type** was measured in both
+  directions and neither ships; what could work is a check reading the schema's
+  OUTPUT, or one a schema opts into, and both need a real case — the 422 that
+  stands in for it is not silent.
 
 **The two type-level numbers, re-measured on the shipped package** (`tsc
 --extendedDiagnostics` over `@lntt/scope`, baseline 329,128 instantiations and
