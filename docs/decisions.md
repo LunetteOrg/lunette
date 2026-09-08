@@ -3051,9 +3051,23 @@ promise the callable returns.
   replaced. Both would have to be taken from a worktree at the pre-change
   commit, since a figure read out of a file is not a measurement.
 - **Gating a schema against its entry's RAW type** was measured in both
-  directions and neither ships; what could work is a check reading the schema's
-  OUTPUT, or one a schema opts into, and both need a real case — the 422 that
-  stands in for it is not silent.
+  directions and neither ships, and the reason is worth keeping because it is
+  not "we did not get to it". `Raw extends InferInput<S>` rejects every schema,
+  valid ones included. The reverse, `InferInput<S> extends Raw`, rejects
+  `z.object({ page: z.coerce.number() })` — the most ordinary query schema
+  there is — because zod reports that schema's `InferInput` as `number`, which
+  is exactly what a schema that genuinely mishandles a query string reports.
+  The two are indistinguishable on the INPUT face, so no test there can
+  separate them, and rejecting a valid declaration is worse than catching
+  nothing. What could work is a check reading the schema's OUTPUT, or one a
+  schema opts into; both need a real case.
+
+  The consequence, measured on the shipped mounts: a coercing schema compiles
+  and its leaf reads a real `number` (`?page=3` arrives as `3`), and the
+  mistaken `z.number()` over the same entry compiles too and answers 422
+  through the author's own `onError`, saying `expected number, received
+  string`. No false rejection, and the error names itself on the first
+  request.
 
 **The type-level numbers.** The first is re-measured on the shipped package,
 against a baseline of 329,128 instantiations and 112,033 types
