@@ -1,10 +1,198 @@
 # @lntt/scope
 
-The host-agnostic **scope runtime** for [`@lntt/wire`](../wire): a per-invocation
-guard/leaf model with a typed input contract, run as a fold. Wire builds the app
-once at boot; `@lntt/scope` handles what happens **per request** — authentication,
-authorization, resource prefetch, and the use case itself — without an onion, an
-AsyncLocalStorage, or a framework.
+The host-agnostic **scope runtime** for [`@lntt/wire`](../wire): ONE primitive —
+a step wrapping the rest of the fold — and a scope that IS the function running
+it. Wire builds the app once at boot; `@lntt/scope` handles what happens **per
+request** — authentication, authorization, resource prefetch, and the use case
+itself — without an onion, an AsyncLocalStorage, or a framework.
+
+## A scope, whole
+
+```ts
+import { bind, lunette, type PubOf } from '@lntt/wire'
+import { scope } from '@lntt/scope'
+
+// The chain, built once at boot, and what it exposes — see `@lntt/wire`.
+const chain = lunette()
+  .provide('repo', () => makeRepo())
+  .expose('posts', (ctx) => bind({ getPost, publishPost })(ctx.repo))
+
+type Deps = PubOf<typeof chain>
+
+const showPost = scope<{ readonly id: string }>()
+  .step(async ({ posts }: Deps, { id }) => posts.getPost(id))
+
+const { app: deps } = await chain.build()
+await showPost(deps, { id: '1' })   // Post | NotFound
+```
+
+That is all of it. `scope()` starts one, `.step` adds to it, and **the value it
+hands back IS the function that runs it, from the first line** — no closing
+verb, and nothing to build (the `build()` above is the CHAIN's, the other
+lifetime).
+
+A scope takes two arguments, split by LIFETIME. First the **app**: the chain
+wire built once at boot, alive as long as the process, and what every later
+snippet here calls `deps`. Second the **scope execution parameters**: everything
+that belongs to this one invocation. `scope<Args>()` declares the second by
+hand, which is what a scope with no host does; `scope(carrier)` takes it from a
+carrier instead (below), and then a **mount** — the small wrapper each host
+subpath ships, which turns a scope into the handler that host expects — builds
+them for you out of the request and calls the scope with both.
+
+## One primitive: `.step`
+
+A **step** wraps the rest of the fold: it reads the app and the ctx as they
+stand, and either continues inward with what it populates or hands back
+something of its own and stops. Every verb the builder offers is sugar over this
+one — a verb is a function from its own arguments TO A STEP.
+
+A step says three things, and each one rides a position the signature already
+has — so a step is a plain function and declares nothing beside itself:
+
+| what it says | where it lives |
+|---|---|
+| what it asks of the app | the first parameter's type |
+| what it reads of the run | the second parameter's type |
+| what it populates downstream | `next`'s parameter type — **annotated** |
+
+```ts
+import { scope, type Next } from '@lntt/scope'
+
+const publish = scope<{ readonly id: string; readonly token: string }>()   // `Deps` as above
+  .step(async (_app: {}, { token }, next: Next<{ actor: string }>) =>
+    token === '' ? { error: 'unauthorized' as const } : next({ actor: token }),
+  )
+  .step(async ({ posts }: Deps, { id, actor }) => posts.publishPost(id, actor))
+```
+
+The first parameter accumulates: what every step asks of the app is what the
+scope demands of the chain, checked at the call and at the mount. The second is
+the run's parameters plus everything the steps before it populated — `actor` is
+readable in the leaf because the step above it put it there, and it is typed
+because that step said so. Written INLINE it needs no annotation of its own: the
+scope supplies its type, which is why it is bare in every snippet here. A step
+written as a standalone function annotates what it reads, and that annotation is
+what makes it portable — it names an entry rather than a host. The ctx is
+READ-ONLY, shallowly, whatever the carrier declared.
+
+**The third one is a declaration, not an inference** — measured. `Add` occurs
+only in a parameter position of `next`, so a step written
+`(app, ctx, next) => next({ user })` populates nothing as far as the builder is
+concerned: the annotation `next: Next<{ user: User }>` is what says it, and it
+sits on the parameter it describes.
+
+**Not calling `next` ends the fold**, and there is nothing to declare for that
+either — no terminator, no closing verb. **Everything runs where it was
+written**: one ordered list, no category hoisted, which is why a body-reading
+step placed after an authenticating one parses a payload only for requests that
+got past the guard.
+
+## What a step hands back
+
+A step returns a value and **the fold hands it back untouched** — no `ok`, no
+`Outcome`, no branch to unwrap. What a scope yields is the union of what its
+steps return, so `publish` above hands back
+`{ error: 'unauthorized' } | Post | NotFound`: the guard's refusal stands beside
+the leaf's result, in the type and at runtime.
+
+That is the project's posture rather than a detail of the fold. **A returned
+value is a domain outcome**: it passes through — commit, no retry, ack. **A
+thrown error is infrastructure**: react to it — rollback, retry, nack. The pivot
+is the same on every host, and each mount answers a throw in its host's own door
+(Express's error middleware, Hono's `HTTPException`, tRPC's `TRPCError`, a thrown
+`data()` on React Router). So a guard that refuses RETURNS its refusal; nothing
+is caught for you and nothing is normalised (§42).
+
+One shape is refused: a step that hands back nothing at all. Forgetting `return`
+in front of `next(…)` is silent and plausible — the inner steps run, the leaf
+computes its value, and the wrapper's `undefined` is handed back instead — so
+the gate lands on the step that did it, rather than as `T | undefined` in
+whichever file finally reads the result. A leaf that really has nothing to hand
+back writes `return undefined` and passes.
+
+## Carriers
+
+A **carrier** says who is on the other end and what a single run brings with it:
+Express's `req` and `res`, Hono's `c`, a tRPC resolver's `input` and `ctx`,
+React Router's `request` and `params`. It fixes the type of the scope's second
+argument, and that is its whole job.
+
+It is **chosen exactly once**, in `scope(carrier())`, and it is **pure
+declaration** — no runtime value, no fold work, never a step. Which is why there
+is no `.extend(carrier)`: as a step, two carriers would be expressible on one
+scope and would fail only later, at the mount, by accident.
+
+```ts
+import expressLib from 'express'
+import { scope } from '@lntt/scope'
+import { express, expressCarrier } from '@lntt/scope/express'
+
+const { route, handler, mw } = express(deps)   // the mounts, curried with the app
+
+const showPost = scope(expressCarrier())
+  .step(async ({ posts }: Deps, { res }) => res.json(posts.getPost('1')))
+
+const app = expressLib()
+app.get('/posts/1', handler(showPost))
+```
+
+**The words are the host's, not the core's.** No HTTP name appears anywhere in
+the core: a leaf writes `res.status(404).json(…)` or `c.json(v, 404)` — its own
+host's shape, which the mount then checks that host can really send. The core
+owns the mechanism and never the alphabet.
+
+**A carrier declares nothing about what a scope READS** of a request: that is
+the schema's to say, and it is said per BRANCH rather than per scope — the
+reason is *A verb is per branch; a type argument is per scope*, below.
+
+`scope()` with no carrier reads nothing of the request and mounts on all four
+hosts — the one wholly portable shape. Between the two there is a middle, and
+**Reading a request** below is where it lives.
+
+## Extending the builder
+
+```ts
+.step(fn)        // acts on the FLOW    — the step list grows
+.extend(ext)     // acts on the BUILDER — the step list does not
+```
+
+An extension contributes **verbs**, and a verb is a function from its own
+arguments TO A STEP — so the fold work happens when the verb is CALLED, and a
+STEP stays the only thing that ever joins the fold: `.extend` itself pushes
+none. `@lntt/scope/guard` ships three:
+
+| verb | what it does |
+|---|---|
+| `.guard(check, onError)` | ADDS a ctx entry from what the check returned; the check refuses with `fail(issues)` |
+| `.refine(name, check, onError)` | REPLACES an entry the ctx already holds |
+| `.validate(name, schema, onError)` | `refine` with the check supplied by a [Standard Schema](https://standardschema.dev) |
+
+**Extension** covers two things, and the two arrive by different verbs. One
+contributes VERBS and is added with `.extend`, as `guards` is. The other is a
+plain STEP that populates a ctx entry from the host's own request, and is added
+with `.step`, as `headers` is below — see **Reading a request** for that half.
+
+```ts
+import { expressCarrier, headers } from '@lntt/scope/express'
+import { fail, guards } from '@lntt/scope/guard'
+
+const withActor = scope(expressCarrier())
+  .extend(guards)
+  .step(headers)   // an extraction step: it populates `ctx.headers`
+  .guard(
+    (_app: {}, { headers: h }) =>
+      h['x-actor-id'] ? { actor: h['x-actor-id'] } : fail([{ message: 'unauthorized' }]),
+    (issues, { res }) => res.status(401).json({ issues }),
+  )
+```
+
+A verb may REPLACE a ctx entry where `.step` may only add — that bypass is what
+`refine` and `validate` are for, and it is why the primitive refuses a
+re-populated key rather than resolving it: the difference between a refinement
+and a collision is intent, which no type can read.
+
+## What ships, per host
 
 Framework-free by construction, and dependency-free: the core has none at all,
 not even types-only. A carrier ships as a SUBPATH of this package, carrying its
@@ -15,10 +203,10 @@ core stays dependency-free for anyone importing it:
 
 | subpath | the mount factory | it hands back |
 |---|---|---|
-| `@lntt/scope/express` | `express(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it — plus `query`, `cookies`, `headers`, `body(encoding, onError)` |
-| `@lntt/scope/hono` | `hono(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it — plus `query`, `cookies`, `headers`, `body(encoding, onError)` |
+| `@lntt/scope/express` | `express(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it — and, exported beside the factory, the read steps `params`, `query`, `cookies`, `headers`, `body(encoding, onError)` |
+| `@lntt/scope/hono` | `hono(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it — and, exported beside the factory, the read steps `params`, `query`, `cookies`, `headers`, `body(encoding, onError)` |
 | `@lntt/scope/trpc` | `trpc(t, deps)` | `{ carrier, procedure, middleware }` — a resolver and a middleware, the two tRPC has |
-| `@lntt/scope/react-router` | `reactRouter(deps)` | `{ loader, action }` — two shapes, never a middleware — plus `query`, `cookies`, `headers`, `body(encoding, onError)` |
+| `@lntt/scope/react-router` | `reactRouter(deps)` | `{ loader, action }` — two shapes, never a middleware — and the read steps `query`, `cookies`, `headers`, `body(encoding, onError)`; `params` needs none, the carrier brings it |
 | `@lntt/scope/guard` | — | `{ guards, fail }` — the extension: `.guard(check, onError)` adds an entry, `.refine(name, check, onError)` replaces one, `.validate(name, schema, onError)` is refine with the check given by a Standard Schema |
 
 tRPC's carrier comes OUT of the factory rather than being imported beside it,
@@ -53,7 +241,7 @@ downstream, and the mount says so. A middleware that must read the input narrows
 it by hand.
 
 **No carrier declares what a scope reads**, on any of the four. A carrier's type
-arguments are for what the run BRINGS — Hono's env is the only one left — and
+arguments are for what the run BRINGS — Hono's env is the only one — and
 what a scope reads of an entry is the schema's to say.
 
 The reason is not tidiness: a type argument is fixed at `scope(carrier<X>())`,
@@ -157,18 +345,6 @@ Declaring the mount `Promise<Response>` erases them and `hc` answers `unknown`,
 which is why the return type is threaded through and pinned in
 `hono/index.test-d.ts`.
 
-## The error convention
-
-A **returned** value is a domain outcome: it passes through — commit, no retry,
-ack. A **thrown** error is infrastructure: react to it — rollback, retry, nack.
-The pivot is the same on every host, and each mount answers it in its host's own
-door (Express's error middleware, Hono's `HTTPException`, tRPC's `TRPCError`, a
-thrown `data()` on React Router).
-
-The fold produces nothing of its own on top of that: a scope hands back what its
-leaf RETURNED, and whether that went well is the carrier's statement, not the
-core's (§42). There is no `Outcome`, no `Abort`, and no branch to unwrap.
-
 ## Reading a request, and refining what was read
 
 The two halves are deliberately apart. An **extension EXTRACTS**: it populates a
@@ -194,9 +370,36 @@ one would be to throw, and a thrown error means infrastructure. What it returns
 joins what the scope can yield, so a mount refuses at compile time an `onError`
 building something its host will never send.
 
-## Not here yet
+## The gates, by what they catch
 
-- **the worked examples** (#59), which come last and are the real proof.
+Every one of these is a compile error, and every one of them lands on the line
+that contains the mistake — an adopter meets them as messages, so they are
+listed by what they catch rather than by how they are built.
+
+| the mistake | where it lands | what it says |
+|---|---|---|
+| the chain does not expose what the steps ask of the app | the call, and the mount, alike | `__ERROR_chain_Pub_missing_deps`, carrying what the scope demands |
+| a step hands back nothing — `return` forgotten in front of `next(…)` | the `.step` argument | ⛔ this step returns nothing — did you forget `return` in front of `next(…)`? |
+| a step populates a ctx key another step already populated | the `.step` argument | ⛔ this ctx key is already populated: `actor` — an extension may REPLACE it, a step may not |
+| `guard` adds a key already populated | the check argument | ⛔ … — `refine` replaces an entry, `guard` may only add |
+| `validate` or `refine` names an entry the ctx has not got | the name argument | the valid names, listed: `"wrong"` is not assignable to `"params" \| "req" \| "res" \| "next"` — and `never` on a scope holding nothing to refine |
+| two extensions contribute one verb name, or a verb shadows the scope's own surface | the `.extend` argument | ⛔ a verb under this name is already contributed: … / ⛔ a verb cannot be named: … |
+| a step reads a ctx the scope does not hold | the `.step` argument | the missing member, named — contravariance, not a gate of ours, and the one check a consumer's `strictFunctionTypes: false` turns off |
+| a scope written for another host | the mount argument | the run's parameters are not assignable — contravariance again |
+| the mounted route does not supply a param the scope validates | the mount argument | ⛔ this route does not supply a param the scope validates: `id` |
+| the leaf hands back a value the host will never send | the mount argument | ⛔ answer on `res`: … (Express) / ⛔ a middleware answers with a Response: … (Hono) |
+| a middleware derives a ctx key the run itself brought | the mount argument | ⛔ this middleware derives a ctx key the run itself brought: `res` — the leaf strips those by name, so it would never arrive |
+
+The last four are the mount's, and only the mount's: the same scope is correct
+on another host, so they cannot be asked any earlier.
+
+## Worked examples
+
+`examples/app` is one chain and one domain, mounted unchanged on four hosts —
+`examples/express`, `examples/hono`, `examples/trpc` and `examples/rr7`. What
+they differ in is what the host makes different, and nothing else.
+
+## Considered and closed
 
 A guard reusable across carriers as a packaged unit was considered (#67) and
 closed: a shared prefix is already a scope VALUE kept and branched from twice
