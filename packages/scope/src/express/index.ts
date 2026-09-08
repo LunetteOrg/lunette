@@ -49,11 +49,11 @@ export interface ExpressCarrier {
   }
 }
 
-// PURE DECLARATION — the returned object carries nothing, and there is no type
-// argument left for the call to make a claim with. It stays a CALL rather than
-// a bare exported value for one reason: `honoCarrier` and `reactRouterCarrier`
-// still take theirs, and a vocabulary where one carrier is invoked and the next
-// is not costs more than the parentheses do.
+// PURE DECLARATION — the returned object carries nothing, and it takes no type
+// argument to make a claim with. It stays a CALL rather than a bare exported
+// value for one reason: `honoCarrier` takes an env, so it must be one, and a
+// vocabulary where one carrier is invoked and the next is not costs more than
+// the parentheses do.
 export const expressCarrier = (): ExpressCarrier => ({})
 
 // Whatever a middleware's steps derive lands on `res.locals` before Express's
@@ -172,10 +172,10 @@ type AnswerGate<S extends State, Then = unknown> = [Unsendable<S>] extends [neve
 // be assignable to, and `strictFunctionTypes` does the rest — a parameter is
 // contravariant, so a scope demanding args the mount does not bring is refused
 // at the argument. It is the shape `trpc.procedure` and `reactRouter` already
-// had for free by naming `S['args']` in a real parameter position; the two
-// mounts that take a `Scope<S>` and cast had nothing checking that axis at all,
-// so a Hono scope mounted here compiled and died on `c.json is not a function`
-// on every request.
+// had for free by naming `S['args']` in a real parameter position. A mount that
+// takes a `Scope<S>` and casts checks that axis nowhere, so without this a Hono
+// scope mounted here compiles and dies on `c.json is not a function` on every
+// request.
 //
 // `app` is `never` because the CHAIN is `DepGuard`'s to judge: it is assignable
 // to any app type, so this member says nothing about the deps and the two gates
@@ -237,15 +237,15 @@ export const express = <App extends object>(deps: App) => {
     //   app.get('/posts/:id', handler(scope))      the bare handler, nothing checked
     //
     // Which one is called `route` is the whole point. Written as one verb with
-    // two forms, the shorter and more natural call — `route(scope)` — was the
-    // one that checks NOTHING, so the library's own principle 1 cost an extra
+    // two forms, the shorter and more natural call — `route(scope)` — would be
+    // the one that checks NOTHING, so the checked path would cost an extra
     // argument and a spread while the mistake was free. The adjective belongs
     // on whoever gives something up, not on whoever keeps it, so the escape
     // hatch is the one that has to be named — and `handler` says what it hands
     // back rather than what it skips.
     //
-    // WHAT `route` COMPARES IS THE SCHEMA, not a declaration on the carrier
-    //. A scope that says what the URL carries says it once, in
+    // WHAT `route` COMPARES IS THE SCHEMA, not a declaration on the carrier.
+    // A scope that says what the URL carries says it once, in
     // `.validate('params', schema, onError)`, and the gate reads that: the
     // pattern is needed to route and the schema is needed to validate, so
     // nothing is written a third time merely to be compared. A scope that
@@ -362,10 +362,9 @@ export const express = <App extends object>(deps: App) => {
 // a Fetch shim being built around a Node stream.
 export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from '../reads.ts'
 
-// THE FIFTH READ EXTENSION, and Express-only: no Fetch-family equivalent
-// ships today, since `req.params` needs no adaptation the way headers or
-// cookies do — Express's own router already hands back a plain string-keyed
-// record.
+// THE FIFTH READ EXTENSION, and Express-only: the Fetch family needs no
+// equivalent, since `req.params` needs no adaptation the way headers or cookies
+// do — Express's own router already hands back a plain string-keyed record.
 //
 // FIXED shape, not generic over a declared param set. A generic
 // `params = async <P>(...) => next({ params: req.params as P })` was tried
@@ -377,12 +376,11 @@ export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from
 // So `ctx.params` starts WIDE (`ParamsDictionary`), exactly the way
 // `body('json')` starts `unknown` — trusted from the framework's own router,
 // refined by `.validate('params', schema, onError)` where a route wants a
-// check on the VALUE. It is now the ONE way a scope says what it reads of the
-// URL: the carrier's own `expressCarrier<{ id: string }>()` declaration, and
-// the route-pattern check `route` built on it, are gone. What their
-// removal costs is a compile-time refusal of a pattern missing a NAME; what
-// they never gave is the FORMAT, which is where a bad `:id` actually goes
-// wrong.
+// check on the VALUE. That schema is the ONE place a scope says what it reads
+// of the URL, and it does both jobs: it checks the value at runtime, and it is
+// what `route` compares the mounted pattern against. A declaration on the
+// CARRIER could only ever check a param's NAME, and never its FORMAT — which is
+// where a bad `:id` actually goes wrong.
 export const params = async (
   _app: {},
   { req }: { readonly req: Request },
@@ -445,10 +443,10 @@ export const cookies = async (
 // unsafe: the encoding check below closes the case where the data would be
 // WRONG, and what is left is which of two correct answers the client gets.
 //
-// THE READ BELOW HAS A CEILING, `DEFAULT_BODY_LIMIT` unless a
-// caller raises it — the recommendation above no longer trades `express.json()`'s
-// 100 kB default for nothing. Node has no size limit of its own, so this is the
-// only one standing on the unparsed path.
+// THE READ BELOW HAS A CEILING, `DEFAULT_BODY_LIMIT` unless a caller sets one,
+// so the recommendation above does not trade `express.json()`'s 100 kB default
+// for nothing. Node has no size limit of its own, so this is the only one
+// standing on the unparsed path.
 export const body =
   <E extends Encoding, R>(
     encoding: E,

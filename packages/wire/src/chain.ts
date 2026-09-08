@@ -356,9 +356,8 @@ type SeedBrand<S> = DegeneracyOr<
 // Seed or a cast, and re-typing a slot whose
 // identity already lies is refused. Same verdict shape as the collision
 // guards (both kinds report as one union, never vanishes), but this one
-// still lives on the RETURN type — the argument-side move was scoped to
-// the collision guard alone — and its brand is the plain ASCII key
-// 'override'.
+// rides the RETURN type where the collision guard rides the argument, and
+// its brand is the plain ASCII key 'override'.
 // A WIDENED patch annotation (an index signature or key pattern —
 // Record<string, …>, Record<symbol, …>, Record<`data-${string}`, …>)
 // carries no nameable keys: Exclude does not reduce them away, so

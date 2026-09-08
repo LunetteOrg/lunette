@@ -81,8 +81,8 @@ export const headersFrom = (headers: Iterable<readonly [string, string]>): Heade
 // neighbour does: the `cookie` package — what Express and `cookie-parser` are
 // built on — keeps the first (verified: `parse('a=1; a=2')` is `{ a: '1' }`),
 // and browsers send the more specific cookie first, which is usually the one
-// meant to win. Keeping the last, as this did, meant code moved off
-// `cookie-parser` read the OTHER value for a session or auth cookie, silently.
+// meant to win. Keeping the LAST would hand code arriving from `cookie-parser`
+// the other value for a session or auth cookie, silently.
 export const cookiesFrom = (header: string | null | undefined): Cookies => {
   const out = bag<string>()
   if (!header) return out
@@ -230,13 +230,12 @@ export const wrongEncoding = (contentType: string | undefined, encoding: Encodin
 // Only the `form` branch needs one, and only because `formData()` is the
 // platform's own multipart reader and there is no other door to it.
 //
-// The CONTENT-TYPE is checked FIRST, on every path. It used to be checked only
-// where a parser had run before us, on the reasoning that elsewhere a mismatch
-// fails in the parse itself — true for form, and NOT true for json: bytes that
-// happen to parse were accepted whatever the client called them. That gap has a
-// name, and it is not tidiness. `text/plain` is one of the three content-types a
-// browser may send cross-origin with NO preflight, so a JSON endpoint that
-// accepts it is reachable by a forged cross-site request that
+// The CONTENT-TYPE is checked FIRST, on every path, and not left to the parse
+// to catch. A mismatch does fail in the parse for form, and does NOT for json:
+// bytes that happen to parse would be accepted whatever the client called them.
+// That gap has a name, and it is not tidiness. `text/plain` is one of the three
+// content-types a browser may send cross-origin with NO preflight, so a JSON
+// endpoint that accepts it is reachable by a forged cross-site request that
 // `application/json` would have stopped at the preflight. Requiring the encoding
 // the step asked for is the cheap half of CSRF that costs nothing to hold.
 export const parseBody = (
@@ -249,10 +248,9 @@ export const parseBody = (
   if (encoding === 'json') {
     // `fatal: true`, and the default is why: a non-fatal decoder REPLACES every
     // invalid byte with U+FFFD and hands back a string, so a payload that is not
-    // UTF-8 arrived as mojibake and failed later — as a parse error if it was
-    // lucky, and as silently wrong data if the damage happened inside a string.
-    // The comment below used to claim the refusal that the decoder was not
-    // performing.
+    // UTF-8 would arrive as mojibake and fail later — as a parse error if it
+    // were lucky, and as silently wrong data where the damage fell inside a
+    // string. Fatal, the refusal happens here, on the bytes.
     //
     // Any `charset` the client names is ignored on purpose: RFC 8259 requires
     // JSON exchanged between systems to be UTF-8, so a payload in anything else
@@ -316,10 +314,9 @@ export const finishRead = async <E extends Encoding, Ctx, R>(
 
 // ── the four steps, built ONCE for the whole Fetch family ────────────────────
 // Hono and React Router differ in exactly one thing: where the `Request` is
-// found — `c.req.raw` on one, `request` on the other. Everything else was
-// duplicated verbatim between the two subpaths, so a fix to the typing had to be
-// applied twice by hand. It is written here instead, and each subpath passes its
-// one line.
+// found — `c.req.raw` on one, `request` on the other. Everything else is
+// identical, and written per subpath it would be two copies to fix in step. It
+// is written here instead, and each subpath passes its one line.
 //
 // Express is NOT of this family: `req` is a Node message, so its four are
 // written against that and adapt to these readers at the edge.

@@ -64,8 +64,8 @@ describe('keyed form — normal behaviour', () => {
   })
 
   it('a WIDENED patch forced past the ban still hits the net', async () => {
-    // The top-level widened patch is refused at compile time (decision
-    // 32); a cast defeats any guard — this net is what stands under it.
+    // The top-level widened patch is refused at compile time; a cast defeats
+    // any guard, and this net is what stands under it.
     const chain = lunette()
       .provide('db', () => 1)
       // @ts-expect-error — compile-time ban; the runtime is the safety net

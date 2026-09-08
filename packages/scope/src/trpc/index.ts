@@ -32,12 +32,12 @@ import type { Validated } from '../route-gate.ts'
 // then read.
 // `input` is FIXED at `unknown`, and that is the whole of what a run brings
 // here: the raw value tRPC hands a resolver, already read and validated by
-// `.input(schema)`. The carrier used to take an `In` saying which shape the
-// scope reads of it, and it went the way Express's and Hono's params
-// declarations went — what a scope reads of an entry is said by
-// `.validate('input', schema, onError)`, once, and `procedure` puts THAT in the
-// resolver's parameter so `.input(schema)` is still checked against it by
-// contravariance.
+// `.input(schema)`. An `In` here, saying which shape the scope reads of it,
+// would be a declaration on the CARRIER — fixed at the first call, so one base
+// value could not serve two procedures reading different inputs. What a scope
+// reads of an entry is said by `.validate('input', schema, onError)`, once, and
+// `procedure` puts THAT in the resolver's parameter so `.input(schema)` is
+// checked against it by contravariance.
 export interface TrpcCarrier<Ctx> {
   readonly __args?: { readonly input: unknown; readonly ctx: Ctx }
 }

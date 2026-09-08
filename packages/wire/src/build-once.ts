@@ -26,10 +26,11 @@ export interface BuildOnce<C> {
   // this per request must not pay for a seed that will be discarded, and the
   // signature must not promise a per-request seed it ignores. A seed that
   // varies per call is therefore never even computed — the per-call axis is the
-  // window (principle 4), never a second app.
+  // window, never a second app.
   // THROWS after `dispose`: a disposed handle has no app to hand back, and the
   // one it built is running on closed resources. Infrastructure, so thrown
-  // rather than returned (principle 3).
+  // rather than returned: a returned error is a domain outcome, and this is
+  // not one.
   ensure(seed: () => SeedOf<C>): Promise<BuiltOf<C>>
   // Tear the chain down, ONCE. A handle that never built has nothing to close.
   // Called again it returns the FIRST teardown's promise rather than repeating

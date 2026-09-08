@@ -77,12 +77,12 @@ declare const PASSED: unique symbol
 // The member is REQUIRED, and that is load-bearing rather than tidy. Optional,
 // this is a WEAK TYPE: `R extends Passed` then holds for anything that could
 // carry the key, so an index signature satisfies it. A leaf returning
-// `Record<string, number>` — a tally, a bag of headers, a wide row — was
-// EXCLUDED by `ValueOf` and the scope declared `never`, which is assignable to
-// everything, so every consumer downstream compiled and received at runtime a
-// value the types called impossible. Requiring the key costs nothing: nobody
-// constructs a `Passed`, and the only value that ever stands for one is the
-// assertion inside the fold.
+// `Record<string, number>` — a tally, a bag of headers, a wide row — would then
+// be EXCLUDED by `ValueOf` and the scope would declare `never`, which is
+// assignable to everything: every consumer downstream compiles and receives at
+// runtime a value the types called impossible. Requiring the key costs nothing:
+// nobody constructs a `Passed`, and the only value that ever stands for one is
+// the assertion inside the fold.
 export interface Passed {
   readonly [PASSED]: true
 }
@@ -250,14 +250,14 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 // instead, and a verb named `name` or `length` throws from inside `.extend`,
 // because a function's own properties are not writable.
 //
-// The alphabet is CLOSED, and closing it takes THREE categories — a count this
-// list got wrong twice, each time by declaring closure over a partial
-// enumeration. They differ in HOW they fail, which is why they are named apart
-// rather than merged into one flat list.
+// The alphabet is CLOSED, and beyond the names the builder installs, closing it
+// takes FOUR categories of name the language itself puts on a function. A partial
+// enumeration is the trap: each category is invisible until someone names it,
+// and they differ in HOW they fail, which is why they are named apart rather
+// than merged into one flat list.
 //
 //   OWN properties of a function (`name`, `length`, `prototype`, `caller`,
-//   `arguments`). Assignment THROWS, so the failure is at least loud — which is
-//   exactly why these were the ones noticed first.
+//   `arguments`). Assignment THROWS, so the failure is at least loud.
 //
 //   INHERITED members: `bind`, `call`, `apply`, `toString`, `constructor` from
 //   `Function.prototype`, and `valueOf`, `hasOwnProperty`, `isPrototypeOf`,
@@ -282,7 +282,7 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 //
 //   PROTOCOL names, which the language gives meaning to on any object. Only
 //   `then` is reachable — a verb name is a string key, so `Symbol.iterator` and
-//   its kind cannot be one — and it is the worst of the three. A scope carrying
+//   its kind cannot be one — and it is the worst of the four. A scope carrying
 //   `then` IS a thenable, so `await` calls it with `(resolve, reject)`; the verb
 //   wrapper reads those as the verb's own arguments, pushes a step and returns
 //   a builder, resolving nothing. The promise stays pending forever, and any
@@ -292,9 +292,9 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 // `U` sits on the ALIAS, not the method, for the reason `ReturnGate`'s does —
 // a defaulted parameter in a method's own list is caller-overridable.
 // ONE list, read twice. The type derives from the array, so the two halves of
-// this gate cannot drift apart — which they could while both were written out
-// by hand, and which nothing would have reported. Same move the barrel made:
-// no second list to keep in step with the first.
+// this gate cannot drift apart — written out by hand they could, with nothing
+// reporting it. No second list to keep in step with the first, here as at the
+// barrel.
 const RESERVED = [
   // what the builder installs
   'steps',
@@ -343,9 +343,9 @@ type VerbGate<
 
 // How anything OUTSIDE the builder reads what a scope accumulated — a mount
 // asking what it can render, a test asking what it yields. With the state in a
-// parameter, one conditional reads all of it; the per-axis phantoms this
-// replaced were not merely redundant, an INVARIANT one blocked the inference of
-// `S` from a verb's `this` altogether.
+// parameter, one conditional reads all of it. A phantom per axis is not merely
+// redundant beside it: an INVARIANT one blocks the inference of `S` from a
+// verb's `this` altogether.
 export type StateOf<Sc> = Sc extends Scope<infer S> ? S : never
 export type ResultOf<Sc> = ValueOf<StateOf<Sc>['returns']>
 
@@ -366,8 +366,9 @@ export type ResultOf<Sc> = ValueOf<StateOf<Sc>['returns']>
 // refinement and a collision is INTENT, which no type can read. Under parallel
 // steps it is worse: `Promise.all` has no order, so last-writer-wins stops
 // being deterministic and there is no correct answer to converge on. `wire`
-// reached the same verdict for the chain's context (`DupKeyMsg`), and this is
-// principle 1 applied to the scope's.
+// reached the same verdict for the chain's context (`DupKeyMsg`), and the rule
+// is the same one: a configuration error surfaces at the call site, at compile
+// time.
 //
 // The deliberate case has a way out already, and it costs nothing to offer: a
 // VERB does not come through here. `.extend`'s wrapper pushes its step directly,
@@ -482,7 +483,7 @@ export interface Scope<S extends State> {
   // populates — so a step is a bare function and declares nothing.
   //
   // `ctx` is typed `Ctx<S>`, and that one position does the work an alphabet of
-  // transport features was going to do. Under `strictFunctionTypes` a
+  // declared transport features would do. Under `strictFunctionTypes` a
   // function-typed parameter is contravariant, so a step ANNOTATING a wider ctx
   // than the scope holds is refused right here, naming the missing member. A
   // step reading what the scope has not got is not a rule the core enforces — it
@@ -641,8 +642,8 @@ function make(steps: readonly AnyStep[], verbs: Verbs): Built {
       // name that is both has to get the same verdict from both halves.
       // Checking `taken` first hides the reserved name behind it: the author
       // fixes what was named, re-runs, and only then meets the other one — the
-      // same masking the `hasOwn` note below is about, arriving by a different
-      // door. `make`'s sweep stays as the backstop for verbs that arrive by
+      // same masking `hasOwn` rather than `in` avoids just above, arriving by a
+      // different door. `make`'s sweep is the backstop for verbs that arrive by
       // some other route than this one.
       refuseReserved(Object.keys(ext.methods))
       const taken = Object.keys(ext.methods).filter((k) => Object.hasOwn(verbs, k))

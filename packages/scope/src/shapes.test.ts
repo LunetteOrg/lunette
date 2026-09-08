@@ -76,8 +76,8 @@ const refineToken = async (
 // Let the rest run and act on what came BACK. A step wraps `next`, so it has an
 // after — where a span is closed, a metric flushed, a rolling session cookie
 // attached to whatever the leaf decided. A pre-hook plus a collector could not
-// express this, and it is the shape that replaced sinks: with the
-// outbound side a RETURNED value, decorating it is ordinary code.
+// express this: with the outbound side a RETURNED value, decorating it is
+// ordinary code.
 const timed = (log: string[]) => async (_app: {}, _ctx: {}, next: Next<{}>) => {
   log.push('in')
   const out = await next({})
@@ -252,12 +252,12 @@ describe('a step that hands back nothing', () => {
 })
 
 // ── a step may not re-populate a ctx key ─────────────────────────────────────
-// The types intersected where the runtime overwrote, and `never` made the
-// disagreement silent: assignable to everything, so every later use compiled
-// while the run handed back the second step's value. Refused now, because the
-// difference between a refinement and a collision is intent and no type can
-// read it — and because under parallel steps last-writer-wins is not even
-// deterministic.
+// Unrefused, the types INTERSECT where the runtime OVERWRITES, and `never`
+// makes the disagreement silent: assignable to everything, so every later use
+// compiles while the run hands back the second step's value. It is refused
+// rather than resolved because the difference between a refinement and a
+// collision is intent and no type can read it — and because under parallel
+// steps last-writer-wins is not even deterministic.
 describe('two steps populating the same ctx key', () => {
   it('is REFUSED at the step that wrote the second, with the key named', () => {
     const refused = () => {
@@ -311,10 +311,10 @@ describe('two steps populating the same ctx key', () => {
 })
 
 // ── the runtime halves of what `contract.test-d.ts` states as types ──────────
-// They lived there as `expect(...)` calls, which never ran: a `*.test-d.ts` is
-// typechecked and never executed. The TYPE claims stay there, where they
-// belong; these are the halves that have to actually happen, because a type
-// says nothing about what the runtime does when it gets there.
+// An `expect(...)` written beside those type claims never runs: a `*.test-d.ts`
+// is typechecked and never executed. The TYPE claims belong there; these are the
+// halves that have to actually happen, because a type says nothing about what
+// the runtime does when it gets there.
 describe('what the type contract claims, happening', () => {
   it('a base that stops early hands its value back, rather than reaching the no-leaf throw', async () => {
     const base = scope(fixture).step(async (_app: {}, ctx, next: Next<{}>) =>
@@ -325,10 +325,11 @@ describe('what the type contract claims, happening', () => {
   })
 
   it('a leaf whose value has an index signature really hands that value back', async () => {
-    // The other half of the `Passed` weak-type regression: the type side pins
-    // that `ResultOf` is `Record<string, number>` and not `never`, and this
-    // pins that the value arrives — which is what made the old bug a lie rather
-    // than merely a wrong type.
+    // The other half of the `Passed` weak-type claim: the type side pins that
+    // `ResultOf` is `Record<string, number>` and not `never`, and this pins that
+    // the value arrives. Both halves are needed — `never` is assignable to
+    // everything, so a wrong type here would compile everywhere downstream while
+    // the value showed up anyway.
     const tally = scope(fixture).step(
       async (_app: {}, _ctx: {}) => ({ hits: 1 }) as Record<string, number>,
     )

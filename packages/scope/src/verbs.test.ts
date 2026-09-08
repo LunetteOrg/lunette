@@ -23,8 +23,7 @@ import {
 
 // ── what a verb produces: an ordinary step ───────────────────────────────────
 // A factory, from its own arguments TO A STEP. It never sees the builder or a
-// callback to rebuild it: pushing the step is the core's job, and that was the
-// only thing any verb ever did with them.
+// callback to rebuild it: pushing the step is the core's job.
 const withHeader =
   (name: string, value: string) =>
   async (_app: {}, _ctx: {}, next: Next<{}>) => {
@@ -166,7 +165,8 @@ describe('an extension enriches the builder, and nothing else', () => {
     // `Surface` with `Record<string, (...a: any[]) => any>` keeps the call below
     // an error — `noUncheckedIndexedAccess` makes the property "possibly
     // undefined" — so the directive stays used and the widening goes unnoticed.
-    // Measured: that mutation left all 81 tests green and zero type errors.
+    // Measured: that mutation leaves the whole suite green, with no type
+    // error anywhere.
     //
     // Asking whether the name is a KEY has no such escape.
     //
@@ -269,11 +269,11 @@ describe('a verb cannot take a name the surface already owns', () => {
   it('reports the RESERVED name first, in the order the type gate reports them', () => {
     // The two halves have to agree on more than the verdict. `VerbGate` nests
     // `Own` outside `Taken`, so a name that is both reserved and already
-    // contributed is reported as reserved; the runtime used to check `taken`
-    // in `.extend` and reach the reserved sweep only afterwards, so it said the
-    // opposite. The author fixes the name it named, re-runs, and only then
-    // meets the other one — which is the masking the `hasOwn`-not-`in` note
-    // above exists to prevent, arriving by a different door.
+    // contributed is reported as reserved, and `.extend` sweeps for reserved
+    // names before it asks which are taken. The other order hides the reserved
+    // name behind the taken one: the author fixes the name it named, re-runs,
+    // and only then meets the second — the same masking `hasOwn` rather than
+    // `in` avoids in the taken check, arriving by a different door.
     const both = {
       methods: {
         header: () => (async () => 'x') as unknown as AnyStep,
@@ -327,8 +327,9 @@ describe('a verb cannot take a name the surface already owns', () => {
   })
 
   it('refuses one named `valueOf`, from the half of the prototype chain that is not a function`s', () => {
-    // `Object.prototype`, which the list had missed while claiming to be
-    // closed over "what every function carries".
+    // `Object.prototype`: a name inherited from the half of the chain that is
+    // not a function's, so enumerating what a FUNCTION carries never reaches
+    // it.
     const shadowsValueOf = {
       methods: { valueOf: () => (async () => 'x') as unknown as AnyStep },
     }
@@ -336,7 +337,7 @@ describe('a verb cannot take a name the surface already owns', () => {
   })
 
   it('refuses one named `name`, which would otherwise throw from inside the core', () => {
-    // A function's `name` is not writable, so this used to surface as
+    // A function's `name` is not writable, so unrefused this surfaces as
     // `TypeError: Cannot assign to read only property 'name' of function` —
     // pointing at `make`, never at the extension that caused it.
     const shadowsName = {
@@ -376,11 +377,11 @@ describe('awaiting a scope', () => {
 })
 
 // ── two extensions cannot both own a verb name ───────────────────────────────
-// The two halves used to disagree and neither said so. `Surface` intersects, so
-// a shared name becomes an OVERLOAD LIST where TypeScript prefers the EARLIER
-// signature for arguments it accepts; `.extend`'s merge is `{ ...verbs,
-// ...ext.methods }` and keeps the LATER factory. So the call site was checked
-// against one extension and served by the other.
+// Unrefused, the two halves disagree with nothing saying so. `Surface`
+// intersects, so a shared name becomes an OVERLOAD LIST where TypeScript
+// prefers the EARLIER signature for arguments it accepts; `.extend`'s merge is
+// `{ ...verbs, ...ext.methods }` and keeps the LATER factory — the call site
+// checked against one extension and served by the other.
 interface TagString {
   tag<S extends State>(this: Scope<S>, v: string): Surface<S>
 }
@@ -434,10 +435,9 @@ describe('a verb name already contributed by another extension', () => {
 })
 
 // ── the alphabet is closed, and this is what proves it ───────────────────────
-// It has declared closure three times and been short three times — first
-// `Function.prototype`, then the protocol names, then the accessors — and each
-// miss was a CATEGORY, never a single name. Three reviews found them one at a
-// time.
+// What a hand-written list misses is a CATEGORY, never a single name —
+// `Function.prototype`'s members, the protocol names, the inherited accessors —
+// and each category is invisible until someone thinks of it.
 //
 // So this does not compare the list against another list written by hand. It
 // derives the QUESTION from the runtime — every name actually reachable on a
@@ -498,8 +498,9 @@ describe('every name reachable on a scope is refused as a verb', () => {
 // It pushes its step by a different route — the wrapper in `make`, not `.step`
 // — so the immutability that `fold.test.ts` pins for the primitive has to be
 // pinned here too. A base carrying verbs is exactly the thing meant to be
-// shared, and nothing checked that calling one twice from the same base did not
-// accumulate.
+// shared, and it takes a test calling one TWICE from the same base to pin: a
+// suite that calls each verb once stays green while the base accumulates under
+// everyone.
 describe('branching a base that carries verbs', () => {
   it('leaves the base untouched, and each call independent', async () => {
     const base = scope<{}>().extend(pins)

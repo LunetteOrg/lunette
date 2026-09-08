@@ -3,18 +3,20 @@ import { scope, type Next } from './index.ts'
 import { fixture, refused, type Refusal } from './fixture/carrier.ts'
 
 // THE TYPE CONTRACT, in the half that has to RUN — the companion to
-// `contract.test-d.ts`, split from it because these claims were pretending.
+// `contract.test-d.ts`, and separate from it because these claims cannot be
+// made there.
 //
 // Each of these builds a scope and awaits it to name the type of what came
-// back. In a `*.test-d.ts` that await never happened: the file is typechecked
-// and never executed, so the line read as a run and was one only on paper. Here
-// it is a run, and the type claim beside it is still checked — by
+// back. In a `*.test-d.ts` that await never happens: the file is typechecked
+// and never executed, so such a line reads as a run and is one only on paper.
+// Here it is a run, and the type claim beside it is still checked — by
 // `tsc --noEmit`, which reads every file whatever it is called, `expectTypeOf`
 // included (measured: a false one is `TS2344`).
 //
-// Which is why each case now says BOTH things. The type was the only claim
-// while the file could not run; the value is what a run is for, and asserting
-// only one of them was how four assertions came to sit here proving nothing.
+// Which is why each case says BOTH things. A type claim alone says nothing
+// about what happens at runtime, and a value alone says nothing about what the
+// scope declares; either on its own is an assertion that proves less than it
+// looks.
 
 interface Repos {
   readonly users: { readonly byId: (id: string) => { readonly name: string } | undefined }
@@ -65,7 +67,7 @@ describe('what a scope yields', () => {
     const base = scope<{ readonly id: string }>().step(
       async (_app: {}, ctx, next: Next<{ upper: string }>) => next({ upper: ctx.id }),
     )
-    // And this is the case that could not be written honestly before: `never`
+    // And this is the case that cannot be made in a type-only file: `never`
     // has no inhabitant, so there is no value to name — the run THROWS, and
     // saying so takes running it. The type half stays beside it.
     const run = () => base({}, { id: 'u1' })

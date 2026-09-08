@@ -16,11 +16,11 @@ import type { Validated } from '../route-gate.ts'
 import { fetchReads } from '../reads.ts'
 
 // `params` is React Router's own `Params`, whose values are `string |
-// undefined` — the width a route really hands a loader. The carrier used to
-// take what the scope said the route supplies
-// (`reactRouterCarrier<Route.LoaderArgs['params']>()`), and it went the way the
-// other three declarations went: what a scope reads of an entry is said
-// by `.validate('params', schema, onError)`, once, per BRANCH.
+// undefined` — the width a route really hands a loader. A declaration of what
+// the route supplies would sit on the CARRIER
+// (`reactRouterCarrier<Route.LoaderArgs['params']>()`), and there is none: what
+// a scope reads of an entry is said by `.validate('params', schema, onError)`,
+// once, per BRANCH.
 //
 // That last word is the reason, and it is sharper here than anywhere else. A
 // type argument is fixed at `scope(carrier<X>())` — the FIRST call — so every
@@ -35,9 +35,9 @@ export interface ReactRouterCarrier {
   readonly __args?: { readonly request: Request; readonly params: Params }
 }
 
-// PURE DECLARATION — the returned object carries nothing, and there is no type
-// argument left for the call to make a claim with. It stays a call because one
-// vocabulary should not have a carrier invoked beside a carrier that is not.
+// PURE DECLARATION — the returned object carries nothing, and it takes no type
+// argument to make a claim with. It stays a call because one vocabulary should
+// not have a carrier invoked beside a carrier that is not.
 export const reactRouterCarrier = (): ReactRouterCarrier => ({})
 
 // `loader` and `action` are the same wrapper twice, and stay two names on

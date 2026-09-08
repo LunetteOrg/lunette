@@ -24,11 +24,11 @@
 // gate that refuses a step re-populating a key. The four read extensions only
 // ADD, so they stay plain steps. The line falls where the gate already is.
 //
-// WHY THIS IS NOT IN THE CORE. Principle 6 — extensions are dialects, never
-// verbs grafted into the core — and the cost of a verb there is paid by every
-// scope that never calls it. Nor is it per carrier: nothing in here is
-// host-specific, because the one part that knew about a host (how to fail) lives
-// in the caller now.
+// WHY THIS IS NOT IN THE CORE. An extension is a dialect, never a verb grafted
+// into the core, and the cost of a verb there is paid by every scope that never
+// calls it. Nor is it per carrier: nothing in here is host-specific, because the
+// one part that knows about a host — how to fail — lives in the caller's
+// `onError`.
 
 import type { AnyStep, Collides, Ctx, Extension, Scope, State, Surface } from '../index.ts'
 
@@ -95,12 +95,10 @@ export type OutputOf<Sch extends StandardSchemaV1> = Extract<
 // A symbol key private to this module, so a failure cannot collide with any
 // enrichment a check produces.
 //
-// This is NOT the carrier vocabulary this runtime once had, and the difference
-// is worth stating because it looks like one. That was an OPEN ALPHABET of words coined per
-// carrier and checked twice; this is ONE value, owned by one extension, meaning
-// exactly one thing. And the host's response never passes through a check at
-// all — `onError` builds it — so what is left to say is one bit, optionally with
-// issues. A sentinel covers it.
+// ONE value, owned by one extension, meaning exactly one thing — not an
+// alphabet of refusals a check may pick from. The host's response never passes
+// through a check at all (`onError` builds it), so all a check has to say is one
+// bit, optionally with issues, and a sentinel covers that.
 //
 // A THROW IS NOT A FAILURE SIGNAL and is never caught here. Under the error
 // convention a thrown error is INFRASTRUCTURE — rollback, retry, nack — so a

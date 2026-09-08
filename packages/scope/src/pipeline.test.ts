@@ -8,11 +8,11 @@ import { fail, guards } from './guard/index.ts'
 import * as ex from './express/index.ts'
 import * as ho from './hono/index.ts'
 
-// THE TWO SLICES MEETING, which is why they shipped together: an extension
-// POPULATES an entry from the host, and a verb REFINES it. `body('json')` gives
-// `unknown`; `validate('body', schema, onError)` gives the schema's output. The
-// division of labour is the whole design — the extraction knows the host, the
-// refinement knows nothing about it.
+// THE TWO SLICES MEETING: an extension POPULATES an entry from the host, and a
+// verb REFINES it. `body('json')` gives `unknown`; `validate('body', schema,
+// onError)` gives the schema's output. The division of labour is the whole
+// design — the extraction knows the host, the refinement knows nothing about
+// it.
 //
 // It also shows the TWO failure points a real route has, reporting different
 // things: "not JSON" and "JSON, but the wrong shape". Passing one constant to
@@ -95,9 +95,9 @@ describe('Hono: the same scope shape, in its own idiom', () => {
 
 describe('what the ORDER says, and where it is caught', () => {
   it('a guard reading an entry nothing populated yet is refused', () => {
-    // Written the other way round — the guard before `ex.headers` — this file
-    // answered 500 at runtime AND failed `tsc`. The same mistake, twice, and the
-    // compile error is the one that arrives first.
+    // Written the other way round — the guard before `ex.headers` — this
+    // would answer 500 at runtime AND fail `tsc`. The same mistake, twice, and
+    // the compile error is the one that arrives first.
     const refused = () => {
       scope(ex.expressCarrier())
         .extend(guards)

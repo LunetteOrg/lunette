@@ -65,7 +65,7 @@ describe('bind (types)', () => {
   it('one arity only: there is no second argument to forget', () => {
     const ctx = { otpRepo: { consume: async () => true } }
 
-    // the old two-argument form is an arity error, not a silent rebind
+    // a second argument is an arity error, not a silent rebind
     // @ts-expect-error — bind takes exactly one argument, the record
     bind(ctx, { requestOtp })
   })
@@ -83,9 +83,9 @@ describe('bind (types)', () => {
   })
 
   it('a bare leaf without braces is rejected at the call', () => {
-    // The braces are the NAME CARRIER (a function's name is runtime-only,
-    // so `bind(leaf)` could never produce a typed record — see decision
-    // 28d). Forgetting them is an immediate error, tsc 5.9 verbatim:
+    // The braces are the NAME CARRIER: a function's name is runtime-only, so
+    // `bind(leaf)` has nothing to key a typed record by. Forgetting them is an
+    // immediate error, tsc 5.9 verbatim:
     //   error TS2345: Argument of type '(deps: …) => Promise<…>' is not
     //     assignable to parameter of type 'Record<string, Leaf>'.
     //   Index signature for type 'string' is missing in type '(deps: …)…'.
