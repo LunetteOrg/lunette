@@ -3053,7 +3053,7 @@ promise the callable returns.
 - **Gating a schema against its entry's RAW type** was measured in both
   directions and neither ships, and the reason is worth keeping because it is
   not "we did not get to it". Re-measured here on zod 4.5.4, the version this
-  package pins, over `Query = Record<string, string | string[]>`:
+  workspace resolves (the package declares the range `^4.5.4`), over `Query = Record<string, string | string[]>`:
 
   `Raw extends InferInput<S>` rejects every keyed object schema, including
   `z.object({ page: z.string() })`, which is a valid declaration over a query
