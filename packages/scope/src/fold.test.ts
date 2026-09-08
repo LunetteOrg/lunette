@@ -8,12 +8,11 @@ import { scope, type Next } from './index.ts'
 // ctx it starts from are all decided here, before any carrier exists.
 //
 // The base builder has ONE verb, so every one of these is written with nothing
-// but `.step()`. What the sugar will buy later is not power — it is not having
-// to call `next` correctly.
+// but `.step()`. What sugar over it buys is not power — it is not having to
+// call `next` correctly.
 
-// Declaring termination, written out. `handle` will be sugar for exactly this
-// one line, and for nothing else: the leaf itself needs no wrapping, because
-// the fold hands back whatever any step returned, untouched.
+// Declaring termination, written out: the leaf itself needs no wrapping,
+// because the fold hands back whatever any step returned, untouched.
 interface Repos {
   readonly users: { readonly byId: (id: string) => { readonly name: string } | undefined }
 }

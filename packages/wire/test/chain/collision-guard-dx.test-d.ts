@@ -2,20 +2,21 @@
 // WHERE the guard diagnostics land and WHAT they say, for the two places a
 // check like this can ride — the RETURN type and the ARGUMENT.
 // Verbatim tsc 5.9 output is quoted above each @ts-expect-error. All
-// prototypes are self-contained declared classes; the final section
-// exercises the real chain. The contract files assert the behaviour —
+// prototypes are self-contained declared classes; the later sections
+// exercise the real chain. The contract files assert the behaviour —
 // this file is the evidence record.
 //
-// Emoji rendering note: non-ASCII characters in
-// property NAMES are printed escaped in diagnostics ('⛔ keys …'),
-// while string literal VALUES print raw ('⛔ key …'). Consequence:
-// ASCII brand property, emoji only in the message value.
+// Emoji rendering note: non-ASCII characters in property NAMES are printed
+// escaped in diagnostics ('⛔ keys …'), while string literal VALUES print
+// raw ('⛔ key …'). Consequence: ASCII brand property, emoji only in the
+// message value.
 //
 // Scope: the keyed form (constraint on the key literal), the patch form
 // (same trick on fn's return type), the mount form (fragment
 // requirements at the mount point), the honest cost of the real verbs'
-// overload sets, and the brand-property refinement (a private symbol — the
-// string-keyed prototypes below stand as written; see the last section).
+// overload sets, and the brand property (a private symbol on the real chain;
+// the prototypes below key theirs by name, which is what the last section
+// measures the cost of).
 
 import { describe, expectTypeOf, it } from 'vitest'
 import { lunette } from '../../src/index.ts'
@@ -81,7 +82,7 @@ describe('guard on the RETURN type', () => {
   })
 })
 
-// ── the prototypes: move the check onto the ARGUMENT ──────────────────────
+// ── the prototypes: the check on the ARGUMENT ─────────────────────────────
 
 // B1 — message as a bare string literal. DEAD END, recorded so it is not
 // re-proposed: "db" & "⛔ …" are two different string literals, so the
@@ -197,11 +198,10 @@ describe('prototype B2: argument constraint, object-branded message', () => {
 })
 
 // ── the mount form: fragment requirements at the mount point ──────────────
-// The remaining verb form from the spike. The gate stays [Ctx] extends
-// [FSeed] (authoritative, same gate as the return-type MountGuard this
-// replaces); the MESSAGE
-// names the unmet keys — missing entirely, or present with an
-// incompatible type.
+// The verb form of the same question. The gate is [Ctx] extends [FSeed],
+// authoritative on either side, and what differs is the MESSAGE: this one
+// names the unmet keys — missing entirely, or present with an incompatible
+// type.
 
 type UnmetSeed<Ctx, FSeed> = {
   [K in keyof FSeed]: K extends keyof Ctx
@@ -433,12 +433,12 @@ describe('the real overload set: TS2769 wraps, the message survives', () => {
 })
 
 // ── the brand property: a private symbol, not a string name ───────────────
-// Found in review sparring: a STRING-keyed brand ({ collision: msg }) can
-// be satisfied — deliberately, by writing the exact message into the
-// patch (the guard lifts; only the runtime net catches the collision) —
-// and it competes with a legitimate domain key named 'collision' (the
-// error then demands the user's own property equal the guard message).
-// The fix is the house idiom already used by providedBrand: the brand
+// A STRING-keyed brand ({ collision: msg }) can be satisfied —
+// deliberately, by writing the exact message into the patch (the guard
+// lifts; only the runtime net catches the collision) — and it competes
+// with a legitimate domain key named 'collision' (the error then demands
+// the user's own property equal the guard message). The house idiom
+// closes both: the brand
 // property is an UNEXPORTED unique symbol — nobody outside chain.ts can
 // name it, so it cannot be produced (short of a cast, which defeats any
 // guard, on either side) and never meets user keys.
@@ -446,14 +446,14 @@ describe('the real overload set: TS2769 wraps, the message survives', () => {
 // value is unchanged. Contract: collision-guard.test-d.ts ("unforgeable").
 
 describe('the brand property is a private symbol', () => {
-  it('writing the exact message into the patch no longer compiles', () => {
+  it('writing the exact message into the patch does not compile', () => {
     //   error TS2322: ...
     //     Property '[collision]' is missing in type '{ db: string;
     //     collision: "⛔ key already present in the context: db"; }' but
     //     required in type '{ [collision]: "⛔ key already present in the
     //     context: db"; }'.
-    // (with the string brand this line COMPILED — the paradox that
-    // triggered the refinement)
+    // (with a string brand this line COMPILES — the paradox a private
+    // symbol removes)
     // @ts-expect-error — the hand-written property is not the brand
     void lunette().provide(() => ({ db: 1 })).provide(() => ({
       db: 'two',
@@ -479,7 +479,7 @@ describe('the brand property is a private symbol', () => {
 
     //   error TS2322: Type '{ db: string; collision: { bodies: number; }; }'
     //     is not assignable ... Property '[collision]' is missing ...
-    // (with the string brand the demand was on the USER's property:
+    // (with a string brand the demand lands on the USER's property:
     //   Type '{ bodies: number; }' is not assignable to type
     //   '"⛔ key already present in the context: db"')
     // @ts-expect-error — the clash on db is reported, the domain key is left alone
@@ -491,9 +491,9 @@ describe('the brand property is a private symbol', () => {
 })
 
 // ── non-string keys: the message, and then the deeper hole ────────────────
-// THE MESSAGE COLLAPSES for number and symbol keys: `${K & string}` is never for both, and interpolating never kills
-// the whole template ({ [collision]: never } — red, but mute). Fixing it
-// split the two kinds:
+// THE MESSAGE COLLAPSES for number and symbol keys: `${K & string}` is
+// never for both, and interpolating never kills the whole template
+// ({ [collision]: never } — red, but mute). So the two kinds are split:
 //
 // SYMBOLS get a label. There is no `${symbol}` at the type level — a
 // unique symbol has no name a template can print. The oracle killed the
