@@ -18,8 +18,8 @@ import { fetchReads } from '../reads.ts'
 // `params` is React Router's own `Params`, whose values are `string |
 // undefined` — the width a route really hands a loader. A declaration of what
 // the route supplies would sit on the CARRIER
-// (`reactRouterCarrier<Route.LoaderArgs['params']>()`), and it does not: what a
-// scope reads of an entry is said by `.validate('params', schema, onError)`,
+// (`reactRouterCarrier<Route.LoaderArgs['params']>()`), and there is none: what
+// a scope reads of an entry is said by `.validate('params', schema, onError)`,
 // once, per BRANCH.
 //
 // That last word is the reason, and it is sharper here than anywhere else. A

@@ -439,9 +439,8 @@ describe('the real overload set: TS2769 wraps, the message survives', () => {
 // with a legitimate domain key named 'collision' (the error then demands
 // the user's own property equal the guard message). The house idiom closes
 // both: the brand property is an UNEXPORTED unique symbol — nobody outside
-// chain.ts can
-// name it, so it cannot be produced (short of a cast, which defeats any
-// guard, on either side) and never meets user keys.
+// chain.ts can name it, so it cannot be produced (short of a cast, which
+// defeats any guard, on either side) and never meets user keys.
 // Diagnostics print it as '[collision]' / '[requirement]'; the message
 // value is unchanged. Contract: collision-guard.test-d.ts ("unforgeable").
 

@@ -459,8 +459,8 @@ describe('an any context is refused by name, not with a false collision', () => 
 
   it("residual, pinned: a WIDENED string key is the runtime net's territory", () => {
     // A LIMIT of any literal-based guard, whichever side it rides:
-    // Extract<string, 'db'> is never, so a key typed as
-    // plain `string` bypasses the literal-based check and the runtime
+    // Extract<string, 'db'> is never, so a key typed as plain `string`
+    // bypasses the literal-based check and the runtime
     // net throws at boot instead (asserted in keyed.test.ts). One of the
     // widened-type residuals the literal-based guard cannot see.
     const widened: string = 'db'
