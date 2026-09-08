@@ -23,8 +23,7 @@ import {
 
 // ── what a verb produces: an ordinary step ───────────────────────────────────
 // A factory, from its own arguments TO A STEP. It never sees the builder or a
-// callback to rebuild it: pushing the step is the core's job, and that was the
-// only thing any verb ever did with them.
+// callback to rebuild it: pushing the step is the core's job.
 const withHeader =
   (name: string, value: string) =>
   async (_app: {}, _ctx: {}, next: Next<{}>) => {
@@ -166,8 +165,8 @@ describe('an extension enriches the builder, and nothing else', () => {
     // `Surface` with `Record<string, (...a: any[]) => any>` keeps the call below
     // an error — `noUncheckedIndexedAccess` makes the property "possibly
     // undefined" — so the directive stays used and the widening goes unnoticed.
-    // Measured: that mutation leaves the whole suite green and zero type
-    // errors.
+    // Measured: that mutation leaves the whole suite green, with no type
+    // error anywhere.
     //
     // Asking whether the name is a KEY has no such escape.
     //

@@ -237,15 +237,15 @@ export const express = <App extends object>(deps: App) => {
     //   app.get('/posts/:id', handler(scope))      the bare handler, nothing checked
     //
     // Which one is called `route` is the whole point. Written as one verb with
-    // two forms, the shorter and more natural call — `route(scope)` — was the
-    // one that checks NOTHING, so the library's own principle 1 cost an extra
+    // two forms, the shorter and more natural call — `route(scope)` — would be
+    // the one that checks NOTHING, so the checked path would cost an extra
     // argument and a spread while the mistake was free. The adjective belongs
     // on whoever gives something up, not on whoever keeps it, so the escape
     // hatch is the one that has to be named — and `handler` says what it hands
     // back rather than what it skips.
     //
-    // WHAT `route` COMPARES IS THE SCHEMA, not a declaration on the carrier
-    //. A scope that says what the URL carries says it once, in
+    // WHAT `route` COMPARES IS THE SCHEMA, not a declaration on the carrier.
+    // A scope that says what the URL carries says it once, in
     // `.validate('params', schema, onError)`, and the gate reads that: the
     // pattern is needed to route and the schema is needed to validate, so
     // nothing is written a third time merely to be compared. A scope that
@@ -444,7 +444,7 @@ export const cookies = async (
 // unsafe: the encoding check below closes the case where the data would be
 // WRONG, and what is left is which of two correct answers the client gets.
 //
-// THE READ BELOW HAS A CEILING, `DEFAULT_BODY_LIMIT` unless a caller sets its own,
+// THE READ BELOW HAS A CEILING, `DEFAULT_BODY_LIMIT` unless a caller sets one,
 // so the recommendation above does not trade `express.json()`'s 100 kB default
 // for nothing. Node has no size limit of its own, so this is the only one
 // standing on the unparsed path.

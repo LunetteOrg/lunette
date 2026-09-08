@@ -2,7 +2,7 @@
   "name": "@lntt/flow",
   "version": "0.0.0",
   "private": true,
-  "description": "Flow/orchestration dialect for @lntt/wire. Status: planned.",
+  "description": "Flow/orchestration dialect for @lntt/wire. A scaffold: no surface of its own yet.",
   "license": "MIT",
   "type": "module"
 }

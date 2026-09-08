@@ -22,9 +22,9 @@ import { answered, badArgs, fixture, refused, type Refusal } from './fixture/car
 // So the claims needing a run live in `contract.test.ts`, where they run: the
 // ones building a scope and awaiting it to name what came back, where the await
 // does nothing here. What is left is type-level throughout — conditional types
-// read directly, and refusals under `@ts-expect-error` inside
-// functions nobody calls, which is also what keeps a directive from silencing a
-// line that would really throw.
+// read directly, and refusals under `@ts-expect-error` inside functions nobody
+// calls, which is also what keeps a directive from silencing a line that would
+// really throw.
 
 interface Repos {
   readonly users: { readonly byId: (id: string) => { readonly name: string } | undefined }

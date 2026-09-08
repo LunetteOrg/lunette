@@ -2,7 +2,7 @@
   "name": "@lntt/listener",
   "version": "0.0.0",
   "private": true,
-  "description": "Event-consumer dialect for @lntt/wire (Redis, SQS, ... as swappable engines). Status: planned.",
+  "description": "Event-consumer dialect for @lntt/wire (Redis, SQS, ... as swappable engines). A scaffold: no surface of its own yet.",
   "license": "MIT",
   "type": "module"
 }

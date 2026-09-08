@@ -250,7 +250,8 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 // instead, and a verb named `name` or `length` throws from inside `.extend`,
 // because a function's own properties are not writable.
 //
-// The alphabet is CLOSED, and closing it takes FOUR categories. A partial
+// The alphabet is CLOSED, and beyond the names the builder installs, closing it
+// takes FOUR categories of name the language itself puts on a function. A partial
 // enumeration is the trap: each category is invisible until someone names it,
 // and they differ in HOW they fail, which is why they are named apart rather
 // than merged into one flat list.
@@ -281,7 +282,7 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 //
 //   PROTOCOL names, which the language gives meaning to on any object. Only
 //   `then` is reachable — a verb name is a string key, so `Symbol.iterator` and
-//   its kind cannot be one — and it is the worst of the three. A scope carrying
+//   its kind cannot be one — and it is the worst of the four. A scope carrying
 //   `then` IS a thenable, so `await` calls it with `(resolve, reject)`; the verb
 //   wrapper reads those as the verb's own arguments, pushes a step and returns
 //   a builder, resolving nothing. The promise stays pending forever, and any
@@ -342,9 +343,9 @@ type VerbGate<
 
 // How anything OUTSIDE the builder reads what a scope accumulated — a mount
 // asking what it can render, a test asking what it yields. With the state in a
-// parameter, one conditional reads all of it; the per-axis phantoms this
-// replaced were not merely redundant, an INVARIANT one blocked the inference of
-// `S` from a verb's `this` altogether.
+// parameter, one conditional reads all of it. A phantom per axis is not merely
+// redundant beside it: an INVARIANT one blocks the inference of `S` from a
+// verb's `this` altogether.
 export type StateOf<Sc> = Sc extends Scope<infer S> ? S : never
 export type ResultOf<Sc> = ValueOf<StateOf<Sc>['returns']>
 
@@ -365,8 +366,9 @@ export type ResultOf<Sc> = ValueOf<StateOf<Sc>['returns']>
 // refinement and a collision is INTENT, which no type can read. Under parallel
 // steps it is worse: `Promise.all` has no order, so last-writer-wins stops
 // being deterministic and there is no correct answer to converge on. `wire`
-// reached the same verdict for the chain's context (`DupKeyMsg`), and this is
-// principle 1 applied to the scope's.
+// reached the same verdict for the chain's context (`DupKeyMsg`), and the rule
+// is the same one: a configuration error surfaces at the call site, at compile
+// time.
 //
 // The deliberate case has a way out already, and it costs nothing to offer: a
 // VERB does not come through here. `.extend`'s wrapper pushes its step directly,

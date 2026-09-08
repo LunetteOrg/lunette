@@ -76,8 +76,8 @@ const refineToken = async (
 // Let the rest run and act on what came BACK. A step wraps `next`, so it has an
 // after — where a span is closed, a metric flushed, a rolling session cookie
 // attached to whatever the leaf decided. A pre-hook plus a collector could not
-// express this, and it is the shape that replaced sinks: with the
-// outbound side a RETURNED value, decorating it is ordinary code.
+// express this: with the outbound side a RETURNED value, decorating it is
+// ordinary code.
 const timed = (log: string[]) => async (_app: {}, _ctx: {}, next: Next<{}>) => {
   log.push('in')
   const out = await next({})
