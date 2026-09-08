@@ -1,4 +1,4 @@
-import { data } from 'react-router'
+import { data, useLoaderData } from 'react-router'
 import { z } from 'zod'
 import { scope } from '@lntt/scope'
 import { reactRouter, reactRouterCarrier } from '@lntt/scope/react-router'
@@ -35,3 +35,20 @@ export const loader = mount(
       return result
     }),
 )
+
+// THE ROUTE MODULE'S OTHER HALF, and the reason the mount is transparent at
+// all. `useLoaderData<typeof loader>()` reads the loader's return type — so
+// what a step handed back reaches the component with no annotation and no
+// cast. A mount declared `unknown` would serve the same bytes and leave this
+// line, and the whole route's data, untyped.
+export default function Post() {
+  const post = useLoaderData<typeof loader>()
+
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      <p>{post.content}</p>
+      {post.published ? <span data-published="yes">published</span> : null}
+    </article>
+  )
+}

@@ -1,4 +1,4 @@
-import { data } from 'react-router'
+import { data, Form, useActionData } from 'react-router'
 import { z } from 'zod'
 import { scope } from '@lntt/scope'
 import { body, reactRouter, reactRouterCarrier } from '@lntt/scope/react-router'
@@ -29,3 +29,25 @@ export const action = mount(
     })
     .step(async ({ posts }: Deps, { body: input }) => posts.createPost(input)),
 )
+
+// THE ACTION'S OWN HALF. `useActionData<typeof action>()` reads the action's
+// return type the way `useLoaderData` reads a loader's, so what the step handed
+// back — the created post — is typed here with nothing annotated.
+//
+// `<Form method="post">` posts to THIS route's action. The action reads the
+// body with `body('json', …)`, so a real form would submit JSON through
+// `useSubmit`; the plain form below is the shape, not a working submit.
+export default function NewPost() {
+  const created = useActionData<typeof action>()
+
+  return (
+    <section>
+      {created ? <p data-created={created.id}>{created.title}</p> : null}
+      <Form method="post">
+        <input name="title" />
+        <input name="content" />
+        <button type="submit">create</button>
+      </Form>
+    </section>
+  )
+}

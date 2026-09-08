@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { isRouteErrorResponse } from 'react-router'
-import { loader } from './post.ts'
+import { renderToString } from 'react-dom/server'
+import {
+  createStaticHandler,
+  createStaticRouter,
+  isRouteErrorResponse,
+  StaticRouterProvider,
+} from 'react-router'
+import type { RouteObject } from 'react-router'
+import Post, { loader } from './post.tsx'
 import { action as publish } from './publish.ts'
-import { action as create } from './posts.ts'
+import { action as create } from './posts.tsx'
 import type { PostRoute, PostsRoute, WrongRoute } from './types.ts'
 
 const loaderArgs = (id: string): PostRoute.LoaderArgs => ({
@@ -108,5 +115,57 @@ describe('rr7 + scope: the typegen checks what the scope validated', () => {
   it('refuses a route whose params supply something else', () => {
     // @ts-expect-error — this route supplies `slug`; the loader validated `id`
     void (loader satisfies (args: WrongRoute.LoaderArgs) => unknown)
+  })
+})
+
+// LOADER THROUGH COMPONENT TO HTML, with React Router's own static handler
+// running the whole thing — the real router matching the real path, calling the
+// real loader, rendering the real component. No DOM: `createStaticHandler` and
+// `renderToString` are the server path, which is where a loader's value lands
+// first anyway.
+//
+// What this proves that a type assertion cannot: the value a step returned is
+// the value that reaches the markup, through every layer between.
+describe('rr7 + scope: the loader\'s value reaches the rendered HTML', () => {
+  // THE CAST IS THE TEST'S SCAFFOLDING, and what it steps around is worth
+  // knowing. This loader DEMANDS the params it validated (`{ id: string }`);
+  // React Router's generic `RouteObject` supplies the wide `Params`, whose
+  // values are `string | undefined`, so the two are not assignable and
+  // contravariance says so — the same mechanism that makes the `satisfies`
+  // check above work at all.
+  //
+  // A real app never meets this: `routes.ts` plus the typegen give each route
+  // its own params type, which is the narrow one. A route array built by hand
+  // is not that, and cannot be. A loader that validates nothing takes the wide
+  // `Params` and drops straight in.
+  const routes = [
+    { path: '/posts/:id', loader, Component: Post },
+  ] as unknown as RouteObject[]
+
+  const render = async (url: string) => {
+    const handler = createStaticHandler(routes)
+    const context = await handler.query(new Request(url))
+    if (context instanceof Response) return { status: context.status, html: '' }
+
+    const router = createStaticRouter(handler.dataRoutes, context)
+    return {
+      status: context.statusCode,
+      html: renderToString(<StaticRouterProvider router={router} context={context} />),
+    }
+  }
+
+  it('renders the post the domain returned', async () => {
+    const { status, html } = await render('http://localhost/posts/1')
+
+    expect(status).toBe(200)
+    expect(html).toContain('Hello')
+    expect(html).toContain('World')
+  })
+
+  it('a malformed id never renders: the thrown 400 goes to the boundary', async () => {
+    const { status, html } = await render('http://localhost/posts/abc')
+
+    expect(status).toBe(400)
+    expect(html).not.toContain('Hello')
   })
 })

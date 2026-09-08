@@ -2,7 +2,7 @@
   "name": "@lntt/example-rr7",
   "version": "0.0.0",
   "private": true,
-  "description": "Example: the shared app, mounted on React Router 7 with @lntt/scope/react-router \u2014 loaders and actions, and the typegen check the mount's own parameter makes possible.",
+  "description": "Example: the shared app, mounted on React Router 7 with @lntt/scope/react-router \u2014 real route modules, loader through component to HTML, and the typegen check the mount's own parameter makes possible.",
   "type": "module",
   "scripts": {
     "test": "vitest run",
@@ -12,11 +12,15 @@
     "@lntt/example-app": "workspace:*",
     "@lntt/scope": "workspace:*",
     "react-router": "7.18.3",
-    "zod": "^4.5.4"
+    "zod": "^4.5.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
     "typescript": "^5.9.2",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0"
   }
 }
