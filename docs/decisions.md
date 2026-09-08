@@ -2586,8 +2586,7 @@ directly rather than returning a value for an adapter to render.
 described.** `gated = scope(expressCarrier()).extend(guards).guard(findAuth,
 onError)` is built once; `auditScope` and `recordScope` both call `.step()` on
 that SAME value. No mechanism beyond what the builder already is — which is
-exactly what closing #67 (this record's decision) said the reusable unit
-already was.
+exactly what decision 55 says the reusable unit already is.
 
 **One casualty of dropping `@lntt/integration`'s per-pack build: the
 "each product is built lazily, only when its own route is first hit" claim.**
@@ -2772,8 +2771,8 @@ other side.
 to route and the schema exists to validate: each is there for a reason of its
 own, and neither was written to be compared. That is the difference from the
 declaration, whose only job WAS to be compared — a third name kept in sync by
-hand. It is also the shape the design record described from the start and that
-never shipped; the pre-#30 branch built it, and this is that gate, on the
+hand. It is also the shape described before anything was built and that never
+shipped; the pre-#30 branch built it, and this is that gate, on the
 settled core.
 
 The reading is §45's, unchanged and now shared: ONE DIRECTION (the schema
@@ -2918,8 +2917,8 @@ it.
 historical — rejected: 1156 lines of which half describe machinery that never
 shipped stay in `docs/`, and someone reopens them believing it. *Rewrite it as
 the contract it claims to be* — rejected: that is what `packages/scope/README.md`
-now is, and a second document for the same audience is the duplication the
-"one way to do each thing" principle refuses. *Move the residue into a new short document* — rejected on
+now is, and a second document for the same audience is duplication that leaves
+a reader guessing which of the two is current. *Move the residue into a new short document* — rejected on
 measurement, below.
 
 **Why.** It was doing four jobs and three had moved out from under it. Nine
@@ -2944,7 +2943,7 @@ to constraints (`index.ts` and `guard/index.ts`), and reading-versus-parsing
 failing for opposite reasons (`guard/index.ts`).
 
 Three were still binding and written down nowhere, so they went into the source
-where each one bites: an invariant phantom whose actual type is `never` not
+where each one bites: an invariant type PARAMETER whose actual type is `never` not
 extending `any` in a conditional position, on `LocalsOf` in `express/index.ts`;
 why the chain gate carries a named member holding `Need` rather than a message
 literal — a literal could not carry a type, and what the reader needs printed is
@@ -3070,3 +3069,37 @@ retired document, on the 21-step fixture it names, whose own baseline was
 
 **What this does not touch.** `docs/design/scope-runtime.md` stays: it is an
 open design exploration with the performance record two spikes cite by name.
+
+### 55. A reusable sequence of steps needs no packaging: the unit is the scope VALUE
+
+**Decision.** Ship no mechanism for reusing a sequence of steps across carriers
+— no packaged fragment, no generic function over an abstract state. The unit
+that needed reusing already exists: the SCOPE VALUE. `.step`, `.guard` and
+`.extend` each return a NEW value and never touch the one they were called on,
+so a shared prefix is a value kept and branched from twice.
+
+```ts
+const base     = scope(expressCarrier()).extend(guards).step(headers)
+const authBase = base.guard(findActor, onError)
+
+const routeA = authBase.step(leafA)
+const routeB = authBase.step(leafB)
+```
+
+**Alternatives.** *A packaged unit* — a value holding a sequence, applied to a
+scope of any carrier. Rejected: it needs a generic over an abstract state, and
+what it would buy is what `authBase` above already is. *A helper function
+taking a scope and returning one* — the same thing with a different spelling,
+and it loses the concrete type: `authBase`'s type is inferred once, at its own
+line, where a generic helper would have to reconstruct it.
+
+**Why.** The question was whether a sequence needs its own mechanism, and the
+answer is that immutability already gives one. Verified by running the shape:
+two Express routes sharing one `authBase`, independent leaves, both correct. No
+new export, and every leaf branching from the prefix is an ordinary `.step()`
+the builder already offers.
+
+**Where this verdict comes from.** It was reached while the scope API document
+was the working record, and is written here because that document is retired
+(decision 54) and this is the claim it held that lived nowhere else.
+

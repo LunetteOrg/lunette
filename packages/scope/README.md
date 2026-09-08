@@ -408,7 +408,7 @@ A guard reusable across carriers as a packaged unit was considered (#67) and
 closed: a shared prefix is already a scope VALUE kept and branched from twice
 — `const authBase = base.guard(...)`, then `authBase.step(leafA)` and
 `authBase.step(leafB)` — with no mechanism beyond what `.step`/`.guard`
-already are. See the decision record in `docs/decisions.md`.
+already are. The verdict is decision 55 in `docs/decisions.md`.
 
 ## Status
 

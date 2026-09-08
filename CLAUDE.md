@@ -16,8 +16,9 @@ the `errore` library (errors as values) applied to DI.
                         The core is ONE file, `index.ts` — where `export`
                         means public, since there is nowhere else for a name to
                         live. On it ship four carriers with their host mounts
-                        (express, hono, trpc, react-router), the read steps each
-                        host admits, and the guard extension, each a subpath. The contract is
+                        (express, hono, trpc, react-router) as one subpath each,
+                        the guard extension as another, and the read steps
+                        re-exported from the host subpath that populates them. The contract is
                         packages/scope/README.md — READ IT FIRST — and the traps
                         a rewrite must inherit rather than rediscover are stated
                         at the line each one constrains, in the source
