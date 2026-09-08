@@ -2910,8 +2910,9 @@ cost breakdown — is written at the line it constrains, in
 `packages/scope/src/index.ts` and `route-gate.ts`. Everything else it held has a
 better home already: the contract is `packages/scope/README.md` and the code,
 the rejected roads are this file, and the work order is the issue graph and the
-project board — which decision 33's own rule says never lives in a file, since a
-file is right only for whoever stands on the branch that last edited it.
+project board — which is where `CLAUDE.md` says order lives, never in a file,
+since a file is right only for whoever stands on the branch that last edited
+it.
 
 **Alternatives.** *Freeze it as an archive*, with a header saying it is
 historical — rejected: 1156 lines of which half describe machinery that never
@@ -2924,8 +2925,8 @@ measurement, below.
 **Why.** It was doing four jobs and three had moved out from under it. Nine
 inline "superseded / never shipped / retired" blocks had accumulated, and its
 own header said most of what followed described the vocabulary design that was
-tried and dropped. Terms the shipped code does not have: `Outcome`,
-`vocabulary`, `intent`, `Capability`, `sink`, `effects`.
+tried and dropped. Identifiers the shipped code does not have: `Outcome`,
+`__vocabulary`, `IntentsOf`, `Word`, `Capability`, `CarrierGuard`.
 
 The cost was not the upkeep. `CLAUDE.md` said READ IT FIRST, so whoever obeyed
 met a document that contradicted itself in its third line — and it manufactured
@@ -2935,9 +2936,9 @@ under `packages/`.
 
 **What the residue turned out to be, checked before deleting.** Of the eighteen
 traps, most were already in the code, in the code's own words: the gate riding
-the ARGUMENT and defaulted parameters on the ALIAS (`index.ts`), an intersection
-that cannot refine so `Ctx` uses `Omit`, vacuous truth on a param-less pattern
-(`route-gate.ts`), an invariant phantom blocking inference, a state member
+the ARGUMENT, defaulted parameters on the ALIAS and an intersection that cannot
+refine so `Ctx` uses `Omit` (all `index.ts`), vacuous truth on a param-less
+pattern (`route-gate.ts`), an invariant phantom blocking inference, a state member
 constrained to the wrong shape, `infer` through a generic factory instantiating
 to constraints (`index.ts` and `guard/index.ts`), and reading-versus-parsing
 failing for opposite reasons (`guard/index.ts`).
@@ -3021,17 +3022,32 @@ promise the callable returns.
   pre-change commit: 207,153 → 222,755 instantiations (+7.5%), check 0.36s →
   0.41s. The method is the finding: **a figure read out of a file is not a
   measurement**. The stale number a table was carrying, read as the "before",
-  turned +7.5% into a reported +65% — which is the same failure the `Grown`
-  bullet above records from the other side.
+  turned +7.5% into a reported +65% — the same failure the `Grown` bullet below
+  records from the other side.
+- **The builder's state in a type PARAMETER against phantoms read through
+  `Self`**: −8.3% and −5.2% instantiations on two workloads, types −15.8% and
+  −16.9%, solving to ≈−54 per scope and −11 per step. Not repeated here because
+  it is already where it constrains, on the state parameter in
+  `packages/scope/src/index.ts`, with the workload in
+  `research/parameterised-builder`.
+- **`returns` as a raw union, projected at the readers, against extracting
+  eagerly**: 24,349 → 24,057, a wash. Kept for the reason the numbers did not
+  show: eager extraction is LOSSY, and a step that WRAPS — replacing what came
+  back — was dropped from what the scope reported. The raw union keeps the
+  material to narrow.
+- **The rest of the cost breakdown** on that same 21-step fixture: the `returns`
+  accumulation 6%, one whole member of `State` 1.3%, and `DepGuard` ~0 — it
+  rides the call, not each step. The other half of "a new axis is affordable".
 - **Gating a schema against its entry's RAW type** was measured in both
   directions and neither ships; what could work is a check reading the schema's
   OUTPUT, or one a schema opts into, and both need a real case — the 422 that
   stands in for it is not silent.
 
-**The type-level numbers.** The first is re-measured on the shipped package;
-the second is quoted from the retired document, on the 21-step fixture it names (`tsc
---extendedDiagnostics` over `@lntt/scope`, baseline 329,128 instantiations and
-112,033 types):
+**The type-level numbers.** The first is re-measured on the shipped package,
+against a baseline of 329,128 instantiations and 112,033 types
+(`tsc --extendedDiagnostics` over `@lntt/scope`). The second is quoted from the
+retired document, on the 21-step fixture it names, whose own baseline was
+24,349:
 
 - **DRYing `Grown`.** Rebuilding the state through `Omit<S, keyof P> & P` so it
   names only the members that change: 363,347 instantiations (**+10.4%**) and
