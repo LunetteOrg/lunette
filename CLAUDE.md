@@ -13,14 +13,14 @@ the `errore` library (errors as values) applied to DI.
   packages/scope        @lntt/scope  the host-agnostic scope runtime — ONE
                         primitive (a step wrapping the rest of the fold) and a
                         scope IS the function that runs it, from the first line.
-                        BEING REBUILT (#30): the core is ONE file, `index.ts`
-                        — where `export` means public, since there is nowhere
-                        else for a name to live — and nothing else ships yet. The carriers, the
-                        extensions, the host mounts and the examples land on it
-                        in that order. The contract is docs/design/scope-api.md
-                        — READ IT FIRST; its "Where this goes next" is the work
-                        order, and its "Traps already paid for" is the list a
-                        rewrite must inherit rather than rediscover
+                        The core is ONE file, `index.ts` — where `export`
+                        means public, since there is nowhere else for a name to
+                        live. On it ship four carriers with their host mounts
+                        (express, hono, trpc, react-router), their read steps,
+                        and the guard extension, each a subpath. The contract is
+                        packages/scope/README.md — READ IT FIRST — and the traps
+                        a rewrite must inherit rather than rediscover are stated
+                        at the line each one constrains, in the source
   packages/{cli,listener,flow}       scaffolds only — no shipped design;
                         their stories live in the tracker
   research/             live research prototypes (prior art, not products) —
@@ -120,9 +120,9 @@ the tracker when relevant — never from here.
 - **Vocabulary**: chain · layer · bare/bound leaf · binder (`bind(record)`,
   apply = fixed deps, `.with` = per call, `.by` = per call keyed) · window
   · opener (window arg 1) · bridge (window arg 2) · bag · guard · seed —
-  and, for the scope runtime, a lexicon of its own, settled in
-  `docs/design/scope-api.md`: scope (`scope()` agnostic, `scope(carrier)`
-  chooses one) · scope execution (one run: `postScope(app, params)`) · scope
+  and, for the scope runtime, a lexicon of its own: scope (`scope()`
+  agnostic, `scope(carrier)` chooses one) · scope execution (one run:
+  `postScope(app, params)`) · scope
   execution parameters (the second argument — what belongs to THIS run; carried
   as `State['args']` and declared by a carrier's `__args`. NOT `seed`, which is
   wire's build-once, the other lifetime, and not `params`, which is the name of
@@ -207,8 +207,8 @@ Order and status live in the **project**
 file lives on a branch, so a written-down order is right only for whoever
 stands on the branch that last edited it. Sequence is carried by the
 issues' own `blocked by` relations — a claim on the issue, the same from
-every branch — and `docs/design/scope-api.md` records the shape of that
-graph and what is deliberately unscheduled, not the positions.
+every branch — and the project's `Priority` field says which of the ready
+ones comes first.
 
 The decision record (discarded alternatives and why) is
 **`docs/decisions.md`** — consult it BEFORE proposing API changes: many

@@ -6,7 +6,7 @@ out of review scope), these are usage references — in scope for review, meant
 to be read and copied.
 
 Tracked by #59, landing one slice at a time — a 191-file PR in one go is the
-shape `docs/design/scope-api.md` warns against. `examples/bare-express`, from
+shape decision 50 in `docs/decisions.md` warns against. `examples/bare-express`, from
 the previous core, does not come back; see decision 50 in `docs/decisions.md`
 for why its whole premise stopped applying.
 
@@ -21,7 +21,7 @@ a **compile error** — `test/isolation.test-d.ts` carries both directions as
 load-bearing negatives.
 
 The admin product's gate (`src/admin.ts`) uses the pattern #67 closed on
-(`docs/design/scope-api.md`) rather than only describing it: one scope value,
+rather than only describing it: one scope value,
 built once with `.guard()`, two routes branching from it with `.step()`.
 
 ## [`app/`](./app) — the shared app

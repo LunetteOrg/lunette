@@ -2301,7 +2301,7 @@ than an inconvenience:
 A sugar available on half the hosts, meaning something different on each half, is
 what principle 5 refuses. Note the lexicon entry that has been describing `guard`
 as "stop with one of the carrier's words" was stale from §43 onward, and is now
-corrected in `docs/design/scope-api.md`: a guard is a SHAPE a plain step already
+corrected in `CLAUDE.md`'s own lexicon: a guard is a SHAPE a plain step already
 has, not a verb.
 
 **What was NOT weighed, and did not need to be.** #63 said `guard`'s case is a
@@ -2568,7 +2568,7 @@ carrier IS the minimal native mount, shipped, not a package to avoid. There is
 no "with adapter" path left to contrast a "without" one against — the two
 converged, which was the win #60 shipped, not a gap this issue needs to
 re-open. Nothing a rewrite of `bare-express` could still teach is not already
-on the page in `packages/scope/README.md` and `docs/design/scope-api.md`.
+on the page in `packages/scope/README.md`.
 
 **`two-chains` ports without a comparable rewrite of its thesis.** `@lntt/wire`
 (`lunette`, `layer`, `.use`, `.expose`, `chain.build`) is unchanged by the scope
@@ -2584,8 +2584,8 @@ directly rather than returning a value for an adapter to render.
 described.** `gated = scope(expressCarrier()).extend(guards).guard(findAuth,
 onError)` is built once; `auditScope` and `recordScope` both call `.step()` on
 that SAME value. No mechanism beyond what the builder already is — which is
-exactly what closing #67 (this record's decision, `docs/design/scope-api.md`)
-said the reusable unit already was.
+exactly what closing #67 (this record's decision) said the reusable unit
+already was.
 
 **One casualty of dropping `@lntt/integration`'s per-pack build: the
 "each product is built lazily, only when its own route is first hit" claim.**
@@ -2635,8 +2635,8 @@ Express's OWN 400 for malformed JSON, which was true only because
 **`research/with-scope-hosts/src/{hono,react-router,trpc}` remain unported.**
 Each carries the same pre-#60 hand-rolled carrier and needs the same treatment;
 they land as their own slices of #59 rather than in this one, for the reason
-`docs/design/scope-api.md` gives for slicing at all — reviewing four hosts'
-worth of changes as one PR is the shape to avoid.
+slicing exists at all — reviewing four hosts' worth of changes as one PR is the
+shape to avoid.
 
 ### 52. `params`, a fifth read extension: route params are VALIDATED, not merely cast
 
@@ -2770,9 +2770,9 @@ other side.
 to route and the schema exists to validate: each is there for a reason of its
 own, and neither was written to be compared. That is the difference from the
 declaration, whose only job WAS to be compared — a third name kept in sync by
-hand. It is also the shape `docs/design/scope-api.md` described from the start
-and that never shipped; the pre-#30 branch built it, and this is that gate, on
-the settled core.
+hand. It is also the shape the design record described from the start and that
+never shipped; the pre-#30 branch built it, and this is that gate, on the
+settled core.
 
 The reading is §45's, unchanged and now shared: ONE DIRECTION (the schema
 demands, the route supplies, a superset passes); optionality is meaning on both
@@ -2899,3 +2899,52 @@ loses `c.req.param('id')` typed as `string` from the pattern, and gains a
 host, and everything §45 says about transparent mounts except the params half of
 the Express row: a `route` hands back `RequestHandler` at the router's own
 params width now, since nothing narrower is declared.
+
+### 54. `docs/design/scope-api.md` is retired; the traps and the numbers live in the code
+
+**Decision.** Delete the scope API design document. What it carried that
+nothing else did — the traps that each cost a measurement, and the builder's
+cost breakdown — is written at the line it constrains, in
+`packages/scope/src/index.ts` and `route-gate.ts`. Everything else it held has a
+better home already: the contract is `packages/scope/README.md` and the code,
+the rejected roads are this file, and the work order is the issue graph and the
+project board — which decision 33's own rule says never lives in a file, since a
+file is right only for whoever stands on the branch that last edited it.
+
+**Alternatives.** *Freeze it as an archive*, with a header saying it is
+historical — rejected: 1156 lines of which half describe machinery that never
+shipped stay in `docs/`, and someone reopens them believing it. *Rewrite it as
+the contract it claims to be* — rejected: that is what `packages/scope/README.md`
+now is, and a second document for the same audience is the duplication decision
+42 exists to avoid. *Move the residue into a new short document* — rejected on
+measurement, below.
+
+**Why.** It was doing four jobs and three had moved out from under it. Nine
+inline "superseded / never shipped / retired" blocks had accumulated, and its
+own header said most of what followed described the vocabulary design that was
+tried and dropped. Terms the shipped code does not have: `Outcome`,
+`vocabulary`, `intent`, `Capability`, `sink`, `effects`.
+
+The cost was not the upkeep. `CLAUDE.md` said READ IT FIRST, so whoever obeyed
+met a document that contradicted itself in its third line — and it manufactured
+false positives: #38 and #44 read as live work purely because this document
+still said `Capability`/`CarrierGuard` survive for the mount. They exist nowhere
+under `packages/`.
+
+**What the residue turned out to be, measured before deleting.** Of eighteen
+traps, the ones that still bind were already in the code, in the code's own
+words: the gate riding the ARGUMENT and defaulted parameters on the ALIAS
+(`index.ts`), an intersection that cannot refine so `Ctx` uses `Omit`, vacuous
+truth on a param-less pattern (`route-gate.ts`), an invariant phantom blocking
+inference, a state member constrained to the wrong shape, `infer` through a
+generic factory instantiating to constraints, and reading-versus-parsing failing
+for opposite reasons (`guard/index.ts`). Four had no counterpart and were
+written in: why the chain gate is an OBJECT and not a message string, why a
+fresh call signature per step does not rescue `this`, what `Grown`'s repetition
+buys (+47% instantiations if DRYed), and where the builder's cost actually is
+(`Ctx` 16%, `Surface` 15%, all of `State`'s members ~9% together). The rest —
+intent inference, carrier-and-extension brands, a declaration read by value —
+is about machinery that is gone. That is archaeology, and git keeps it.
+
+**What this does not touch.** `docs/design/scope-runtime.md` stays: it is an
+open design exploration with the performance record two spikes cite by name.
