@@ -1,6 +1,6 @@
 // `@lntt/scope/react-router` — the React Router carrier and its two mounts.
 //
-// A carrier is `__args` alone (§43). A loader and an action carry the same
+// A carrier is `__args` alone. A loader and an action carry the same
 // `{ request, params }` pair, so ONE carrier serves both — but they are two
 // DISTINCT mount shapes and never a generic middleware: each runs to
 // completion on its own, once, for its own route. That is why there is no
@@ -19,14 +19,14 @@ import { fetchReads } from '../reads.ts'
 // undefined` — the width a route really hands a loader. The carrier used to
 // take what the scope said the route supplies
 // (`reactRouterCarrier<Route.LoaderArgs['params']>()`), and it went the way the
-// other three declarations went (§53): what a scope reads of an entry is said
+// other three declarations went: what a scope reads of an entry is said
 // by `.validate('params', schema, onError)`, once, per BRANCH.
 //
 // That last word is the reason, and it is sharper here than anywhere else. A
 // type argument is fixed at `scope(carrier<X>())` — the FIRST call — so every
 // branch of a scope inherits it, and one base value could not serve two routes
 // reading different params. A verb is per branch, which is what makes a base
-// scope the reusable unit #67 says it is.
+// scope a reusable unit at all.
 //
 // NO READ EXTENSION is needed for it, unlike Express and Hono: `params` is
 // already what a run brings here, so `validate` has an entry to refine on the
@@ -36,9 +36,8 @@ export interface ReactRouterCarrier {
 }
 
 // PURE DECLARATION — the returned object carries nothing, and there is no type
-// argument left for the call to make a claim with. It stays a call for the
-// reason §45 gives: one vocabulary should not have a carrier invoked beside a
-// carrier that is not.
+// argument left for the call to make a claim with. It stays a call because one
+// vocabulary should not have a carrier invoked beside a carrier that is not.
 export const reactRouterCarrier = (): ReactRouterCarrier => ({})
 
 // `loader` and `action` are the same wrapper twice, and stay two names on
@@ -62,7 +61,7 @@ export const reactRouter = <App extends object>(deps: App) => {
   // the one way to reach a scope while supplying less than it asks.
   //
   // THE PARAMS THE SCOPE VALIDATED RIDE THE MOUNT'S OWN PARAMETER, which is
-  // what puts a route under a check here at all (§53). React Router never hands
+  // what puts a route under a check here at all. React Router never hands
   // us a pattern — `routes.ts` owns that mapping — so there is nothing for a
   // gate of ours to read. What there IS, in an RR7 app, is the typegen: a route
   // module writes

@@ -241,7 +241,7 @@ describe('buildOnce when the build fails', () => {
 // the memo outlived its own teardown, so `ensure` handed back an app whose
 // layers had already run their `finally` — an object that still answers, on
 // resources that are closed. The failure surfaced wherever the app next touched
-// one, never at the call that asked for it (§38).
+// one, never at the call that asked for it.
 describe('buildOnce after dispose', () => {
   it('refuses to hand the app back — the one it built runs on closed resources', async () => {
     const { chain, built, torn } = counted()
@@ -321,7 +321,7 @@ describe('buildOnce after dispose', () => {
 })
 
 // The two costs of handing callers a promise DERIVED from the build, rather
-// than the build itself (§38).
+// than the build itself.
 describe('buildOnce teardown, as something callers observe', () => {
   it('reports a FAILED teardown to the second caller too', async () => {
     let closes = 0

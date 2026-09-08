@@ -1,6 +1,6 @@
 // `@lntt/scope/trpc` — the tRPC carrier and its two mounts.
 //
-// A carrier is `__args` alone (§43). tRPC's shape is its own: a resolver gets
+// A carrier is `__args` alone. tRPC's shape is its own: a resolver gets
 // `input` — already read AND validated by `.input(schema)`, so there is no raw
 // body to split from a schema check the way Express and Hono need — and `ctx`,
 // created once per request by the transport.
@@ -9,7 +9,7 @@
 // EXPRESS-shaped middleware would invent a door tRPC does not have, while
 // `t.middleware` is a door tRPC already owns. So the second mount is tRPC's own
 // unit, and what it hands the chain is a CONTEXT OVERRIDE rather than a
-// `res.locals` copy or a `c.set` (§45).
+// `res.locals` copy or a `c.set`.
 
 import type { TRPCMiddlewareFunction, TRPCRootObject } from '@trpc/server'
 import type { DepGuard, ResultOf, Scope, State } from '../index.ts'
@@ -34,7 +34,7 @@ import type { Validated } from '../route-gate.ts'
 // here: the raw value tRPC hands a resolver, already read and validated by
 // `.input(schema)`. The carrier used to take an `In` saying which shape the
 // scope reads of it, and it went the way Express's and Hono's params
-// declarations went (§53) — what a scope reads of an entry is said by
+// declarations went — what a scope reads of an entry is said by
 // `.validate('input', schema, onError)`, once, and `procedure` puts THAT in the
 // resolver's parameter so `.input(schema)` is still checked against it by
 // contravariance.
@@ -85,7 +85,7 @@ const toNext =
   }
 
 // ── NO READ EXTENSIONS HERE, and the two refusals differ in hardness ─────────
-// The other three carriers ship `query`, `cookies`, `headers` and `body` (#62).
+// The other three carriers ship `query`, `cookies`, `headers` and `body`.
 // This one ships none, and the reasons are not the same one twice:
 //
 // THE BODY IS UNREACHABLE. What a run brings here is `input` and `ctx` — the
@@ -104,8 +104,8 @@ const toNext =
 // there — and `validate('input', schema, onError)` is the door for everything
 // the client actually sends.
 //
-// Conflating the two would be the "false safety" #38 warns about: the first is a
-// fact about the transport, the second is a judgement about a design.
+// Conflating the two would be false safety: the first is a fact about the
+// transport, the second is a judgement about a design.
 
 // ── gate: the scope was written for THIS carrier ─────────────────────────────
 // `procedure` above has this for free — it names the args in a real parameter
@@ -143,7 +143,7 @@ export const trpc = <T, App extends object>(_t: T, deps: App) => ({
 
   // WHAT `.input(schema)` IS CHECKED AGAINST IS THE SCHEMA THE SCOPE VALIDATED
   // WITH — `Validated<S, 'input'>`, the same source the two pattern hosts read
-  // for their route gate (§53). It sits in the RESOLVER'S PARAMETER, so the
+  // for their route gate. It sits in the RESOLVER'S PARAMETER, so the
   // check is tRPC's own and not a gate of ours: the resolver tRPC expects is
   // handed `.input(schema)`'s OUTPUT, and a resolver demanding `{ id: string }`
   // does not accept a procedure supplying `{ slug: string }` — nor one

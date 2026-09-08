@@ -60,7 +60,7 @@ export const listScope = scope(expressCarrier()).step(
 // a `typeof` narrows it into the 404 this route already has.
 //
 // What that gives up is the MOUNT check: `route` compares a pattern against the
-// `.validate('params', …)` schema (§53), and a scope that validates nothing
+// `.validate('params', …)` schema, and a scope that validates nothing
 // leaves it nothing to compare, so `route('/items', itemScope)` would compile
 // here. `examples/express` shows the other end — one schema, the format checked
 // at runtime and the pattern checked at compile time. This product's point is

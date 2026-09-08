@@ -8,7 +8,7 @@ import { guards } from '../guard/index.ts'
 import { hono, honoCarrier, params } from './index.ts'
 
 // A guard, written here rather than imported: what a guard IS belongs to no
-// carrier (§43). It stops the way Hono stops — `throw new HTTPException(…)`.
+// carrier. It stops the way Hono stops — `throw new HTTPException(…)`.
 const requireActor = async (
   _app: {},
   { c }: { readonly c: Context },
@@ -197,7 +197,7 @@ describe('`params` on Hono: WIDE from `c.req.param()`, refined by `.validate`', 
   })
 
   // `route('/posts', showPost)` does not compile: the gate reads this scope's
-  // schema and the pattern supplies no `id` (§53, pinned in `index.test-d.ts`).
+  // schema and the pattern supplies no `id` (pinned in `index.test-d.ts`).
   // Past the gate, through the escape hatch, the same mistake reaches the
   // request — and `.validate` is what stands between it and the leaf.
   it('mounted past the gate with `handler`, a missing param is `.validate`\'s 400', async () => {

@@ -59,8 +59,8 @@ const doneToken = {} as Provided<any>
 // shallow merge would betray the intersection type: the check must fail.
 export type Clash<Ctx, P> = Extract<keyof P, keyof Ctx>
 
-// How a guard brand works. TypeScript has no custom type errors
-// (decisions §4, "Horizon"), so the guards STAGE one: every guarded
+// How a guard brand works. TypeScript has no custom type errors, so the
+// guards STAGE one: every guarded
 // argument is intersected with a conditional brand —
 //
 //   provide<P>(fn: (ctx) => P & CollisionBrand<Ctx, P>)
@@ -75,7 +75,7 @@ export type Clash<Ctx, P> = Extract<keyof P, keyof Ctx>
 //     rejected, and the diagnostic prints the missing property with its
 //     string-literal value: the message, offending key included.
 // The diagnostic therefore lives on the verb's ARGUMENT, not on its
-// return type (decision in discussion #21; the evidence record is
+// return type (the evidence record, with verbatim tsc output, is
 // test/chain/collision-guard-dx.test-d.ts): the exact line goes red and
 // the chain keeps typing downstream — no TS7006 cascade. The message
 // rides a string-literal VALUE under the symbol key: emoji in property
@@ -124,8 +124,8 @@ declare const requirement: unique symbol
 // line — `any` absorbs every brand (`any & Brand = any`) — but an any
 // PATCH turns the context to any and the next wiring line lands here,
 // honestly. (An any KEY instead mints an index-signature context, which
-// stays consistent with what the phantom type claims — the recorded
-// residual in decisions §4; the runtime nets are the floor.)
+// stays consistent with what the phantom type claims — a residual the
+// types cannot reach; the runtime nets are the floor.)
 // Two-stage detection. The canonical `0 extends 1 & T` idiom goes blind
 // when T is a CONSTRAINED class type parameter instantiated with any
 // (the constraint absorbs the intersection during member
@@ -229,7 +229,7 @@ export type WidenedPatchMsg =
 // present" — failing at the wrong line with the wrong message. Refused
 // at its own line instead, with the cure in the text: mount the bag
 // under ONE literal key, where the index signature lives inside the
-// VALUE and the guard stays active for siblings (decision 32). The
+// VALUE and the guard stays active for siblings. The
 // EMPTY patch is not widened (keyof never): it flows. Judged
 // member-wise over a union, like every key set.
 type HasNoNames<P> = P extends unknown
@@ -313,7 +313,7 @@ export type UnmetSeedOf<Ctx, FSeed> = FSeed extends unknown
 
 // An any seed makes `[Ctx] extends [FSeed]` trivially true: without the
 // degeneracy gate a fragment's real requirements go entirely UNCHECKED
-// — a silent pass, not a wrong message (decisions §4). The fragment
+// — a silent pass, not a wrong message. The fragment
 // chain value is not any even when its Seed parameter is, so the brand
 // sticks and can refuse by name.
 // INVARIANT: this brand checks FSeed's degeneracy only — a degenerate
@@ -353,18 +353,18 @@ type SeedBrand<S> = DegeneracyOr<
 // Mirror guard for override: only keys that already exist can be
 // replaced (a typo in the name does not go unnoticed), and the numeric
 // ban holds here too — a numeric slot can only pre-exist via a declared
-// Seed or a cast (decision 30's residual), and re-typing a slot whose
+// Seed or a cast, and re-typing a slot whose
 // identity already lies is refused. Same verdict shape as the collision
 // guards (both kinds report as one union, never vanishes), but this one
-// still lives on the RETURN type — moving it onto the argument is a
-// separate decision (#25 scopes the argument-side move to the collision
-// guard) — and its brand is the plain ASCII key 'override'.
+// still lives on the RETURN type — the argument-side move was scoped to
+// the collision guard alone — and its brand is the plain ASCII key
+// 'override'.
 // A WIDENED patch annotation (an index signature or key pattern —
 // Record<string, …>, Record<symbol, …>, Record<`data-${string}`, …>)
 // carries no nameable keys: Exclude does not reduce them away, so
 // without this filter a literal check would read every
 // actually-existing key as "missing" — a false positive. Widened types
-// are the runtime net's territory (decisions §4): the filter drops
+// are the runtime net's territory: the filter drops
 // them MEMBER-WISE — `{}` extends `Record<K, 1>` exactly when K is
 // satisfiable by omission (an index signature / pattern), while
 // literals, numbers and unique symbols demand their property and stay.

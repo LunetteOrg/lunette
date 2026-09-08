@@ -2,7 +2,7 @@
 // repeats a top-level key already present in the context. The diagnostic
 // lands on the exact colliding line and names the key in the message
 // value (collision-guard-dx.test-d.ts is the evidence record with the
-// verbatim tsc output; the decision is discussion #21). The chain keeps
+// verbatim tsc output). The chain keeps
 // typing downstream — the accepted trade: the collided key's accumulated
 // type is transiently wrong (an intersection the runtime would never
 // produce) until the collision is fixed; the build stays red at the
@@ -159,7 +159,7 @@ describe('the guard brand is unforgeable and does not shadow user keys', () => {
 // interpolation collapses it to never). The two key kinds go two ways:
 // symbols get a LABEL (no `${symbol}` exists at the type level — tsc
 // still names the binding, `typeof theSym`, in the same diagnostic);
-// numbers are REJECTED outright (decision 30), because the deeper hole
+// numbers are REJECTED outright, because the deeper hole
 // is the key itself: the runtime coerces 42 to "42" while the types
 // keep them distinct, so a numeric key could slip past the guard and
 // throw at runtime. Strings name, symbols give identity, numbers are
@@ -223,7 +223,7 @@ describe('non-string PropertyKeys: symbols labelled, numbers rejected', () => {
 // genuine string collision reports the two TOGETHER as a union of
 // messages — consistent with how multiple string collisions report —
 // with the empty side interpolating never and vanishing from the union
-// (decision 30). Both the key sets and the message types are the REAL
+//. Both the key sets and the message types are the REAL
 // ones (imported above): nothing here can drift.
 type MirrorCollisionMsg<Ctx, P> =
   | NumKeyMsg<NumKeys<P>>
@@ -287,15 +287,15 @@ describe('union keys: one colliding member is a collision', () => {
   })
 
   it('a union carrying a numeric member falls under the numeric ban', () => {
-    // @ts-expect-error — 42 in the union: numbers are not keys (decision 30)
+    // @ts-expect-error — 42 in the union: numbers are not keys
     void lunette().provide(numOrFresh, () => 1)
   })
 
   it('a union key with no colliding member flows', () => {
     // Pinned current behavior: the context gains BOTH members (Record
-    // over a union) while the runtime sets exactly one — a residual of
-    // the same family as decision 30's, worth its own decision if a
-    // real case ever hits it. The collision guard's job here is only
+    // over a union) while the runtime sets exactly one — the same family
+    // of residual the numeric-key rule leaves, and worth settling only if
+    // a real case ever hits it. The collision guard's job here is only
     // the clash, and there is none.
     const chain = lunette().provide('db', () => 1).provide(cacheOrQueue, () => 'v')
     expectTypeOf(chain.run).toBeFunction()
@@ -341,16 +341,16 @@ describe('symbol keys are guarded in the patch form too', () => {
   })
 })
 
-// Decision 31: extensions supply VALUES (adapters, windows, decorators,
-// fragments); only the app extends the chain, and always concretely. A
+// Extensions supply VALUES (adapters, windows, decorators, fragments); only
+// the app extends the chain, and always concretely. A
 // helper generic over the chain asks tsc to prove "no collision, for
 // EVERY Ctx" at the definition site — unprovable, since a caller's chain
 // may well carry the key — so the argument-side guard refuses with
 // TS2769. That refusal is a guardrail, not a gap: the reusable form of
 // "add these layers" is a fragment (requirements in the Seed, collision
 // checked at the mount, on a concrete chain), and the package-level
-// patterns are the adapter/window pairs of issues #27/#28.
-describe('generic chain extension is refused by design (decision 31)', () => {
+// patterns are the adapter/window pairs.
+describe('generic chain extension is refused by design', () => {
   it('a helper generic over the chain cannot call the guarded verbs', () => {
     function addRenderer<
       Ctx extends object,
@@ -380,7 +380,7 @@ describe('generic chain extension is refused by design (decision 31)', () => {
 // line — `any` absorbs every brand intersection (`any & Brand = any`) —
 // so an any PATCH is silent where it happens and honest at the next
 // wiring line (the context is any by then); an any KEY is the pinned
-// residual below. (decisions §4)
+// residual below.
 declare const anyValue: any
 declare const anyKey: any
 
@@ -415,7 +415,7 @@ describe('an any context is refused by name, not with a false collision', () => 
     void lunette<any>().use(frag)
   })
 
-  it('a TOP-LEVEL widened patch is refused, pointing at the move (decision 32)', () => {
+  it('a TOP-LEVEL widened patch is refused, pointing at the move', () => {
     // A patch whose keyof carries no nameable keys has no legitimate
     // top-level form: it would drop the collision check to boot, lie on
     // absent reads, and poison keyof Ctx so every LATER literal provide
@@ -461,8 +461,8 @@ describe('an any context is refused by name, not with a false collision', () => 
     // Pre-existing on main (the old return-type guard had the identical
     // mechanism): Extract<string, 'db'> is never, so a key typed as
     // plain `string` bypasses the literal-based check and the runtime
-    // net throws at boot instead (asserted in keyed.test.ts). Recorded
-    // in decisions §4 with the other widened-type residuals.
+    // net throws at boot instead (asserted in keyed.test.ts). One of the
+    // widened-type residuals the literal-based guard cannot see.
     const widened: string = 'db'
     const chain = lunette().provide('db', () => 1).provide(widened, () => 2)
 
@@ -548,8 +548,8 @@ describe('an any context is refused by name, not with a false collision', () => 
     // context it leaves behind is NOT any — it is Ctx & Record<any, V>,
     // whose phantom index signature makes the next line read "already
     // present": consistent with what the (wrong) type now claims, so the
-    // any-context refusal cannot reach it. Recorded in decisions §4; the
-    // runtime nets stay the floor under every phantom.
+    // any-context refusal cannot reach it. The runtime nets stay the floor
+    // under every phantom.
     void lunette()
       .provide(anyKey, () => 1)
       // @ts-expect-error — the phantom index signature claims every key

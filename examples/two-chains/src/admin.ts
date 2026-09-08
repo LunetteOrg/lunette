@@ -44,9 +44,9 @@ const findAuth = (
   { req }: { readonly req: Request },
 ) => (deps.auth.accepts(req.header('authorization') ?? null) ? {} : fail([{ message: 'unauthorized' }]))
 
-// A SCOPE VALUE IS THE RECYCLABLE UNIT (decision in docs/design/scope-api.md,
-// #67): `gated` is built once, and both routes below branch from it — no
-// mechanism beyond what `.guard()` and `.step()` already are.
+// A SCOPE VALUE IS THE RECYCLABLE UNIT: `gated` is built once, and both routes
+// below branch from it — no mechanism beyond what `.guard()` and `.step()`
+// already are.
 const gated = scope(expressCarrier())
   .extend(guards)
   .guard(findAuth, (issues, { res }: { readonly res: Response }) => res.status(401).json({ issues }))

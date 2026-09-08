@@ -14,7 +14,7 @@ const { route, handler } = hono({})
 
 // Reads the param BY HAND, off Hono's own accessor: nothing declares what it
 // wants, so `c.req.param('id')` is `string | undefined` — the width Hono gives
-// a scope that names no pattern, which is now every scope (§53).
+// a scope that names no pattern, which is now every scope.
 const byId = scope(honoCarrier()).step(async (_app: {}, { c }) => {
   expectTypeOf(c.req.param('id')).toEqualTypeOf<string | undefined>()
   return c.json({ id: c.req.param('id') })

@@ -574,7 +574,7 @@ describe('Express `body`: a stream already read says so', () => {
   })
 })
 
-describe('`body`: a size limit, decision 49', () => {
+describe('`body`: a size limit', () => {
   it('Express: the DEFAULT limit reaches `onError`, not a throw', async () => {
     const app = expressLib()
     app.post(

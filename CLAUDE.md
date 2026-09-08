@@ -31,13 +31,19 @@ the `errore` library (errors as values) applied to DI.
                         was settled on, each carrying its measurement
 ```
 
-**`@lntt/integration` and `examples/` are SET ASIDE**, deliberately, while the
-core is rebuilt (#30). Both live on `origin/story-30/scope-impl` — 27
-integration files, 191 example files, verified present — along with most of the
-extensions, and they come back in that order once the core and its sugars are
-settled. Porting them against a surface still in motion is the work done twice
-that the design document exists to avoid; their last state on THIS branch is in
-the history, one `git show` away.
+**`@lntt/integration` is SET ASIDE**, deliberately, while the core settles
+(#30). It lives on `origin/story-30/scope-impl` — 27 files, verified present —
+along with most of the extensions. Porting it against a surface still in motion
+is the work done twice that the design document exists to avoid; its last state
+on THIS branch is in the history, one `git show` away.
+
+**`examples/` are BACK**, landing one slice at a time under #59: `two-chains`,
+then the shared `app` and its four per-host entries (`express`, `hono`, `trpc`,
+`rr7`), each its own package mounting the SAME chain. They are reviewed as
+DEMONSTRATIONS — the convention is at the end of this file. Still to return:
+`examples/cloudflare-workers/{bare,express,hono}` (only their
+`worker-configuration.d.ts` is here today). `examples/bare-express` does not
+come back at all — decision 50.
 
 The old `@lntt/http` (the `pipe`-based "wire owns the server" posture) was
 superseded by the scope runtime and removed; if the own-the-loop posture is
@@ -82,10 +88,34 @@ the tracker when relevant — never from here.
   test names, runtime error messages, READMEs) and must contain no
   references to external repos or to the design's history. Conversation
   with the owner stays in Italian.
-- **Citing decisions**: entries in `docs/decisions.md` are cited as
-  `decision N` (prose) or `§N` (compact). NEVER `#N` or `ADR #N`: on
-  GitHub, `#N` autolinks to issue/PR N — a decision citation would point
-  at an unrelated thread. `#N` is reserved for actual issues, PRs and
+- **CODE COMMENTS CITE NOTHING EXTERNAL.** No `§N`, no `decision N`, no
+  `#N`, no PR or discussion numbers, in any `.ts` file — comments, test
+  names and runtime strings alike. A comment has to stand on its own where
+  it is read: a reader with the file open cannot follow a pointer, and a
+  pointer decays the moment the thing it names is renumbered, superseded or
+  rewritten. So state the CONSTRAINT and the reason for it inline, however
+  compressed — "measured", "the gate would collapse to `never`", "a binding
+  is a dependency" — and if the reason is too long to inline, the comment
+  needs the short version, not a reference.
+- **A COMMENT DESCRIBES THE CODE, never the change that produced it.** No
+  "used to", no "no longer", no "is gone now", no "this is the shape X made
+  impossible", no naming of what was removed, renamed or fixed. A reader
+  arrives at the file as it is; the previous version is not in front of them
+  and is not their problem. This is strictest in `examples/`, where the
+  reader is learning the shape and every sentence about a past API is one
+  they have to discard. What SURVIVES this rule is a counterfactual that
+  still constrains the reader — "a generic here is not inferred and adds
+  nothing, silently", "returning it renders normally where throwing reaches
+  the ErrorBoundary" — because that tells them what not to write. The test
+  is whether the sentence would still be worth reading if the old version
+  had never existed.
+- **Where citations DO belong**: `docs/decisions.md` (entries cite each
+  other as `decision N` in prose or `§N` compact), the other files under
+  `docs/`, READMEs, commit messages, PR descriptions and issues. There a
+  reader can follow the link, and the numbering is the document's own.
+  NEVER `#N` or `ADR #N` for a decision even there: on GitHub `#N`
+  autolinks to issue/PR N — a decision citation would point at an
+  unrelated thread. `#N` is reserved for actual issues, PRs and
   discussions.
 - **Vocabulary**: chain · layer · bare/bound leaf · binder (`bind(record)`,
   apply = fixed deps, `.with` = per call, `.by` = per call keyed) · window
@@ -153,19 +183,16 @@ the tracker when relevant — never from here.
   are not actionable; the only thing worth checking is whether the
   prototype demonstrates what it set out to. Scope `/review` and
   `/code-review` to `packages/`, `docs/`, and root config.
-- **Reviewing `examples/`** (set aside today — this stands for when they return):
-  they ARE reviewed, but as DEMONSTRATIONS, not as
-  production systems. What counts: does it teach the right thing, is every
-  claim in its prose true, does it compile and pass, would a reader copying
-  the SHAPE be led right. What does not: production hardening — concurrency
-  and races, pagination and unbounded reads, retry and backoff, N+1 access
-  patterns, exhaustion limits. An example is allowed to be the simplest thing
-  that shows its point, and simplifying is often what makes the point legible
-  (the fat eager KV read in `examples/cloudflare-workers/*` is what makes
-  build-once observable at all; a realistic lazy handle would demonstrate
-  less). Where a shortcut could mislead someone copying it, the answer is a
-  COMMENT stating the limit, not hardening the example. Findings of the
-  production-hardening kind are noted and closed, not fixed.
+- **Reviewing `examples/`**: they ARE reviewed, and by ONE question —
+  **does this represent a use case someone really has, on this host?** Not
+  whether it is formally correct or production-grade. `examples/CLAUDE.md`
+  carries the full lens: what that question refuses (a `<Form>` whose action
+  reads JSON; an action guarded by a header a browser cannot send), what is
+  explicitly NOT a defect (weak auth, an in-memory repo, no pagination, no
+  retry — these are PoCs and their weakness must not be "fixed"), and what IS
+  one (a claim in prose that is not true, a shape that would not work,
+  divergence between entries with no reason). Read it before touching that
+  directory.
 
 ## Status and next steps
 

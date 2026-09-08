@@ -1,4 +1,4 @@
-// Scope-runtime re-seed perf probe (issue #30) — the recorded evidence
+// Scope-runtime re-seed perf probe — the recorded evidence
 // behind the perf verdict in docs/design/scope-runtime.md. Each route is a
 // scope chain seeded with the *inferred* app Pub (App & Invocation); the
 // type-level cost of re-seeding was swept over K routes (K = 0/10/20/40)

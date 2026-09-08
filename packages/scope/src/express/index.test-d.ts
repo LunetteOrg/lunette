@@ -17,7 +17,7 @@ import type { Next } from '../index.ts'
 
 const { route, handler, mw } = express({})
 
-// The carrier declares no params (§53): `req.params` is Express's own wide
+// The carrier declares no params: `req.params` is Express's own wide
 // dictionary on every scope, and what a route really carries is checked by
 // `.step(params).validate('params', …)` instead, on the value.
 //
@@ -25,16 +25,16 @@ const { route, handler, mw } = express({})
 // dictionary width, plus what `noUncheckedIndexedAccess` makes of an index
 // signature — and every part of that union is a case the router really produces
 // (a repeated param, a pattern that does not carry the name). The declaration
-// used to narrow all three away on the strength of a NAME check alone: the
-// narrowing §53 gave up, and `.validate('params', …)` is what earns it back,
-// having actually looked at the value.
+// used to narrow all three away on the strength of a NAME check alone. That
+// narrowing is gone, and `.validate('params', …)` is what earns it back, having
+// actually looked at the value.
 const byId = scope(expressCarrier()).step(async (_app: {}, { req, res }) => {
   expectTypeOf(req.params.id).toEqualTypeOf<string | string[] | undefined>()
   return res.json({ id: req.params.id })
 })
 
 // A scope that says what the URL carries: it says it ONCE, in the schema, and
-// that is what `route` compares a pattern against (§53).
+// that is what `route` compares a pattern against.
 const withId = scope(expressCarrier())
   .extend(guards)
   .step(params)
@@ -55,7 +55,7 @@ describe('what a scope reads of the URL: `params`, then `validate`', () => {
       })
 
     // and after the schema `id` is `string` because something LOOKED at it:
-    // the narrowing the carrier's declaration used to assert (§53), now earned
+    // the narrowing the carrier's declaration used to assert, now earned
     // rather than asserted — and the SAME schema is what `route` reads below.
     withId.step(async (_app: {}, { params: p }) => {
       expectTypeOf(p.id).toEqualTypeOf<string>()
@@ -287,7 +287,7 @@ describe('a mount takes a scope written for ITS carrier, and no other', () => {
 
 describe('two message-gates never meet on one argument', () => {
   it('answers with a message where intersecting them would collapse to `never`', () => {
-    // THE PAIR THAT FOUND THE INVARIANT (§44): both the answer gate and the
+    // THE PAIR THAT FOUND THE INVARIANT: both the answer gate and the
     // path gate fail here. Intersected side by side their literals give
     // `'⛔ A' & '⛔ B'`, which is `never`, and the error becomes "not assignable
     // to parameter of type 'never'" with nothing left to read. Chained, the
@@ -320,8 +320,8 @@ describe('two message-gates never meet on one argument', () => {
 
 describe('a middleware answers on `res` too, and worse when it does not', () => {
   it('refuses a guard that stops by returning a domain value', () => {
-    // The convention makes this the natural thing to write (§3: a RETURNED
-    // error is a domain value), and on `mw` it is worse than on a route: the
+    // The error convention makes this the natural thing to write — a RETURNED
+    // error is a domain value — and on `mw` it is worse than on a route: the
     // fold never reaches `toNext`, so Express's `next` is never called and the
     // request hangs with no response at all.
     const returnsAnError = scope(expressCarrier()).step(

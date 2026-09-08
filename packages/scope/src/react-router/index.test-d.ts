@@ -12,7 +12,7 @@ import { z } from 'zod'
 
 const { loader: mountLoader, action: mountAction } = reactRouter({})
 
-// The carrier declares nothing about the params (§53): they arrive at React
+// The carrier declares nothing about the params: they arrive at React
 // Router's own width, and a scope that wants a narrower one says so in a schema
 // — per BRANCH, which is what lets one base value serve two routes.
 const carrier = reactRouterCarrier()
@@ -65,7 +65,7 @@ describe('what a route module sees', () => {
   })
 
   it('a BASE scope serves two routes reading DIFFERENT params', () => {
-    // THE REASON THE DECLARATION WENT (§53). A type argument is fixed at
+    // THE REASON THE DECLARATION WENT. A type argument is fixed at
     // `scope(carrier<X>())`, so every branch inherits it and this could not be
     // written: one base, two schemas, two routes.
     const base = scope(carrier).extend(guards)

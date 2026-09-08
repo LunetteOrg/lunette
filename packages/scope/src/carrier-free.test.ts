@@ -28,7 +28,7 @@ import { trpc } from './trpc/index.ts'
 // that reads nothing of the request at all. The four hosts still share no
 // argument name, so a step annotating `c` or `req` still belongs to one host —
 // but a step annotating `{ query: Query }` belongs to none, because the read
-// extensions (#62) confine the host knowledge to one step and everything after
+// extensions confine the host knowledge to one step and everything after
 // it is carrier-free. So there IS a partly-portable middle now; it is built, not
 // given, and `reads.test.ts` pins it by reading one step on three hosts.
 //
@@ -46,7 +46,7 @@ import { trpc } from './trpc/index.ts'
 // one host. The four share no arg name (`req`/`res`, `c`, `input`/`ctx`,
 // `request`/`params`), so there is no partly-portable middle: a scope reads
 // nothing of the run, or it reads one host's — or it reads an ENTRY, which is
-// the third answer #62 added and the reason the paragraph above exists.
+// the third answer, and the reason the paragraph above exists.
 const stamp = scope().step(
   async ({ rid }: { readonly rid: string }, _ctx, next: Next<{ rid: string }>) => next({ rid }),
 )

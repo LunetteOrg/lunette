@@ -85,10 +85,9 @@ describe('two chains on one Express app', () => {
     admin.closed.length = 0
 
     // Both chains build when `makeApp` is awaited — a plain `chain.build()`,
-    // eager rather than lazy, unlike the retired `@lntt/integration` host
-    // packs this example used to mount through. Independence is about
-    // ISOLATION, not about deferral: neither product's state leaks into the
-    // other's, whichever order requests arrive in.
+    // eager rather than lazy. Independence is about ISOLATION, not about
+    // deferral: neither product's state leaks into the other's, whichever
+    // order requests arrive in.
     const { url, close } = await start()
     expect(catalog.opened).toEqual(['catalogue-db'])
     expect(admin.opened).toEqual(['audit'])

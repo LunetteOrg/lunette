@@ -102,8 +102,8 @@ describe('mount (types)', () => {
     // its true shape ("Property 'env' is missing in type '{ wrong: Env }'
     // but required in type '{ env: Env }'"). No brand: recite only where
     // the type is mute (the no-mapper path relates two inferred
-    // parameters and needs one — decisions §4). Adding UnmetSeed here
-    // would trade shapes for name-only.
+    // parameters and needs one). Adding UnmetSeed here would trade shapes
+    // for name-only.
     lunette()
       .provide(() => ({ mainEnv: { DATABASE_URL: 'x' } as Env }))
       // @ts-expect-error — the mapper does not produce { env: Env }
@@ -172,7 +172,7 @@ describe('optional seed keys: absence is not an unmet requirement', () => {
 // infers any, which satisfies FSeed by plain assignability). Both doors
 // refuse by name: the mapper's function value is not any even when its
 // return is, so a brand STICKS to it — unlike the patch positions where
-// any absorbs (decisions §4).
+// any absorbs.
 declare const anySeedFrag: Lunette<{ x: number }, { pub: string }, any>
 
 describe('degenerate fragment seeds are refused, not silently accepted', () => {

@@ -41,8 +41,8 @@ describe('override (types)', () => {
       .provide(() => ({ db: 1 }))
       .override(() => ({ bd: 2 }))
 
-    // still a return-type guard (see #25: only the collision guard moved
-    // onto the argument): ASCII property name, emoji in the message value
+    // still a return-type guard — only the COLLISION guard moved onto the
+    // argument: ASCII property name, emoji in the message value
     expectTypeOf(chain).toEqualTypeOf<{ override: MissingKeyMsg<'bd'> }>()
 
     // the one literal-text pin for the message family (the other
@@ -67,9 +67,9 @@ describe('override (types)', () => {
     }>()
   })
 
-  // Decision 30 reaches override too: numbers are not keys anywhere. A
-  // numeric slot can only pre-exist via a declared Seed or a cast (the
-  // decision's residual), and replacing it would re-type a slot whose
+  // The numeric ban reaches override too: numbers are not keys anywhere. A
+  // numeric slot can only pre-exist via a declared Seed or a cast, and
+  // replacing it would re-type a slot whose
   // identity already lies (42 vs "42") — refused instead.
   it('a numeric key is refused even when the numeric slot exists', () => {
     const chain = lunette<{ 42: string }>().override(() => ({ 42: 'still' }))
@@ -114,9 +114,9 @@ describe('override (types)', () => {
   // key) must not trip a false positive — Exclude<string, 'db'> does
   // not reduce, so an unfiltered check would read every
   // actually-existing key as "missing". Widened types are the runtime
-  // net's territory (same convention as the widened key on the keyed
-  // verbs, decisions §4): the guard steps aside instead of inventing a
-  // missing key.
+  // net's territory, the same convention the widened key on the keyed
+  // verbs follows: the guard steps aside instead of inventing a missing
+  // key.
   it("a widened patch annotation flows: the runtime net's territory", () => {
     const chain = lunette()
       .provide(() => ({ db: 1 as unknown }))

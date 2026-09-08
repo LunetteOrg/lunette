@@ -32,7 +32,7 @@ const withHeader =
     // producing nothing of its own: `next` hands back a `Passed` that says
     // nothing, so the step states what it expects. A real carrier does this
     // once, in a helper, and every decorator it ships is written against the
-    // carrier's own type (§42).
+    // carrier's own type.
     const out = (await next({})) as unknown as string
     return `${out} [${name}=${value}]`
   }

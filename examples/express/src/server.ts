@@ -10,8 +10,8 @@ import { withRequestId } from './request-id.ts'
 const { route, mw } = express(deps)
 
 // `id` is VALIDATED, not merely cast — `/posts/abc` never reaches the domain
-// lookup. See decision 52 for why `.validate('params', ...)` over the
-// carrier's type argument.
+// lookup. And the SAME schema is what `route` compares the mounted pattern
+// against: `route('/posts', getPost)` does not compile.
 const IdParam = z.object({ id: z.string().regex(/^\d+$/, 'must be numeric') })
 
 const findActor = (_app: {}, { headers: h }: { readonly headers: HeaderEntries }) =>
@@ -22,7 +22,7 @@ const CreatePostSchema = z.object({
   content: z.string().min(1),
 })
 
-// A scope value is the recyclable unit (#67): built once, both routes below
+// A scope value is the recyclable unit: built once, both routes below
 // branch from it.
 const withId = scope(expressCarrier())
   .extend(guards)
@@ -47,14 +47,14 @@ export const publishPost = route(
       const result = posts.publishPost(id)
       if ('notFound' in result) return res.status(404).json({ error: 'not found' })
       // `res.redirect` returns `void`, not `Response` — returning it
-      // directly fails `AnswerGate` (decision 51). `return undefined` says
+      // directly fails `AnswerGate`. `return undefined` says
       // explicitly that this leaf answered by writing to `res`.
       res.redirect(303, `/posts/${result.id}`)
       return undefined
     }),
 )
 
-// NO `express.json()` mounted anywhere in this file (decision 48 + 49):
+// NO `express.json()` mounted anywhere in this file:
 // `body('json', onError)` reads the stream itself and is the single error
 // path for a malformed, oversized or wrongly-encoded payload.
 export const createPost = route(

@@ -98,7 +98,7 @@ export const bind = <M extends Record<string, Leaf>>(record: M): Binder<M> => {
   // The bridge every per-call cadence opens a window with: close the
   // leaf's own args over it, so the window only ever sees the deps.
   const bridge = (uc: Leaf, args: unknown[]) => async (deps: any) => uc(deps, ...args)
-  // The two casts are engine-internal (decision 23): with M generic the
+  // The two casts are engine-internal: with M generic the
   // checker cannot relate the runtime mapping to the mapped types.
   const binder = ((deps: object) =>
     mapEntries(

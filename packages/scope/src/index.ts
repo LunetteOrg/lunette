@@ -393,8 +393,9 @@ export type ResultOf<Sc> = ValueOf<StateOf<Sc>['returns']>
 // six-line reproduction with no library code in it. Any gate riding an argument
 // whose inference produced `any` is unreadable by construction.
 //
-// Moving the check to the RETURN type would catch it, and costs what §39 priced
-// and rejected: it only fires when something downstream touches the poisoned
+// Moving the check to the RETURN type would catch it, and costs what makes the
+// return-type form wrong everywhere else: it only fires when something
+// downstream touches the poisoned
 // type, so a BASE — steps with no leaf, the shape a shared `gated()` has —
 // swallows it and surfaces it in whichever file finally uses the scope, naming
 // a step its author never wrote. That trade is worse than this hole.
@@ -432,8 +433,8 @@ type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Sur
 // GENERIC factory instantiates its type parameters to their constraints, and
 // the verbs that matter are all generic.
 //
-//   declared   `.status(201)` → `{ pinned: 201 }`      ✓
-//   computed   `.status(201)` → `{ pinned: number }`   ✗
+//   declared   `.status` → `{ pinned: 201 }`      ✓
+//   computed   `.status` → `{ pinned: number }`   ✗
 //
 // A verb that REFINES an entry loses more than a literal that way — the entry's
 // name AND the schema's output type, which is its whole job. The duplicate
