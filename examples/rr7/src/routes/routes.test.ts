@@ -94,8 +94,8 @@ describe('rr7 + scope: the create action, body read and validated', () => {
   })
 })
 
-// THE CHECK RR7 GAINED. React Router never hands us a pattern —
-// `routes.ts` owns that mapping — so no gate of ours can read one. What there
+// WHERE A ROUTE IS CHECKED ON THIS HOST. React Router never hands us a pattern
+// — `routes.ts` owns that mapping — so no gate of ours can read one. What there
 // IS is the typegen: the mount's own parameter carries what the scope
 // VALIDATED, so a route module's `satisfies` refuses a route whose generated
 // params say something else. This is the assertion a real route module makes

@@ -31,12 +31,12 @@ const CreatePostSchema = z.object({
   content: z.string().min(1),
 })
 
-// `onError` HERE IS A FORMALITY, and the example says so rather than hiding it:
-// `.input(Id)` already ran and rejected anything malformed before the fold
-// starts, so this branch is unreachable on this host. What the second call
-// buys is the TYPE inside the steps and the check at the mount — not a second
-// runtime check. On Express and Hono, where the framework supplies only a
-// pattern, the same call is the only thing that looks at the value at all.
+// `onError` HERE IS A FORMALITY: `.input(Id)` has already run and rejected
+// anything malformed before the fold starts, so this branch is unreachable on
+// this host. What the second call buys is the TYPE inside the steps and the
+// check at the mount, not a second runtime check. On Express and Hono, where
+// the framework supplies only a pattern, the same call is the only thing that
+// looks at the value at all.
 const badInput = (): never => {
   throw new TRPCError({ code: 'BAD_REQUEST' })
 }
@@ -50,13 +50,13 @@ const badInput = (): never => {
 // inputs differ — and `validate('input', …)` is refused here for the matching
 // reason: this leaf strips `input` by name before `next({ ctx })`.
 //
-// A LIMIT THIS EXAMPLE RAN INTO, stated rather than worked around: the
-// override reaches tRPC (a native resolver on `authed` reads `ctx.actor` as
-// `string`, pinned in `router.test.ts`), but NOT the `ctx` of a scope mounted
-// there. A scope's context type is read off the ROOT builder — `trpc(t, deps)`
-// takes `t` — so it does not follow a procedure that grew it. So the step
-// below reads `ctx.actorId`, the root's own field, and a scope wanting the
-// derived one takes it from where it was derived.
+// AND THE OVERRIDE REACHES tRPC, NOT A SCOPE'S `ctx`. A native resolver on
+// `authed` reads `ctx.actor` as `string` (pinned in `router.test.ts`); a scope
+// mounted on the same procedure does not, because its context type is read off
+// the ROOT builder — `trpc(t, deps)` takes `t` — and does not follow a
+// procedure that grew it. So the step below reads `ctx.actorId`, the root's own
+// field, and a scope wanting the derived one takes it from where it was
+// derived.
 export const authed = t.procedure.use(
   t.middleware(
     middleware(
@@ -69,9 +69,7 @@ export const authed = t.procedure.use(
 )
 
 // A SCOPE VALUE IS THE RECYCLABLE UNIT: `withId` is built once and both
-// procedures below branch from it. A type argument on the carrier could not
-// have served two, since it is fixed at `scope(carrier())` and every branch
-// inherits it.
+// procedures below branch from it, each adding its own steps.
 const withId = scope(carrier()).extend(guards).validate('input', Id, badInput)
 
 export const appRouter = t.router({

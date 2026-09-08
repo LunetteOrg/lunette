@@ -30,10 +30,9 @@ const CreatePostSchema = z.object({
   content: z.string().min(1),
 })
 
-// A SCOPE VALUE IS THE RECYCLABLE UNIT, and this is the shape a carrier
-// type argument used to make impossible: the declaration was fixed at
-// `scope(carrier<X>())`, so every branch inherited it and one base could not
-// serve two routes. A verb is per BRANCH, so this one does.
+// A SCOPE VALUE IS THE RECYCLABLE UNIT: `withId` is built once and the two
+// routes below branch from it, each adding its own steps. What it carries —
+// the params read and their schema — is shared by both, and stated once.
 const withId = scope(honoCarrier())
   .extend(guards)
   .step(params)
@@ -55,8 +54,8 @@ export const publishPost = withId
   })
 
 // No body parser mounted anywhere: `body('json', onError)` reads the request
-// itself and is the single error path for a malformed or oversized payload
-//, so there is no framework-level 400 racing this one.
+// itself and is the single error path for a malformed or oversized payload, so
+// there is no framework-level 400 racing this one.
 export const createPost = scope(honoCarrier())
   .extend(guards)
   .step(body('json', (issues, { c }) => c.json({ issues }, 422)))
@@ -67,11 +66,12 @@ export const createPost = scope(honoCarrier())
 // twin cannot. Hono builds its route SCHEMA into the app's own type as the
 // calls chain, and `hc<typeof app>()` reads it back — path, method, and what
 // each handler returns. The mounts here are transparent (they hand back what
-// the SCOPE handed back), so the leaf's value AND the status it chose survive
-// all the way to the client, typed. Written as separate `app.get(...)`
-// statements the type would not accumulate and `hc` would have nothing to read.
+// the SCOPE handed back), so every answer a route can give reaches the client
+// as a type: the leaf's value, the domain's 404, the schema's 400, as one
+// union. Written as separate `app.get(...)` statements the type would not
+// accumulate and `hc` would have nothing to read.
 //
-// `server.test.ts` calls the client and asserts both the value and its type.
+// `server.test.ts` calls the client and narrows that union with no cast.
 export const app = new Hono()
   .use(mw(scope(honoCarrier()).step(withRequestId)))
   .get(...route('/posts/:id', getPost))

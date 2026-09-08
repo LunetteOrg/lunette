@@ -67,9 +67,9 @@ describe('override (types)', () => {
     }>()
   })
 
-  // Decision 30 reaches override too: numbers are not keys anywhere. A
-  // numeric slot can only pre-exist via a declared Seed or a cast (the
-  // decision's residual), and replacing it would re-type a slot whose
+  // The numeric ban reaches override too: numbers are not keys anywhere. A
+  // numeric slot can only pre-exist via a declared Seed or a cast, and
+  // replacing it would re-type a slot whose
   // identity already lies (42 vs "42") — refused instead.
   it('a numeric key is refused even when the numeric slot exists', () => {
     const chain = lunette<{ 42: string }>().override(() => ({ 42: 'still' }))

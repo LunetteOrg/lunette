@@ -30,11 +30,9 @@ describe('express + scope: a domain "not found"', () => {
 
 describe('express + scope: `withId` — `.step(params).validate(...)`, not the carrier', () => {
   it('a malformed id never reaches the domain lookup: 400, from `.validate`', async () => {
-    // `/posts/missing` used to reach `posts.getPost('missing')` and answer
-    // 404 — a param declared on the carrier was a bare `string` cast with no
-    // format to check, and no such declaration exists any more.
-    // `IdParam`'s schema does check it: this is a 400 the domain lookup never
-    // runs for.
+    // `IdParam` checks the FORMAT, so `/posts/missing` is a 400 the domain
+    // lookup never runs for — where a route that only named the param would
+    // have handed `'missing'` straight to `posts.getPost`.
     const res = await request(app).get('/posts/missing')
     expect(res.status).toBe(400)
   })
@@ -74,10 +72,9 @@ describe('express + scope: the SHARED body reader and validator', () => {
     expect(res.status).toBe(422)
   })
 
-  // Decision 48: with NO `express.json()` mounted, `body('json', onError)`
-  // reads the stream itself and is the ONE error path for whatever is wrong
-  // with it — malformed JSON included. There is no second answer from a
-  // body parser to compare against any more.
+  // With NO `express.json()` mounted, `body('json', onError)` reads the
+  // stream itself and is the ONE error path for whatever is wrong with it,
+  // malformed JSON included — so there is no body-parser 400 racing this 422.
   it('malformed JSON: 422 from `body()`’s own reader, not a body-parser 400', async () => {
     const res = await request(app)
       .post('/posts')
@@ -86,10 +83,9 @@ describe('express + scope: the SHARED body reader and validator', () => {
     expect(res.status).toBe(422)
   })
 
-  // Decision 49: the reader has a default ceiling now — 100 kB isn't
-  // reachable by hand here, but the shape is: an oversized body reaches
-  // `onError` too, the same 422 a malformed one does, never a hang or a
-  // crash.
+  // The reader has a default ceiling of 100 kB. It is not reachable by hand
+  // here, but the shape is: an oversized body reaches `onError` too, with the
+  // same 422 a malformed one gets, never a hang or a crash.
   it('an oversized body: 422 from the same reader, not a raw connection drop', async () => {
     const res = await request(app)
       .post('/posts')

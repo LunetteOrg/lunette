@@ -97,6 +97,18 @@ the tracker when relevant — never from here.
   compressed — "measured", "the gate would collapse to `never`", "a binding
   is a dependency" — and if the reason is too long to inline, the comment
   needs the short version, not a reference.
+- **A COMMENT DESCRIBES THE CODE, never the change that produced it.** No
+  "used to", no "no longer", no "is gone now", no "this is the shape X made
+  impossible", no naming of what was removed, renamed or fixed. A reader
+  arrives at the file as it is; the previous version is not in front of them
+  and is not their problem. This is strictest in `examples/`, where the
+  reader is learning the shape and every sentence about a past API is one
+  they have to discard. What SURVIVES this rule is a counterfactual that
+  still constrains the reader — "a generic here is not inferred and adds
+  nothing, silently", "returning it renders normally where throwing reaches
+  the ErrorBoundary" — because that tells them what not to write. The test
+  is whether the sentence would still be worth reading if the old version
+  had never existed.
 - **Where citations DO belong**: `docs/decisions.md` (entries cite each
   other as `decision N` in prose or `§N` compact), the other files under
   `docs/`, READMEs, commit messages, PR descriptions and issues. There a

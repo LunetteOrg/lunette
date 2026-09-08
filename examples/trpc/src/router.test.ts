@@ -47,7 +47,7 @@ describe('trpc + scope: the middleware guard', () => {
 // is where it lands: tRPC's own resolvers, typed. A scope mounted on the same
 // procedure does NOT see it — its context type is read off the ROOT builder
 // (`trpc(t, deps)`) and does not follow a procedure that grew it. Both halves
-// are pinned here so the limit is a measured fact, not a belief.
+// are pinned here, so the limit is measured rather than believed.
 describe('trpc + scope: where a middleware\'s context override actually lands', () => {
   // A router of this test's own, so the claim is CALLED and not merely typed.
   const probeRouter = t.router({

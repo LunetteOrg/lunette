@@ -341,8 +341,8 @@ describe('symbol keys are guarded in the patch form too', () => {
   })
 })
 
-// Decision 31: extensions supply VALUES (adapters, windows, decorators,
-// fragments); only the app extends the chain, and always concretely. A
+// Extensions supply VALUES (adapters, windows, decorators, fragments); only
+// the app extends the chain, and always concretely. A
 // helper generic over the chain asks tsc to prove "no collision, for
 // EVERY Ctx" at the definition site — unprovable, since a caller's chain
 // may well carry the key — so the argument-side guard refuses with
