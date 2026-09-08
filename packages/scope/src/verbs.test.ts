@@ -272,9 +272,8 @@ describe('a verb cannot take a name the surface already owns', () => {
     // contributed is reported as reserved, and `.extend` sweeps for reserved
     // names before it asks which are taken. The other order hides the reserved
     // name behind the taken one: the author fixes the name it named, re-runs,
-    // and only then meets the second — which is the masking the
-    // `hasOwn`-not-`in` note above exists to prevent, arriving by a different
-    // door.
+    // and only then meets the second — the same masking `hasOwn` rather than
+    // `in` avoids in the taken check, arriving by a different door.
     const both = {
       methods: {
         header: () => (async () => 'x') as unknown as AnyStep,
@@ -329,7 +328,8 @@ describe('a verb cannot take a name the surface already owns', () => {
 
   it('refuses one named `valueOf`, from the half of the prototype chain that is not a function`s', () => {
     // `Object.prototype`: a name inherited from the half of the chain that is
-    // not a function's, which "what every function carries" does not reach.
+    // not a function's, so enumerating what a FUNCTION carries never reaches
+    // it.
     const shadowsValueOf = {
       methods: { valueOf: () => (async () => 'x') as unknown as AnyStep },
     }

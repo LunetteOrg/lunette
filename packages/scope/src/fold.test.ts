@@ -221,14 +221,13 @@ describe('the step primitive, folded', () => {
 })
 
 // ── a scope with no leaf THROWS ──────────────────────────────────────────────
-// It lived in `contract.test-d.ts` as a runtime assertion, where nothing ever
-// ran it: a `*.test-d.ts` file is typechecked and never executed, so the only
-// check that this construction bug is reported rather than swallowed was dead.
-// Replacing the throw with `return undefined` kept the whole suite green.
+// It has to RUN, which is why it is here and not beside the type claim: a
+// `*.test-d.ts` file is typechecked and never executed, so the same assertion
+// written there would pass with the throw replaced by `return undefined` and
+// nothing would say so.
 //
-// The type side stays there — `R` is `never` for such a scope — and this is the
-// half that has to actually run, because `never` says nothing about what the
-// runtime does when it gets there.
+// The type side belongs there — `R` is `never` for such a scope — and says
+// nothing about what the runtime does when it gets there. This is that half.
 describe('a scope with no leaf', () => {
   it('throws rather than handing back a value it does not have', async () => {
     const base = scope<{ readonly id: string }>().step(
@@ -248,9 +247,9 @@ describe('a scope with no leaf', () => {
 // ── a builder is a value, not a mutable object ───────────────────────────────
 // `.step` is `make([...steps, s], verbs)` — a new array and a new closure — so a
 // base can be branched into two chains that do not know about each other. That
-// is what makes a shared `gated()` base safe to hand around, and it was pinned
-// by nothing: a regression to `steps.push(s)` would have kept every test green,
-// because no test ever built two continuations from one base.
+// is what makes a shared `gated()` base safe to hand around, and it takes a test
+// that builds TWO continuations from one base to pin: under `steps.push(s)` a
+// suite that never branches stays green while the base grows under everyone.
 describe('branching a base', () => {
   it('leaves the base untouched, and the branches independent', async () => {
     const base = scope<{ readonly id: string }>().step(

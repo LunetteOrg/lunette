@@ -21,8 +21,8 @@ import { answered, badArgs, fixture, refused, type Refusal } from './fixture/car
 //
 // So the claims needing a run live in `contract.test.ts`, where they run: the
 // ones building a scope and awaiting it to name what came back, where the await
-// does nothing here. What is left is type-level throughout —
-// conditional types read directly, and refusals under `@ts-expect-error` inside
+// does nothing here. What is left is type-level throughout — conditional types
+// read directly, and refusals under `@ts-expect-error` inside
 // functions nobody calls, which is also what keeps a directive from silencing a
 // line that would really throw.
 
@@ -130,15 +130,16 @@ describe('what a scope accumulated, read from outside', () => {
 
 // ── the marker excludes the fold's answer, and NOTHING else ──────────────────
 // `ValueOf` is `Exclude<R, Passed>`, so what `Passed` matches decides what a
-// scope is allowed to say it produces. It matched too much: written with an
-// OPTIONAL member it was a weak type, and `R extends Passed` then holds for any
+// scope is allowed to say it produces. Written with an OPTIONAL member it
+// matches too much: it is then a WEAK TYPE, and `R extends Passed` holds for any
 // type that COULD carry the key — which an index signature can.
 //
-// The failure was silent in the worst way. A leaf returning `Record<string,
-// number>` — a tally, a bag of headers, a wide typed row — was excluded, the
-// scope declared `never`, and `never` is assignable to everything: every
-// consumer downstream compiled and got at runtime a value the types had called
-// impossible. Pinned here because nothing about it is visible at the call site.
+// The failure that follows is silent in the worst way. A leaf returning
+// `Record<string, number>` — a tally, a bag of headers, a wide typed row — is
+// excluded, the scope declares `never`, and `never` is assignable to everything:
+// every consumer downstream compiles and gets at runtime a value the types
+// called impossible. Pinned here because nothing about it is visible at the call
+// site.
 describe('what the marker excludes', () => {
   it('does not eat a leaf whose value has an index signature', () => {
     const tally = scope(fixture).step(
@@ -158,9 +159,8 @@ describe('what the marker excludes', () => {
 })
 
 // ── a carrier that declares something unusable fails CLOSED ──────────────────
-// The fallback existed and was never exercised. It matters because a carrier
-// is hand-written: this is what a typo produces, and the question is whether
-// the mistake shows up or spreads.
+// A carrier is hand-written, so this is what a typo produces, and the question
+// is whether the mistake shows up or spreads.
 describe('a carrier declared wrong', () => {
   it('with a non-object `__args`, it is refused at `scope()` — the fallback is unreachable', () => {
     // Better than the fallback firing: the CONSTRAINT catches it first.
@@ -245,9 +245,9 @@ describe('what a decorating step reads on the way out', () => {
 
   it('narrows to each branch, so read-only did not cost the reading', () => {
     // Asserting the annotation back at itself is a tautology — both sides move
-    // together and the line can never go red — and this branch has already
-    // paid for one test that looked like coverage and was not. So the claim
-    // is structural: the member is still REACHABLE, and it keeps its type.
+    // together and the line can never go red, which is a test that looks like
+    // coverage and is none. So the claim is structural: the member is still
+    // REACHABLE, and it keeps its type.
     const check = () =>
       scope(fixture).step(async (_app: {}, _ctx: {}, next: Next<{}>) => {
         const out = answered<{ name: string }>(await next({}))

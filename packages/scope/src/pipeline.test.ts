@@ -9,8 +9,8 @@ import * as ex from './express/index.ts'
 import * as ho from './hono/index.ts'
 
 // THE TWO SLICES MEETING: an extension POPULATES an entry from the host, and a
-// verb REFINES it. `body('json')` gives
-// `unknown`; `validate('body', schema, onError)` gives the schema's output. The
+// verb REFINES it. `body('json')` gives `unknown`; `validate('body', schema,
+// onError)` gives the schema's output. The
 // division of labour is the whole design — the extraction knows the host, the
 // refinement knows nothing about it.
 //

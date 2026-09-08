@@ -237,11 +237,11 @@ describe('buildOnce when the build fails', () => {
   })
 })
 
-// The handle's lifecycle ends at `dispose`. Before this, none of these threw:
-// the memo outlived its own teardown, so `ensure` handed back an app whose
-// layers had already run their `finally` — an object that still answers, on
-// resources that are closed. The failure surfaced wherever the app next touched
-// one, never at the call that asked for it.
+// The handle's lifecycle ends at `dispose`. Without that, the memo outlives its
+// own teardown and `ensure` hands back an app whose layers have already run
+// their `finally` — an object that still answers, on resources that are closed.
+// The failure then surfaces wherever the app next touches one, never at the call
+// that asked for it.
 describe('buildOnce after dispose', () => {
   it('refuses to hand the app back — the one it built runs on closed resources', async () => {
     const { chain, built, torn } = counted()
