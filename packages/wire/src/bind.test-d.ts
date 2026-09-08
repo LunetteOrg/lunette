@@ -65,7 +65,7 @@ describe('bind (types)', () => {
   it('one arity only: there is no second argument to forget', () => {
     const ctx = { otpRepo: { consume: async () => true } }
 
-    // the old two-argument form is an arity error, not a silent rebind
+    // a second argument is an arity error, not a silent rebind
     // @ts-expect-error — bind takes exactly one argument, the record
     bind(ctx, { requestOtp })
   })

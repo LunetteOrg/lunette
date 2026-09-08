@@ -15,12 +15,13 @@ import { answered, badArgs, fixture, refused, type Refusal } from './fixture/car
 // it CONTAINS rather than a rule to remember. A `*.test-d.ts` is typechecked and
 // never executed — the config runs `src/**/*.test.ts` and typechecks this
 // pattern — so anything written here that reads as execution is not execution.
-// Four `expect(...)` calls sat here unexecuted once, reading as coverage, one of
-// them the only check that a scope with no leaf THROWS.
+// An `expect(...)` written here reads as coverage and is none: nothing calls it,
+// and a claim that needs a RUN — that a scope with no leaf THROWS — would be
+// silently unchecked.
 //
-// The claims that needed a RUN moved to `contract.test.ts`, where they run: they
-// were the ones building a scope and awaiting it to name the type of what came
-// back, and the await was doing nothing. What is left is type-level throughout —
+// So the claims needing a run live in `contract.test.ts`, where they run: the
+// ones building a scope and awaiting it to name what came back, where the await
+// does nothing here. What is left is type-level throughout —
 // conditional types read directly, and refusals under `@ts-expect-error` inside
 // functions nobody calls, which is also what keeps a directive from silencing a
 // line that would really throw.

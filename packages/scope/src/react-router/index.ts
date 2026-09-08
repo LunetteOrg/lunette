@@ -35,9 +35,9 @@ export interface ReactRouterCarrier {
   readonly __args?: { readonly request: Request; readonly params: Params }
 }
 
-// PURE DECLARATION — the returned object carries nothing, and there is no type
-// argument left for the call to make a claim with. It stays a call because one
-// vocabulary should not have a carrier invoked beside a carrier that is not.
+// PURE DECLARATION — the returned object carries nothing, and it takes no type
+// argument to make a claim with. It stays a call because one vocabulary should
+// not have a carrier invoked beside a carrier that is not.
 export const reactRouterCarrier = (): ReactRouterCarrier => ({})
 
 // `loader` and `action` are the same wrapper twice, and stay two names on

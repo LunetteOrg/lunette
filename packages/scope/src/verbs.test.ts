@@ -328,8 +328,8 @@ describe('a verb cannot take a name the surface already owns', () => {
   })
 
   it('refuses one named `valueOf`, from the half of the prototype chain that is not a function`s', () => {
-    // `Object.prototype`, which the list had missed while claiming to be
-    // closed over "what every function carries".
+    // `Object.prototype`: a name inherited from the half of the chain that is
+    // not a function's, which "what every function carries" does not reach.
     const shadowsValueOf = {
       methods: { valueOf: () => (async () => 'x') as unknown as AnyStep },
     }
@@ -435,10 +435,9 @@ describe('a verb name already contributed by another extension', () => {
 })
 
 // ── the alphabet is closed, and this is what proves it ───────────────────────
-// It has declared closure three times and been short three times — first
-// `Function.prototype`, then the protocol names, then the accessors — and each
-// miss was a CATEGORY, never a single name. Three reviews found them one at a
-// time.
+// What a hand-written list misses is a CATEGORY, never a single name —
+// `Function.prototype`'s members, the protocol names, the inherited accessors —
+// and each category is invisible until someone thinks of it.
 //
 // So this does not compare the list against another list written by hand. It
 // derives the QUESTION from the runtime — every name actually reachable on a

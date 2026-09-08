@@ -325,10 +325,11 @@ describe('what the type contract claims, happening', () => {
   })
 
   it('a leaf whose value has an index signature really hands that value back', async () => {
-    // The other half of the `Passed` weak-type regression: the type side pins
-    // that `ResultOf` is `Record<string, number>` and not `never`, and this
-    // pins that the value arrives — which is what made the old bug a lie rather
-    // than merely a wrong type.
+    // The other half of the `Passed` weak-type claim: the type side pins that
+    // `ResultOf` is `Record<string, number>` and not `never`, and this pins that
+    // the value arrives. Both halves are needed — `never` is assignable to
+    // everything, so a wrong type here would compile everywhere downstream while
+    // the value showed up anyway.
     const tally = scope(fixture).step(
       async (_app: {}, _ctx: {}) => ({ hits: 1 }) as Record<string, number>,
     )

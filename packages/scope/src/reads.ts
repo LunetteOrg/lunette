@@ -234,8 +234,8 @@ export const wrongEncoding = (contentType: string | undefined, encoding: Encodin
 // to catch. A mismatch does fail in the parse for form, and does NOT for json:
 // bytes that happen to parse would be accepted whatever the client called them.
 // That gap has a name, and it is not tidiness. `text/plain` is one of the three
-// content-types a
-// browser may send cross-origin with NO preflight, so a JSON endpoint that
+// content-types a browser may send cross-origin with NO preflight, so a JSON
+// endpoint that
 // accepts it is reachable by a forged cross-site request that
 // `application/json` would have stopped at the preflight. Requiring the encoding
 // the step asked for is the cheap half of CSRF that costs nothing to hold.

@@ -49,11 +49,11 @@ export interface ExpressCarrier {
   }
 }
 
-// PURE DECLARATION — the returned object carries nothing, and there is no type
-// argument left for the call to make a claim with. It stays a CALL rather than
-// a bare exported value for one reason: `honoCarrier` and `reactRouterCarrier`
-// still take theirs, and a vocabulary where one carrier is invoked and the next
-// is not costs more than the parentheses do.
+// PURE DECLARATION — the returned object carries nothing, and it takes no type
+// argument to make a claim with. It stays a CALL rather than a bare exported
+// value for one reason: `honoCarrier` takes an env, so it must be one, and a
+// vocabulary where one carrier is invoked and the next is not costs more than
+// the parentheses do.
 export const expressCarrier = (): ExpressCarrier => ({})
 
 // Whatever a middleware's steps derive lands on `res.locals` before Express's
@@ -444,7 +444,7 @@ export const cookies = async (
 // unsafe: the encoding check below closes the case where the data would be
 // WRONG, and what is left is which of two correct answers the client gets.
 //
-// THE READ BELOW HAS A CEILING, `DEFAULT_BODY_LIMIT` unless a caller raises it,
+// THE READ BELOW HAS A CEILING, `DEFAULT_BODY_LIMIT` unless a caller sets its own,
 // so the recommendation above does not trade `express.json()`'s 100 kB default
 // for nothing. Node has no size limit of its own, so this is the only one
 // standing on the unparsed path.
