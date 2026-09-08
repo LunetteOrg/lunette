@@ -22,7 +22,7 @@ const IdParam = z.object({ id: z.string().regex(/^\d+$/, 'must be numeric') })
 // normally, where a thrown one routes to the ErrorBoundary. Nothing in the
 // library guards against writing `return` here by mistake — the two are the
 // same type — so the choice stays the author's, and it is the host's own
-// convention rather than the library's error rule (§3).
+// convention rather than the library's error rule.
 export const loader = mount(
   scope(reactRouterCarrier())
     .extend(guards)

@@ -82,7 +82,7 @@ describe('`refine` and `validate` name an entry the ctx already holds', () => {
 
 describe('what `onError` costs and buys', () => {
   it('joins the RETURNS union, which is what a host mount reads', () => {
-    // `AnswerGate` (§44) then refuses, at the mount, an `onError` that built
+    // `AnswerGate` then refuses, at the mount, an `onError` that built
     // something the host will never send — no gate of this extension's own.
     const h = scope<{ readonly body: unknown }>()
       .extend(guards)

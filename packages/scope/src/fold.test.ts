@@ -3,8 +3,8 @@ import { scope, type Next } from './index.ts'
 
 // THE FOLD, on a scope with NO CARRIER — which is the half `shapes.test.ts`
 // cannot cover, since every one of its cases needs words to say. A bare
-// `scope()` runs nowhere in the sense §40 means it, and composes perfectly well
-// in every other: ordering, stopping, wrapping and the run's arguments as the
+// `scope()` speaks no host's words, and composes perfectly well in every other
+// sense: ordering, stopping, wrapping and the run's arguments as the
 // ctx it starts from are all decided here, before any carrier exists.
 //
 // The base builder has ONE verb, so every one of these is written with nothing
@@ -72,7 +72,7 @@ describe('the step primitive, folded', () => {
         // cost of the fold producing nothing of its own, and it lands on the
         // only shape that reads the way back. Here the scope is agnostic, so
         // what comes back is the domain value; on a carrier it is that
-        // carrier's union, asserted once in a helper it ships (§42).
+        // carrier's union, asserted once in a helper it ships.
         const inner = (await next({})) as unknown as string
         return `wrapped(${inner})`
       })
@@ -191,7 +191,7 @@ describe('the step primitive, folded', () => {
   it('and NOTHING guards the way out — what a decorator writes there reaches the app', async () => {
     // The counterpart, and the asymmetry is deliberate. On the way in the fold
     // builds the ctx, so it can hand out its own object and `Ctx` can be
-    // read-only for free. On the way out it builds nothing (§42): the value is
+    // read-only for free. On the way out it builds nothing: the value is
     // the step's, and `next` returns a `Passed` that names no type, so there is
     // nothing here to protect.
     //

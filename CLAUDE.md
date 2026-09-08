@@ -88,10 +88,22 @@ the tracker when relevant — never from here.
   test names, runtime error messages, READMEs) and must contain no
   references to external repos or to the design's history. Conversation
   with the owner stays in Italian.
-- **Citing decisions**: entries in `docs/decisions.md` are cited as
-  `decision N` (prose) or `§N` (compact). NEVER `#N` or `ADR #N`: on
-  GitHub, `#N` autolinks to issue/PR N — a decision citation would point
-  at an unrelated thread. `#N` is reserved for actual issues, PRs and
+- **CODE COMMENTS CITE NOTHING EXTERNAL.** No `§N`, no `decision N`, no
+  `#N`, no PR or discussion numbers, in any `.ts` file — comments, test
+  names and runtime strings alike. A comment has to stand on its own where
+  it is read: a reader with the file open cannot follow a pointer, and a
+  pointer decays the moment the thing it names is renumbered, superseded or
+  rewritten. So state the CONSTRAINT and the reason for it inline, however
+  compressed — "measured", "the gate would collapse to `never`", "a binding
+  is a dependency" — and if the reason is too long to inline, the comment
+  needs the short version, not a reference.
+- **Where citations DO belong**: `docs/decisions.md` (entries cite each
+  other as `decision N` in prose or `§N` compact), the other files under
+  `docs/`, READMEs, commit messages, PR descriptions and issues. There a
+  reader can follow the link, and the numbering is the document's own.
+  NEVER `#N` or `ADR #N` for a decision even there: on GitHub `#N`
+  autolinks to issue/PR N — a decision citation would point at an
+  unrelated thread. `#N` is reserved for actual issues, PRs and
   discussions.
 - **Vocabulary**: chain · layer · bare/bound leaf · binder (`bind(record)`,
   apply = fixed deps, `.with` = per call, `.by` = per call keyed) · window

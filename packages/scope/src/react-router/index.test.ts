@@ -4,7 +4,7 @@ import { scope, type Next } from '../index.ts'
 import { reactRouter, reactRouterCarrier } from './index.ts'
 
 // A guard, written here rather than imported: what a guard IS belongs to no
-// carrier (§43). It stops the way React Router stops — a THROWN `data(...)`.
+// carrier. It stops the way React Router stops — a THROWN `data(...)`.
 const requireActor = async (
   _app: {},
   { request }: { readonly request: Request },

@@ -53,8 +53,8 @@ describe('keyed form — normal behaviour', () => {
 
   it('a WIDENED key slips past the types; the net throws at boot', async () => {
     // `Extract<string, 'db'>` is never: a key typed as plain string is
-    // invisible to the literal-based guard (pre-existing on main,
-    // decisions §4) — this net is what stands under it.
+    // invisible to the literal-based guard — this net is what stands
+    // under it.
     const widened: string = 'db'
     const chain = lunette().provide('db', () => 1).provide(widened, () => 2)
 

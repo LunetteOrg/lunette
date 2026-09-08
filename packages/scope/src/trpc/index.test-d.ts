@@ -94,7 +94,7 @@ describe('what `.input(schema)` supplies against what the scope VALIDATES', () =
   const { carrier, procedure } = trpc(t, {})
 
   // The scope says what it reads of the input ONCE, in the schema — the same
-  // shape the two pattern hosts use for their params (§53). `procedure` puts
+  // shape the two pattern hosts use for their params. `procedure` puts
   // that in the resolver's parameter, so the check below is tRPC's own
   // contravariance and no gate of ours.
   //

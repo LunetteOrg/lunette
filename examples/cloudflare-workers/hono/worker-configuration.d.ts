@@ -11234,7 +11234,7 @@ declare abstract class BrowserRun {
      * - Data URI string with `Content-Type: text/plain` (when `encoding: 'base64'`)
      *
      * **Error:**
-     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code (400, 422, 429, 500, 503)
+     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code
      *
      * **Headers:**
      * - `X-Browser-Ms-Used`: Browser time consumed in milliseconds (set when status < 500)
@@ -11250,7 +11250,7 @@ declare abstract class BrowserRun {
      * - Binary PDF data with `Content-Type: application/pdf`
      *
      * **Error:**
-     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code (400, 422, 429, 500, 503)
+     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code
      *
      * **Headers:**
      * - `X-Browser-Ms-Used`: Browser time consumed in milliseconds (set when status < 500)
@@ -11266,7 +11266,7 @@ declare abstract class BrowserRun {
      * - `BrowserRunContentSuccessResponse` JSON with `Content-Type: application/json`
      *
      * **Error:**
-     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code (400, 422, 429, 500, 503)
+     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code
      *
      * **Headers:**
      * - `X-Browser-Ms-Used`: Browser time consumed in milliseconds (set when status < 500)
@@ -11282,7 +11282,7 @@ declare abstract class BrowserRun {
      * - `BrowserRunScrapeSuccessResponse` JSON with `Content-Type: application/json`
      *
      * **Error:**
-     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code (400, 422, 429, 500, 503)
+     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code
      *
      * **Headers:**
      * - `X-Browser-Ms-Used`: Browser time consumed in milliseconds (set when status < 500)
@@ -11298,7 +11298,7 @@ declare abstract class BrowserRun {
      * - `BrowserRunLinksSuccessResponse` JSON with `Content-Type: application/json`
      *
      * **Error:**
-     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code (400, 422, 429, 500, 503)
+     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code
      *
      * **Headers:**
      * - `X-Browser-Ms-Used`: Browser time consumed in milliseconds (set when status < 500)
@@ -11315,7 +11315,7 @@ declare abstract class BrowserRun {
      * - `BrowserRunSnapshotSuccessResponse` JSON with `Content-Type: application/json`
      *
      * **Error:**
-     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code (400, 422, 429, 500, 503)
+     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code
      *
      * **Headers:**
      * - `X-Browser-Ms-Used`: Browser time consumed in milliseconds (set when status < 500)
@@ -11331,7 +11331,7 @@ declare abstract class BrowserRun {
      * - `BrowserRunJsonSuccessResponse` JSON with `Content-Type: application/json`
      *
      * **Error:**
-     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code (400, 422, 429, 500, 503)
+     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code
      * - HTTP 422 with code `2012` for HTML-to-markdown conversion failures
      * - HTTP 422/500 for AI extraction failures (may include `rawAiResponse` field)
      *
@@ -11349,7 +11349,7 @@ declare abstract class BrowserRun {
      * - `BrowserRunMarkdownSuccessResponse` JSON with `Content-Type: application/json`
      *
      * **Error:**
-     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code (400, 422, 429, 500, 503)
+     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code
      * - HTTP 422 with code `2012` for HTML-to-markdown conversion failures
      *
      * **Headers:**
@@ -11368,7 +11368,7 @@ declare abstract class BrowserRun {
      * - `result.accessibilityTree` is `null` when `root` matched no element
      *
      * **Error:**
-     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code (400, 422, 429, 500, 503)
+     * - `BrowserRunErrorResponse` JSON with appropriate HTTP status code
      * - HTTP 422 for a malformed `root` selector
      * - HTTP 500 with code `2017` or `2018` when the tree could not be built
      *
@@ -11642,7 +11642,7 @@ interface BasicImageTransformations {
      */
     flip?: 'h' | 'v' | 'hv';
     /**
-     * Number of degrees (90, 180, 270) to rotate the image by. width and height
+     * Number of degrees to rotate the image by. width and height
      * options refer to axes after rotation.
      */
     rotate?: 0 | 90 | 180 | 270 | 360;

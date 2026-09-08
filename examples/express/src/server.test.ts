@@ -32,7 +32,7 @@ describe('express + scope: `withId` — `.step(params).validate(...)`, not the c
   it('a malformed id never reaches the domain lookup: 400, from `.validate`', async () => {
     // `/posts/missing` used to reach `posts.getPost('missing')` and answer
     // 404 — a param declared on the carrier was a bare `string` cast with no
-    // format to check (and the declaration itself is gone now, §53).
+    // format to check, and no such declaration exists any more.
     // `IdParam`'s schema does check it: this is a 400 the domain lookup never
     // runs for.
     const res = await request(app).get('/posts/missing')

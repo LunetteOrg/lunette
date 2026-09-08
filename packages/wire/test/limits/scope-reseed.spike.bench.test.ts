@@ -1,4 +1,4 @@
-// Scope-runtime re-seed RUNTIME probe (issue #30) — the recorded evidence
+// Scope-runtime re-seed RUNTIME probe — the recorded evidence
 // behind the runtime figure in docs/design/scope-runtime.md: the wall-clock
 // cost of building+running a scope chain (seeded with the whole app Pub)
 // once per invocation. Retire once the strong-typed scope kit ships with

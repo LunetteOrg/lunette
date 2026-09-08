@@ -37,8 +37,8 @@ export type Encoding = 'json' | 'form'
 // so the plain one is written.
 //
 // The only way a generic caller could get something useful is for the json
-// branch to be narrower than `unknown` — a `JsonValue`, say. #62 chose `unknown`
-// deliberately: what the entry HOLDS before anyone validates it, and a type that
+// branch to be narrower than `unknown` — a `JsonValue`, say. `unknown` is
+// deliberate: it is what the entry HOLDS before anyone validates it, and a type that
 // forces a validation is the point. Changing that is a design decision, not a
 // repair to this line.
 export type BodyOf<E extends Encoding> = E extends 'json' ? unknown : Record<string, string | File>
@@ -120,7 +120,7 @@ export const cookiesFrom = (header: string | null | undefined): Cookies => {
 // is already here.
 export type Read = { readonly value: unknown } | { readonly issues: readonly StandardIssue[] }
 
-// ── the size cap, decision 49 ─────────────────────────────────────────────────
+// ── the size cap ──────────────────────────────────────────────────────────────
 // NO READER SHIPS WITHOUT A CEILING. Node has no default of its own — unlike
 // Express's `express.json()` (100 kB) and unlike Cloudflare, which enforces one
 // at the platform. A body reader that trusts the client's own idea of "small
@@ -133,7 +133,7 @@ export type Read = { readonly value: unknown } | { readonly issues: readonly Sta
 // they would have had with Express, not one a few percent stricter, and a
 // route that genuinely needs more raises it explicitly — `body('json',
 // onError, { limit })` — which is also where the encoding already lives, a
-// per-route choice from #62.
+// per-route choice.
 export const DEFAULT_BODY_LIMIT = 102_400
 
 export const tooLarge = (limit: number): StandardIssue => ({
@@ -291,7 +291,7 @@ export const parseBody = (
 }
 
 // `arrayBuffer()` READS THE WHOLE PAYLOAD BEFORE RETURNING, which is exactly
-// the shape decision 49 closes: a 5 GB body would sit in memory before a single
+// the shape the ceiling above closes: a 5 GB body would sit in memory before a single
 // byte was checked. `readLimitedBody` stops as soon as `limit` is crossed, so a
 // too-large body never accumulates past it — and its own verdict, not
 // `content-length`, is what decides.
@@ -338,7 +338,7 @@ export const fetchReads = <Args extends object>(requestOf: (ctx: Args) => Reques
   // do not, and the asymmetry has a reason: `body` is the only one carrying a
   // payload that can be malformed. `limit` rides the same options bag rather
   // than a fourth positional argument, since it is the one caller in three who
-  // will ever touch it — `DEFAULT_BODY_LIMIT` (decision 49) covers everyone
+  // will ever touch it — `DEFAULT_BODY_LIMIT` covers everyone
   // else.
   body:
     <E extends Encoding, R>(

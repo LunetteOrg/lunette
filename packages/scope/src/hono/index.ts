@@ -1,6 +1,6 @@
 // `@lntt/scope/hono` — the Hono carrier and its mounts.
 //
-// A carrier is `__args` alone (§43). Hono's whole request lives on one value,
+// A carrier is `__args` alone. Hono's whole request lives on one value,
 // `c`, so that is what a run brings: `c.req` reads, `c.json`/`c.notFound`
 // answer, and a step that answers returns Hono's own `Response`.
 
@@ -24,13 +24,13 @@ import { fetchReads } from '../reads.ts'
 // BINDING is a dependency and belongs in the CHAIN: a step reading `c.env.KV`
 // depends on something its `need` never declared, so no mount can check it and
 // `DepGuard` has nothing to say. A per-request-env platform boots its chain
-// from those bindings at the composition root (§12), and a scope then reads
+// from those bindings at the composition root, and a scope then reads
 // them as ordinary typed deps.
 //
 // AND IT IS THE ONLY TYPE ARGUMENT LEFT. The carrier used to take the ROUTE PATTERN too
 // (`honoCarrier<'/posts/:id'>()`), which typed `c.req.param('id')` as `string`
 // and gave `route` something to compare a mounted pattern against. It went with
-// Express's own declaration (§53): the pattern was then written TWICE by hand —
+// Express's own declaration: the pattern was then written TWICE by hand —
 // once on the carrier, once at the mount — and what the gate compares is now
 // the `.validate('params', …)` schema, which is written once and checks the
 // value rather than the name. `c.req.param('id')` is `string | undefined` here,
@@ -101,7 +101,7 @@ type ArgsGate<E extends Env> = (app: never, args: { readonly c: Context<E, any> 
 // A `route` needs no such check: its mount is declared to hand back what the
 // scope handed back, so Hono's own handler type reads it. A `mw` does not —
 // what it returns is `Response | void`, and everything else is dropped. Under
-// the library's error convention a RETURNED error is a domain value (§3), so
+// the library's error convention a RETURNED error is a domain value, so
 // `return { error: 'unauthorized' }` is the natural thing to write for a guard
 // that stops; Hono then sees `undefined` with the chain uncalled and answers
 // 500. Measured. The twin of Express's `AnswerGate`, and the reasoning is
@@ -154,7 +154,7 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
     // adjective belongs on whoever gives something up, so the escape hatch is
     // the one that has to be named.
     //
-    // WHAT `route` COMPARES IS THE SCHEMA (§53), the same on both hosts: a
+    // WHAT `route` COMPARES IS THE SCHEMA, the same on both hosts: a
     // scope says what the URL carries once, in `.validate('params', schema,
     // onError)`, and the gate reads that against the mounted pattern. It used
     // to read a pattern declared on the carrier, which meant writing
@@ -246,9 +246,9 @@ const reads = fetchReads((ctx: { readonly c: Context<any, any> }) => ctx.c.req.r
 //
 // FIXED shape, not generic over a pattern: a generic read extension does not
 // get its type parameter inferred through `.step()` and adds NOTHING, silently
-// (measured on Express's twin, §52). So `ctx.params` starts WIDE and
+// — measured on Express's twin. So `ctx.params` starts WIDE and
 // `.validate('params', schema, onError)` is what narrows it — and what `route`
-// compares a mounted pattern against (§53).
+// compares a mounted pattern against.
 export const params = async (
   _app: {},
   { c }: { readonly c: Context<any, any> },

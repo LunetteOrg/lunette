@@ -11,7 +11,7 @@ const { route, mw } = hono(deps)
 
 // `id` is VALIDATED, not merely read — `/posts/abc` never reaches the domain
 // lookup. And the SAME schema is what `route` compares the mounted pattern
-// against (§53): `route('/posts', getPost)` does not compile, and says
+// against: `route('/posts', getPost)` does not compile, and says
 //
 //   ⛔ this route does not supply a param the scope validates: id
 //
@@ -30,10 +30,10 @@ const CreatePostSchema = z.object({
   content: z.string().min(1),
 })
 
-// A SCOPE VALUE IS THE RECYCLABLE UNIT (#67), and this is the shape a carrier
+// A SCOPE VALUE IS THE RECYCLABLE UNIT, and this is the shape a carrier
 // type argument used to make impossible: the declaration was fixed at
 // `scope(carrier<X>())`, so every branch inherited it and one base could not
-// serve two routes. A verb is per BRANCH, so this one does (§53).
+// serve two routes. A verb is per BRANCH, so this one does.
 const withId = scope(honoCarrier())
   .extend(guards)
   .step(params)
@@ -56,7 +56,7 @@ export const publishPost = withId
 
 // No body parser mounted anywhere: `body('json', onError)` reads the request
 // itself and is the single error path for a malformed or oversized payload
-// (decisions 48 and 49), so there is no framework-level 400 racing this one.
+//, so there is no framework-level 400 racing this one.
 export const createPost = scope(honoCarrier())
   .extend(guards)
   .step(body('json', (issues, { c }) => c.json({ issues }, 422)))

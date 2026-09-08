@@ -1,6 +1,6 @@
 // `@lntt/scope/express` — the Express carrier and its mounts.
 //
-// A carrier is `__args` alone (§43): the shape of a run's second argument, and
+// A carrier is `__args` alone: the shape of a run's second argument, and
 // nothing coined. There is no vocabulary to render, so what a subpath ships
 // besides the declaration is what Express needs to MOUNT a scope — which is why
 // there is no separate adapter package between the two.
@@ -37,10 +37,10 @@ import {
 
 // A carrier is `__args` alone: the shape of a run's second argument, and
 // nothing else. It takes no type argument — what a scope reads OF the URL is
-// not declared here (§53). `req.params` is Express's own wide dictionary, the
+// not declared here. `req.params` is Express's own wide dictionary, the
 // width its router really hands back, and a scope that wants a narrower one
 // reads it through `.step(params).validate('params', schema, onError)`, where
-// the check is on the VALUE and not merely on a key's presence (§52).
+// the check is on the VALUE and not merely on a key's presence.
 export interface ExpressCarrier {
   readonly __args?: {
     readonly req: Request
@@ -159,7 +159,7 @@ type Unsendable<S extends State> = Exclude<ResultOf<Scope<S>>, Response | undefi
 // this is, or which key the middleware derived.
 //
 // It rides `mw` as well, where the SAME mistake ends worse than on a route.
-// Under the library's error convention a RETURNED error is a domain value (§3),
+// Under the library's error convention a RETURNED error is a domain value,
 // so `return { error: 'unauthorized' }` is the natural thing to write — and
 // there the fold never reaches `toNext`, so Express's `next` is never called
 // and the request hangs with no response at all.
@@ -184,8 +184,8 @@ type AnswerGate<S extends State, Then = unknown> = [Unsendable<S>] extends [neve
 // It is a FUNCTION rather than a conditional yielding a message on purpose. Two
 // message-gates failing on the same argument intersect their literals, `'⛔ A' &
 // '⛔ B'` is `never`, and TypeScript then reports "not assignable to parameter
-// of type 'never'" with both messages gone — measured, and the invariant §44
-// states. A function member cannot collapse that way.
+// of type 'never'" with both messages gone — measured. A function member
+// cannot collapse that way.
 type RouteBrings = {
   readonly req: Request
   readonly res: Response
@@ -215,7 +215,7 @@ export type LocalsOf<Mw> = Mw extends RequestHandler<any, any, any, any, infer L
 
 export const express = <App extends object>(deps: App) => {
   // THE REJECTION IS HANDED TO EXPRESS, never dropped. A THROWN error is the
-  // library's infrastructure signal (§3), and Express's error middleware is
+  // library's infrastructure signal, and Express's error middleware is
   // where that signal is answered — so the fold's promise goes to `next`. Left
   // as a bare `void`, the request would hang until the client gave up and the
   // rejection would surface as an unhandled one, which Node's default
@@ -245,7 +245,7 @@ export const express = <App extends object>(deps: App) => {
     // back rather than what it skips.
     //
     // WHAT `route` COMPARES IS THE SCHEMA, not a declaration on the carrier
-    // (§53). A scope that says what the URL carries says it once, in
+    //. A scope that says what the URL carries says it once, in
     // `.validate('params', schema, onError)`, and the gate reads that: the
     // pattern is needed to route and the schema is needed to validate, so
     // nothing is written a third time merely to be compared. A scope that
@@ -379,10 +379,10 @@ export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from
 // refined by `.validate('params', schema, onError)` where a route wants a
 // check on the VALUE. It is now the ONE way a scope says what it reads of the
 // URL: the carrier's own `expressCarrier<{ id: string }>()` declaration, and
-// the route-pattern check `route` built on it, are gone (§53). What their
+// the route-pattern check `route` built on it, are gone. What their
 // removal costs is a compile-time refusal of a pattern missing a NAME; what
 // they never gave is the FORMAT, which is where a bad `:id` actually goes
-// wrong (§52).
+// wrong.
 export const params = async (
   _app: {},
   { req }: { readonly req: Request },
@@ -445,7 +445,7 @@ export const cookies = async (
 // unsafe: the encoding check below closes the case where the data would be
 // WRONG, and what is left is which of two correct answers the client gets.
 //
-// THE READ BELOW HAS A CEILING, `DEFAULT_BODY_LIMIT` (decision 49) unless a
+// THE READ BELOW HAS A CEILING, `DEFAULT_BODY_LIMIT` unless a
 // caller raises it — the recommendation above no longer trades `express.json()`'s
 // 100 kB default for nothing. Node has no size limit of its own, so this is the
 // only one standing on the unparsed path.

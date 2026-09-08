@@ -19,7 +19,7 @@ const { carrier, procedure, middleware } = trpc(t, deps)
 //                                   and the generated client types it
 //   .validate('input', Id, …)       the scope types `ctx.input` for its steps,
 //                                   and `procedure(sc)` is checked against
-//                                   what `.input()` supplies (§53)
+//                                   what `.input()` supplies
 //
 // Pointed at different schemas the mount is refused — a resolver demanding
 // `{ id: string }` does not accept a procedure supplying `{ slug: string }`,
@@ -68,18 +68,18 @@ export const authed = t.procedure.use(
   ),
 )
 
-// A SCOPE VALUE IS THE RECYCLABLE UNIT (#67): `withId` is built once and both
+// A SCOPE VALUE IS THE RECYCLABLE UNIT: `withId` is built once and both
 // procedures below branch from it. A type argument on the carrier could not
 // have served two, since it is fixed at `scope(carrier())` and every branch
-// inherits it (§53).
+// inherits it.
 const withId = scope(carrier()).extend(guards).validate('input', Id, badInput)
 
 export const appRouter = t.router({
   // NO RETURNED "not found": tRPC has one door for ending a call early, and it
   // is a thrown `TRPCError`. That is the host's own convention, not a gap in
   // the library's — a RETURNED domain value would be serialised as the
-  // procedure's result (§3 is about which of the two a step means, and here
-  // the transport only has one).
+  // procedure's result. The error convention says which of the two a step
+  // MEANS; here the transport only offers one of them.
   getPost: t.procedure.input(Id).query(
     procedure(
       withId.step(async ({ posts }: Deps, { input }) => {

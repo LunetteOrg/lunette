@@ -9,7 +9,7 @@
 // frameworks' understand cases one of ours would bail on (`*path`, `{/:id}`, a
 // bare wildcard naming nothing).
 //
-// THE DEMAND IS THE SCHEMA, and that is the whole design (§53). It is read off
+// THE DEMAND IS THE SCHEMA, and that is the whole design. It is read off
 // what `.validate('params', schema, onError)` wrote into the state, so the two
 // things compared each exist for a reason of their own — the pattern to route,
 // the schema to validate — and nothing is declared a third time to be compared.
@@ -38,7 +38,7 @@ export interface Supply<Req extends string, Opt extends string> {
 // The tRPC carrier borrows THIS half and none of the rest: it has no pattern to
 // compare — its framework supplies a schema, so `.input(schema)`'s own output
 // meets `Validated<S, 'input'>` at the resolver's parameter and contravariance
-// does the refusing, with no gate of ours (§53). What is shared is where the
+// does the refusing, with no gate of ours. What is shared is where the
 // demand comes from, which is the whole point of the design.
 export type Validated<S extends State, N extends string> = N extends keyof S['acc']
   ? S['acc'][N]
@@ -85,7 +85,7 @@ export type Unsupplied<Sup, Par> = [Sup] extends [Opaque]
 // GATES THAT CAN BOTH FAIL ARE CHAINED, never intersected side by side: two
 // message literals meeting on one argument give `'⛔ A' & '⛔ B'`, which is
 // `never`, and TypeScript then reports "not assignable to parameter of type
-// 'never'" with both messages gone (§44). So this takes what to check NEXT, and
+// 'never'" with both messages gone. So this takes what to check NEXT, and
 // only one of them can be the answer.
 export type PathGate<Sup, Par, Then = unknown> = [Unsupplied<Sup, Par>] extends [never]
   ? Then

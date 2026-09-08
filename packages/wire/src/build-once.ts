@@ -11,14 +11,14 @@ import type { BuiltOf, Lunette, SeedOf } from './chain.ts'
 // mirrors where the industry puts it (a caller-held wrapper — NestJS's cached
 // server on Lambda, Effect's `ManagedRuntime.make`), while Symfony's memoizing
 // `Kernel::boot()` answers a problem we do not have (a process that dies each
-// request). See §36.
+// request).
 //
 // The build is LAZY because of the constraint no classic container has: on
 // Cloudflare Workers the bindings only exist inside the fetch handler, so there
 // is no startup moment at which the seed is available. The flip side is that the
 // memo lives as long as the isolate, which we do not control: a deploy changing
 // ONLY bindings may reuse running isolates and keep serving an app built from
-// the old ones. No reliable detection exists on our side (#39).
+// the old ones. No reliable detection exists on our side.
 
 export interface BuildOnce<C> {
   // Build if needed, then hand back the same `{ app, dispose }` forever. The
@@ -26,7 +26,7 @@ export interface BuildOnce<C> {
   // this per request must not pay for a seed that will be discarded, and the
   // signature must not promise a per-request seed it ignores. A seed that
   // varies per call is therefore never even computed — the per-call axis is the
-  // window (principle 4), never a second app (§36).
+  // window (principle 4), never a second app.
   // THROWS after `dispose`: a disposed handle has no app to hand back, and the
   // one it built is running on closed resources. Infrastructure, so thrown
   // rather than returned (principle 3).
@@ -72,7 +72,7 @@ export function buildOnce<C extends Lunette<any, any, any>>(chain: C): BuildOnce
     // a REQUEST, not startup. Callers already sharing the failing build still
     // share its failure; only a caller arriving after it settles starts a new
     // one. Safe because a failed build unwinds: each layer's `finally` runs on
-    // the way out, so nothing it opened is left orphaned (§36).
+    // the way out, so nothing it opened is left orphaned.
     ensure: (seed) => {
       // Sequentially this is the whole guard; the check inside `delivered`
       // covers only the build that was already in flight. Thrown SYNCHRONOUSLY,

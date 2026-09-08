@@ -29,7 +29,7 @@ describe('bind (types)', () => {
 
     // ghost AND ghost2 are both missing from ctx: the APPLICATION does not
     // compile. The blame is aggregate (the missing KEY is named, not which
-    // leaf wants it) — the accepted trade of single-arity bind (decision 27).
+    // leaf wants it) — the accepted trade of single-arity bind.
     // @ts-expect-error — ctx does not provide 'ghost'
     bind({ requestOtp, needsGhost, needsGhost2 })(ctx)
 

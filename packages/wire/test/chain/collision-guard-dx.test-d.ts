@@ -1,7 +1,7 @@
 // DX exploration, NOT the contract (that is collision-guard.test-d.ts):
 // WHERE the guard diagnostics land and WHAT they say — the return-type
 // guard shipped before this change vs the argument-constraint prototypes
-// that replaced it (decision in discussion #21, tracker issue #25).
+// that replaced it.
 // Verbatim tsc 5.9 output is quoted above each @ts-expect-error. All
 // prototypes are self-contained declared classes; the final section
 // exercises the real chain. The contract files assert the behaviour —
@@ -492,8 +492,7 @@ describe('the brand property is a private symbol', () => {
 })
 
 // ── non-string keys: the message, and then the deeper hole ────────────────
-// The PR #26 review caught the message collapsing for number and symbol
-// keys: `${K & string}` is never for both, and interpolating never kills
+// THE MESSAGE COLLAPSES for number and symbol keys: `${K & string}` is never for both, and interpolating never kills
 // the whole template ({ [collision]: never } — red, but mute). Fixing it
 // split the two kinds:
 //

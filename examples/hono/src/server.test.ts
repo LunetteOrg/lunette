@@ -35,7 +35,7 @@ describe('hono + scope: `withId` — one base scope, two routes', () => {
 
   // The same `withId` value serves both routes, and `route` checked BOTH
   // patterns against its schema — `route('/posts', getPost)` would not have
-  // compiled (§53).
+  // compiled.
   it('the SAME base answers the same way under the other route', async () => {
     const res = await app.request('/posts/missing/publish', { method: 'POST' })
     expect(res.status).toBe(400)

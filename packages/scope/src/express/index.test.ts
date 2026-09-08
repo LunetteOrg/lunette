@@ -8,7 +8,7 @@ import { guards } from '../guard/index.ts'
 import { express, expressCarrier, params } from './index.ts'
 
 // A guard, written here rather than imported: what a guard IS belongs to no
-// carrier (§43), and the carrier's own claim is only that a step which stops
+// carrier, and the carrier's own claim is only that a step which stops
 // is never followed by the ones after it.
 const requireActor = async (
   _app: {},
@@ -117,7 +117,7 @@ describe('the Express carrier: `mw`', () => {
   })
 })
 
-// ── the thrown error is INFRASTRUCTURE (§3), and Express's own door for it is
+// ── the thrown error is INFRASTRUCTURE, and Express's own door for it is
 // the error middleware. The fold's promise is a promise: dropped, the request
 // hangs until the client gives up and the rejection surfaces as an unhandled
 // one — which Node kills the process over by default.
@@ -268,7 +268,7 @@ describe('`params`: a fifth read extension, WIDE, refined by `.validate`', () =>
   })
 
   // `route('/posts', showPost)` does not compile: the gate reads this scope's
-  // schema and the pattern supplies no `id` (§53, pinned in `index.test-d.ts`).
+  // schema and the pattern supplies no `id` (pinned in `index.test-d.ts`).
   // The runtime answer below is what the ESCAPE HATCH gets — `handler` never
   // sees the pattern, so the same mistake reaches the request there, and
   // `.validate` is what stands between it and the leaf.

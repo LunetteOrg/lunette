@@ -10,7 +10,7 @@ type Context = { readonly actorId: string | undefined }
 const t = initTRPC.context<Context>().create()
 
 // A guard, written here rather than imported: what a guard IS belongs to no
-// carrier (§43). It stops the way tRPC stops — a thrown `TRPCError`, its one
+// carrier. It stops the way tRPC stops — a thrown `TRPCError`, its one
 // door.
 const requireActor = async (
   _app: {},
