@@ -133,9 +133,9 @@ export type AnyStep = (
 //   signatures in an intersection become OVERLOADS, and the stale one resolves
 //   first.
 //
-//   `result` accumulates as a UNION. Under intersection it cannot: `A & B` over
-//   a type that is not a key collapses, which is why the other union-valued axes
-//   are maps of NAMES.
+//   `returns` accumulates as a UNION. Under intersection it cannot: `A & B` over
+//   a type that is not a key collapses, which is why a union-valued axis cannot
+//   be carried that way at all.
 
 // ── gate: the CHAIN does not expose what the scope demands ───────────────────
 // `Need` and `Pub` are two independently inferred generics with no shared

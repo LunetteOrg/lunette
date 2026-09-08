@@ -2906,8 +2906,8 @@ params width now, since nothing narrower is declared.
 
 **Decision.** Delete the scope API design document. What it carried that
 nothing else did — the traps that each cost a measurement, and the builder's
-cost breakdown — is written at the line it constrains, in
-`packages/scope/src/index.ts` and `route-gate.ts`. Everything else it held has a
+cost breakdown — is written at the line it constrains, across `index.ts`,
+`route-gate.ts`, `guard/index.ts` and `express/index.ts`. Everything else it held has a
 better home already: the contract is `packages/scope/README.md` and the code,
 the rejected roads are this file, and the work order is the issue graph and the
 project board — which is where `CLAUDE.md` says order lives, never in a file,
@@ -2918,8 +2918,8 @@ it.
 historical — rejected: 1156 lines of which half describe machinery that never
 shipped stay in `docs/`, and someone reopens them believing it. *Rewrite it as
 the contract it claims to be* — rejected: that is what `packages/scope/README.md`
-now is, and a second document for the same audience is the duplication decision
-42 exists to avoid. *Move the residue into a new short document* — rejected on
+now is, and a second document for the same audience is the duplication the
+"one way to do each thing" principle refuses. *Move the residue into a new short document* — rejected on
 measurement, below.
 
 **Why.** It was doing four jobs and three had moved out from under it. Nine
@@ -3038,6 +3038,10 @@ promise the callable returns.
 - **The rest of the cost breakdown** on that same 21-step fixture: the `returns`
   accumulation 6%, one whole member of `State` 1.3%, and `DepGuard` ~0 — it
   rides the call, not each step. The other half of "a new axis is affordable".
+- **Two gaps stay open and are worth naming**: the step primitive with the
+  callable scope, and `validate`, were never measured against what they
+  replaced. Both would have to be taken from a worktree at the pre-change
+  commit, since a figure read out of a file is not a measurement.
 - **Gating a schema against its entry's RAW type** was measured in both
   directions and neither ships; what could work is a check reading the schema's
   OUTPUT, or one a schema opts into, and both need a real case — the 422 that
