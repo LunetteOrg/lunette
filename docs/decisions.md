@@ -3037,6 +3037,15 @@ promise the callable returns.
 - **The rest of the cost breakdown** on that same 21-step fixture: the `returns`
   accumulation 6%, one whole member of `State` 1.3%, and `DepGuard` ~0 — it
   rides the call, not each step. The other half of "a new axis is affordable".
+- **`.parallel(a, b)`, parked with its safety analysis done.** Two of the three
+  conditions come free from the signature: children take no `next`, so wrapping
+  is inexpressible, and both read `Ctx<S>`, so a cross-dependency between them
+  is refused by contravariance. The third is the ctx-key collision (#51). No
+  issue tracks the verb itself, and this is the analysis not to redo.
+- **A lazy `ctx.body` getter was rejected**, not overlooked: an async accessor
+  on a synchronous ctx is worse than the read it replaces, and it is the ambient
+  magic the design refuses. The eager read is what makes "every step runs where
+  it was written" observable.
 - **Two gaps stay open and are worth naming**: the step primitive with the
   callable scope, and `validate`, were never measured against what they
   replaced. Both would have to be taken from a worktree at the pre-change
@@ -3092,6 +3101,25 @@ what it would buy is what `authBase` above already is. *A helper function
 taking a scope and returning one* — the same thing with a different spelling,
 and it loses the concrete type: `authBase`'s type is inferred once, at its own
 line, where a generic helper would have to reconstruct it.
+
+*A function generic over "any scope", appending steps from OUTSIDE the builder*,
+so the identical sequence could be handed to two hosts at one call site. This
+one does not merely lose something — it does not compile, and the reason is
+structural rather than about guards: a single generic `.step()` over an
+abstract `S extends State` fails the moment the step reads a concrete ctx
+field, because `Ctx<S>`'s `Omit<S['args'], keyof S['acc']> & S['acc']` does not
+reduce for a naked type parameter, so two derivations of "the same" type never
+structurally unify. Measured, minimized to one `.step()` with no guard in it.
+
+**What DOES work, and is deliberately not shipped.** A raw-function combinator
+outside the builder, generic on its OWN parameters rather than on `State`,
+compiles and runs correctly on two real hosts (Express and Hono). It is unshipped
+because it answers a case nobody has. Written down so the next reader does not
+conclude from the paragraph above that nothing can work — and if a cross-host
+case does show up, it is a STEP's job rather than a new abstraction's: a step
+already carries the contract such a thing would need, its own `Need`/`Add`/`Ret`
+checked at the argument like every other step, so a bespoke "sequence" type
+would be a second name for what the primitive is.
 
 **Why.** The question was whether a sequence needs its own mechanism, and the
 answer is that immutability already gives one. Verified by running the shape:
