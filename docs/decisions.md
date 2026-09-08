@@ -2938,13 +2938,36 @@ words: the gate riding the ARGUMENT and defaulted parameters on the ALIAS
 truth on a param-less pattern (`route-gate.ts`), an invariant phantom blocking
 inference, a state member constrained to the wrong shape, `infer` through a
 generic factory instantiating to constraints, and reading-versus-parsing failing
-for opposite reasons (`guard/index.ts`). Four had no counterpart and were
-written in: why the chain gate is an OBJECT and not a message string, why a
-fresh call signature per step does not rescue `this`, what `Grown`'s repetition
-buys (+47% instantiations if DRYed), and where the builder's cost actually is
-(`Ctx` 16%, `Surface` 15%, all of `State`'s members ~9% together). The rest —
-intent inference, carrier-and-extension brands, a declaration read by value —
-is about machinery that is gone. That is archaeology, and git keeps it.
+for opposite reasons (`guard/index.ts`). Four had no counterpart. Two are
+constraints and were written into the code: why the chain gate is an OBJECT and
+not a message string (a gate resolving the callable itself to a literal makes
+the call print `Type 'String' has no call signatures`, and the reason never
+reaches the reader), and why intersecting a fresh call signature per step does
+not rescue `this` (two call signatures in an intersection become overloads, and
+the stale one resolves first). Two were NUMBERS comparing the shipped shape
+against a rejected one, which is this record's job and not a comment's — they
+are below. The rest — intent inference, carrier-and-extension brands, a
+declaration read by value — is about machinery that is gone. That is
+archaeology, and git keeps it.
+
+**The two numbers, re-measured on the shipped package** (`tsc
+--extendedDiagnostics` over `@lntt/scope`, baseline 329,128 instantiations and
+112,033 types):
+
+- **DRYing `Grown`.** Rebuilding the state through `Omit<S, keyof P> & P` so it
+  names only the members that change: 363,347 instantiations (**+10.4%**) and
+  118,247 types (**+5.5%**). The repetition is the optimisation, and it is the
+  same intersection cost the state parameter avoids, arriving from the other
+  side. The retired document put this at +47% on a 21-step fixture that still
+  carried the word check — which is why the code now states the constraint and
+  leaves the number here: a figure measured on a shape that no longer exists
+  reproduces as something else.
+- **Where the builder's cost is**, on that same fixture: `Ctx`'s `Omit` 16% and
+  `Surface`'s intersection 15% of a chain's instantiations, against ~9% for all
+  of `State`'s members together — so a new axis is affordable and neither
+  derived type is reducible. The `Surface` half has a trap with it, and that one
+  IS in the code: skipping the intersection while `verbs` is empty breaks the
+  inference of `S` through `this`.
 
 **What this does not touch.** `docs/design/scope-runtime.md` stays: it is an
 open design exploration with the performance record two spikes cite by name.

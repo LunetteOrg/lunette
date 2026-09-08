@@ -246,11 +246,8 @@ export type Ctx<S extends State> = Readonly<Omit<S['args'], keyof S['acc']> & S[
 // extensions declared. The verbs are a plain record with no call signature of
 // their own, so intersecting them creates no overload.
 //
-// This intersection and `Ctx`'s `Omit` are where the builder's cost actually is
-// — 15% and 16% of a 21-step chain's instantiations, against ~9% for all of
-// `State`'s members together, so a new axis is affordable and neither derived
-// type is. The obvious shortcut here — skip the intersection while `verbs` is
-// empty — breaks the inference of `S` through `this`, and every verb then sees
+// The obvious shortcut here — skip the intersection while `verbs` is empty —
+// breaks the inference of `S` through `this`, and every verb then sees
 // `Scope<State>` instead of the scope it was called on.
 //
 // A verb's signature is the extension's to write, with `this: Surface<S>` — how
@@ -431,10 +428,10 @@ type CtxGate<S extends State, Add, U = Collides<S, Add>> = [U] extends [never]
   ? unknown
   : `⛔ this ctx key is already populated: ${U & string} — an extension may REPLACE it, a step may not`
 
-// THE REPETITION IS THE OPTIMISATION, measured: writing this as
-// `With<S, P> = Omit<S, keyof P> & P` so it lists only the members it changes
-// costs +47% instantiations on a 21-step chain and +28% types. It is the same
-// intersection cost the state parameter avoids, arriving from the other side.
+// EVERY MEMBER IS LISTED, and the repetition is deliberate: the DRY form
+// (`Omit<S, keyof P> & P`, naming only what changes) costs more, not less —
+// it rebuilds the state through an intersection, which is the shape carrying
+// it in a type parameter exists to avoid.
 type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Surface<{
   need: S['need'] & Need2
   args: S['args']
