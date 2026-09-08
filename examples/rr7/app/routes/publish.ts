@@ -5,6 +5,7 @@ import { headers, reactRouter, reactRouterCarrier, type HeaderEntries } from '@l
 import { fail, guards } from '@lntt/scope/guard'
 import type { Deps } from '@lntt/example-app'
 import { deps } from '../bootstrap/index.ts'
+import type { Route } from './+types/publish'
 
 const { action: mount } = reactRouter(deps)
 
@@ -36,4 +37,4 @@ export const action = mount(
       // reach an ErrorBoundary instead.
       return redirect(`/posts/${result.id}`)
     }),
-)
+) satisfies (args: Route.ActionArgs) => unknown

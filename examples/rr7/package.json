@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "react-router typegen && tsc --noEmit"
   },
   "dependencies": {
     "@lntt/example-app": "workspace:*",
@@ -21,6 +21,7 @@
     "typescript": "^5.9.2",
     "vitest": "^4.1.0",
     "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0"
+    "@types/react-dom": "^19.2.0",
+    "@react-router/dev": "^7.18.3"
   }
 }

@@ -10,19 +10,26 @@ import type { RouteObject } from 'react-router'
 import Post, { loader } from './post.tsx'
 import { action as publish } from './publish.ts'
 import { action as create } from './posts.tsx'
-import type { PostRoute, PostsRoute, WrongRoute } from './types.ts'
+import type { Route as PostRoute } from './+types/post'
+import type { Route as PostsRoute } from './+types/posts'
+import type { Route as PublishRoute } from './+types/publish'
 
-const loaderArgs = (id: string): PostRoute.LoaderArgs => ({
-  request: new Request(`http://localhost/posts/${id}`),
-  params: { id },
-  context: {},
-})
+// The ARGS a route module really receives, at the type React Router generates
+// for THIS route from `app/routes.ts` — `params` included, `{ id: string }`
+// because the path says `/posts/:id`.
+const loaderArgs = (id: string) =>
+  ({
+    request: new Request(`http://localhost/posts/${id}`),
+    params: { id },
+    context: {},
+  }) as unknown as PostRoute.LoaderArgs
 
-const actionArgs = (id: string, init?: RequestInit): PostRoute.ActionArgs => ({
-  request: new Request(`http://localhost/posts/${id}/publish`, { method: 'POST', ...init }),
-  params: { id },
-  context: {},
-})
+const actionArgs = (id: string, init?: RequestInit) =>
+  ({
+    request: new Request(`http://localhost/posts/${id}/publish`, { method: 'POST', ...init }),
+    params: { id },
+    context: {},
+  }) as unknown as PublishRoute.ActionArgs
 
 // A loader or action that stops does it by THROWING — and what `data(v, init)`
 // throws is React Router's own `DataWithResponseInit`, not a `Response`. Both
@@ -76,15 +83,16 @@ describe('rr7 + scope: the publish action and the SHARED guard', () => {
 })
 
 describe('rr7 + scope: the create action, body read and validated', () => {
-  const args = (payload: unknown): PostsRoute.ActionArgs => ({
-    request: new Request('http://localhost/posts', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: typeof payload === 'string' ? payload : JSON.stringify(payload),
-    }),
-    params: {},
-    context: {},
-  })
+  const args = (payload: unknown) =>
+    ({
+      request: new Request('http://localhost/posts', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: typeof payload === 'string' ? payload : JSON.stringify(payload),
+      }),
+      params: {},
+      context: {},
+    }) as unknown as PostsRoute.ActionArgs
 
   it('a valid body: the created post', async () => {
     await expect(create(args({ title: 'New', content: 'Body' }))).resolves.toMatchObject({
@@ -102,19 +110,23 @@ describe('rr7 + scope: the create action, body read and validated', () => {
 })
 
 // WHERE A ROUTE IS CHECKED ON THIS HOST. React Router never hands us a pattern
-// — `routes.ts` owns that mapping — so no gate of ours can read one. What there
-// IS is the typegen: the mount's own parameter carries what the scope
-// VALIDATED, so a route module's `satisfies` refuses a route whose generated
-// params say something else. This is the assertion a real route module makes
-// by writing `export const loader = mount(sc) satisfies (a: Route.LoaderArgs) => unknown`.
+// — `app/routes.ts` owns that mapping — so no gate of ours can read one. What
+// there IS is the typegen: it reads that file and gives each module its own
+// `Route.LoaderArgs`, and the mount's own parameter carries what the scope
+// VALIDATED. So the `satisfies` a route module already writes does the work,
+// by contravariance and with no type of ours in the way.
+//
+// The negative is a REAL generated type, not a hand-written one: `/posts` is a
+// route in this app and its params are `{}`, so the loader that validates `id`
+// does not fit it.
 describe('rr7 + scope: the typegen checks what the scope validated', () => {
-  it('accepts the route whose params supply what the schema demands', () => {
+  it('accepts the route whose generated params supply what the schema demands', () => {
     void (loader satisfies (args: PostRoute.LoaderArgs) => unknown)
   })
 
-  it('refuses a route whose params supply something else', () => {
-    // @ts-expect-error — this route supplies `slug`; the loader validated `id`
-    void (loader satisfies (args: WrongRoute.LoaderArgs) => unknown)
+  it('refuses a route whose generated params supply nothing', () => {
+    // @ts-expect-error — `/posts` carries no `:id`; this loader validated one
+    void (loader satisfies (args: PostsRoute.LoaderArgs) => unknown)
   })
 })
 

@@ -5,6 +5,7 @@ import { body, reactRouter, reactRouterCarrier } from '@lntt/scope/react-router'
 import { guards } from '@lntt/scope/guard'
 import type { Deps } from '@lntt/example-app'
 import { deps } from '../bootstrap/index.ts'
+import type { Route } from './+types/posts'
 
 const { action: mount } = reactRouter(deps)
 
@@ -28,7 +29,7 @@ export const action = mount(
       throw data({ issues }, { status: 422 })
     })
     .step(async ({ posts }: Deps, { body: input }) => posts.createPost(input)),
-)
+) satisfies (args: Route.ActionArgs) => unknown
 
 // THE ACTION'S OWN HALF. `useActionData<typeof action>()` reads the action's
 // return type the way `useLoaderData` reads a loader's, so what the step handed
