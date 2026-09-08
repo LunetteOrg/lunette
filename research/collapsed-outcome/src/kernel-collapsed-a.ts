@@ -3,7 +3,7 @@
 // There is no `ok`/`abort` split and no `ok` boolean. A scope always hands back
 // the same shape: a value, an intent, or both. Whether a run "went well" is not
 // the core's statement — it is inside the word, in the carrier's own terms,
-// which is the whole argument for collapsing (§40 applied to the core itself:
+// which is the whole argument for collapsing (the same reading applied to the core itself:
 // a core that does not know what a 404 IS has no title to know it is not ok).
 //
 // `ValueOf` UNWRAPS the word, so `notFound('gone')` contributes `string` to `R`

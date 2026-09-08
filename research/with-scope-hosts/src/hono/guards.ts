@@ -2,7 +2,7 @@ import { HTTPException } from 'hono/http-exception'
 import type { Next } from '@lntt/scope'
 
 // Hono's own idiomatic way to end a request early — the framework catches an
-// `HTTPException` itself and turns it into its response, same door #76's
+// `HTTPException` itself and turns it into its response, the same door the
 // no-scope spike already found (`src/hono/server.ts` there throws it too).
 export const requireActor = async (
   _app: {},

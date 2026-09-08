@@ -47,7 +47,7 @@ import type { Invalid } from './carrier.ts'
 // a shape a domain value could happen to have (principle 7 — no ambient magic).
 
 // ── the outcome ──────────────────────────────────────────────────────────────
-// THREE branches. `invalid` is the fold failing on its own (§40): a separate
+// THREE branches. `invalid` is the fold failing on its own: a separate
 // branch rather than an abort with a neutral name, so a codec that forgets it
 // fails to COMPILE instead of quietly dropping it.
 //
@@ -79,7 +79,7 @@ export type Outcome<R> = Branded &
     | { readonly ok: false; readonly invalid: Invalid }
   )
 
-// The core's OWN branch, and the one word it does coin (§40): the input did not
+// The core's OWN branch, and the one word it does coin: the input did not
 // validate. It is not an abort — an abort is a word from a carrier's
 // vocabulary, and the core has none — so it is its own branch, and a codec that
 // forgets it fails to compile rather than quietly dropping it.
@@ -101,7 +101,7 @@ export type Next<Add extends object> = (delta: Add) => Promise<Outcome<unknown>>
 //
 // `R` is also where the intents live. A step returning `unauthorized()` has
 // that word in its return TYPE, so the builder reads it by distributing over
-// the whole return (§1: never infer from inside a union constituent). While a
+// the whole return — never infer from inside a union constituent. While a
 // step had to hand back a pre-built `Outcome` the word was cast away before the
 // builder could see it, and a raw step contributed `never` — the fail-open this
 // shape removes rather than documents.

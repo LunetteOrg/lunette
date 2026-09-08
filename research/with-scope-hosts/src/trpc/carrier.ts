@@ -22,7 +22,7 @@ export const trpcCarrier: TrpcCarrier = {}
 // `app` = deps, curried once, same as every other host — but there is no
 // `mw` here: a tRPC procedure is the only mount unit this host has, and
 // forcing an Express-shaped middleware onto it would invent a door tRPC
-// does not have (§76 already found tRPC's ownership model differs, not
+// does not have (tRPC's ownership model differs, not
 // just its syntax).
 //
 // `Args` is fixed, not generic like Express's `route<Args>` — Express's

@@ -5,7 +5,7 @@ import { ABORT, type Abort } from './abort.ts'
 // real code instead of minting a word inline where it would be mistaken for
 // something the core provides.
 //
-// What a carrier IS, in three parts, and the core owns none of them (§40):
+// What a carrier IS, in three parts, and the core owns none of them:
 //
 //   what a run BRINGS       — `Params` below, the second argument of the call
 //   the WORDS it coins      — `refused`, `gone`: values a guard or leaf returns

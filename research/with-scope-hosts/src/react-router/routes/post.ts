@@ -6,7 +6,7 @@ import { deps } from '../bootstrap/index.ts'
 
 const { loader: mount } = reactRouter(deps)
 
-// THROWN, not returned: #76's own table already found a RETURNED
+// THROWN, not returned: a RETURNED
 // `data(null, { status: 404 })` renders normally instead of routing to an
 // ErrorBoundary. Composition does not guard against writing `return` here
 // by mistake — no vocabulary word does that any more (db0ff65) — the fix

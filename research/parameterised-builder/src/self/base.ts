@@ -51,7 +51,7 @@ type AnyAbort = Abort<never> | Abort<any>
 // steps that each return a DOMAIN VALUE intersect instead of uniting —
 // `'anonymous' & number` is `never`. An intersection cannot accumulate a union
 // over a type that is not a key, which is what `__intents` and `__caps` get
-// away with by being maps of NAMES. §9 names this exact shape as the one that
+// away with by being maps of NAMES. This exact shape is the one that
 // "survives by accident", so it is written down, not relied on.
 type ValueOf<R> = R extends AnyOutcome
   ? never
@@ -66,7 +66,7 @@ type ValueOf<R> = R extends AnyOutcome
 // pre-built outcome. Inferring the intent from INSIDE a union constituent
 // (`(ctx) => E | Abort<I>`) makes TypeScript pick the first candidate and
 // reject the rest, so a step that can return two different words stops
-// compiling (§1). Infer the WHOLE return type and distribute afterwards, which
+// compiling. Infer the WHOLE return type and distribute afterwards, which
 // collects every constituent instead.
 //
 // One conditional per case, not two: an outer `extends AnyAbort` guard around
@@ -99,12 +99,12 @@ type DeclaredOf<T> = T extends { readonly __declares?: infer M }
 // touches the poisoned type — so a BASE (a carrier plus a few steps, no leaf,
 // which is exactly the shape a shared `gated()` has in a real app) swallows the
 // mistake and surfaces it in whichever file finally closes the builder,
-// pointing at a step its author never wrote (§2).
+// pointing at a step its author never wrote.
 //
 // `A` and `U` are defaulted parameters used as let-bindings, so each is
 // computed ONCE instead of per mention. They sit on the ALIAS, never on the
 // method: a defaulted parameter in a method's own list is caller-overridable,
-// and naming it `never` walks straight through the gate (§8).
+// and naming it `never` walks straight through the gate.
 type DeclGate<Self, Ret, A = Awaited<Ret>, U = Exclude<IntentKeysOf<A>, DeclaredOf<Self>>> = [
   U,
 ] extends [never]
@@ -114,7 +114,7 @@ type DeclGate<Self, Ret, A = Awaited<Ret>, U = Exclude<IntentKeysOf<A>, Declared
 // The ctx a step reads: what the run was seeded with, plus everything the steps
 // before it populated.
 //
-// An OVERRIDE, not the intersection it looks like (§9). `SeedOf & AccOf` does
+// An OVERRIDE, not the intersection it looks like. `SeedOf & AccOf` does
 // not replace: a step re-populating a key it already has — which is what a
 // refinement IS — would yield the intersection of the two types, and refining
 // `Record<string, string | string[]>` to `{ page: number }` gives `never`. No
@@ -126,8 +126,8 @@ type AnyOutcome = Outcome<unknown>
 
 // ── the closed form ──────────────────────────────────────────────────────────
 // A SCOPE IS THE FUNCTION THAT RUNS IT. Two arguments, split by LIFETIME: the
-// built chain, alive as long as the process (§33 tier 1), and the scope
-// execution parameters — everything belonging to this one run (§33 tier 2).
+// built chain, alive as long as the process, and the scope
+// execution parameters — everything belonging to this one run.
 // The word is not `seed`: wire already uses that for the build-once, which is
 // the OTHER lifetime.
 //
@@ -161,7 +161,7 @@ export interface Handler<
   readonly __result?: R
   // Phantom and INVARIANT — present in both positions on purpose. With only the
   // parameter it is contravariant, and a caller naming the type arguments at a
-  // mount could supply `never` and satisfy a gate the scope still fails (§34,
+  // mount could supply `never` and satisfy a gate the scope still fails (
   // on the capability axis; the same hole, the same shape).
   //
   // Every word this scope can produce — including one returned from a RAW step,
@@ -177,7 +177,7 @@ export interface Handler<
 // duplicate of this argument list that could drift from it with no error.
 //
 // The verb returns `Self` unchanged: it pushes fold work and contributes no
-// type-level state of its own. A verb that DOES contribute — an `.status(201)`
+// type-level state of its own. A verb that DOES contribute — an `.status`
 // pinning a literal for a host's codec — needs the factory's return type read
 // as well, and that is not built (principle 5: no API without a case in hand).
 type VerbsOn<M> = {
@@ -203,7 +203,7 @@ type VerbsIn<S> = S extends { readonly methods: infer M } ? (M extends Verbs ? M
 // key: on the bare-function branch of the union `S` is unresolved and falls
 // back to that constraint, so `keyof S` must not contain `closes`. It did, in
 // the first shape, and a plain enriching step CLOSED THE BUILDER — the same
-// fail-open a vacuous `extends` produces (§3), by a different road.
+// fail-open a vacuous `extends` produces, by a different road.
 type Grown<Self, Need2 extends object, Add extends object, Ret, S> = 'closes' extends keyof S
   ? Handler<
       NeedOf<Self> & Need2,

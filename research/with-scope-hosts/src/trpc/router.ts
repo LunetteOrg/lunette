@@ -32,8 +32,8 @@ export const appRouter = t.router({
   ),
 
   // No redirect: the client already owns what happens after a mutation
-  // succeeds — porting Express/Hono's redirect here would be the category
-  // error #76 already named, not a missing feature.
+  // succeeds — porting Express/Hono's redirect here would be a category
+  // error, not a missing feature.
   publishPost: t.procedure.input(z.object({ id: z.string() })).mutation(
     procedure(
       scope(trpcCarrier)

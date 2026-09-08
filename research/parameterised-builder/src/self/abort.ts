@@ -14,7 +14,7 @@ export const OK: unique symbol = Symbol('scope.ok')
 // Written without its parameter, `Abort` must mean "an intent nobody
 // declared" and fail CLOSED — refused everywhere a definition-side gate
 // checks it — rather than collapse to `never` and mount anywhere, which is
-// the fail-open failure mode §34 had to close on the capability axis.
+// the fail-open failure mode the capability axis had to close.
 export interface UnknownIntent {
   readonly __unknown_intent: true
 }
@@ -22,7 +22,7 @@ export interface UnknownIntent {
 // An abort STOPS the fold. `intent` is opaque: a word from some carrier's
 // vocabulary, and the core only ever checks the brand, never reads it. `__i`
 // is phantom and INVARIANT — a contravariant phantom would let a caller name
-// the gate away by supplying `never`, the same hole §34 closed on `Cap`.
+// the gate away by supplying `never`, the same hole `Cap` had to close.
 export interface Abort<I extends object = UnknownIntent> {
   readonly [ABORT]: true
   readonly intent: unknown

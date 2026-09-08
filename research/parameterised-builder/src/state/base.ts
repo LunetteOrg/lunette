@@ -65,7 +65,7 @@ type DeclGate<S extends State, Ret, A = Awaited<Ret>, U = Exclude<IntentKeysOf<A
   ? unknown
   : `⛔ this scope does not coin the word: ${U & string} — is it the right carrier?`
 
-// The ctx a step reads. Same override rule (§9): a step re-populating a key it
+// The ctx a step reads. Same override rule: a step re-populating a key it
 // already has must REPLACE it, not intersect with it.
 type Ctx<S extends State> = Omit<S['seed'], keyof S['acc']> & S['acc']
 
