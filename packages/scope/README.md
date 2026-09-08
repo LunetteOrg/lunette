@@ -1,47 +1,51 @@
 # @lntt/scope
 
-The host-agnostic **scope runtime** for [`@lntt/wire`](../wire): a per-invocation
-guard/leaf model with a typed input contract, run as a fold. Wire builds the app
-once at boot; `@lntt/scope` handles what happens **per request** — authentication,
-authorization, resource prefetch, and the use case itself — without an onion, an
-AsyncLocalStorage, or a framework.
+The host-agnostic **scope runtime** for [`@lntt/wire`](../wire): ONE primitive —
+a step wrapping the rest of the fold — and a scope that IS the function running
+it. Wire builds the app once at boot; `@lntt/scope` handles what happens **per
+request** — authentication, authorization, resource prefetch, and the use case
+itself — without an onion, an AsyncLocalStorage, or a framework.
 
 ## A scope, whole
 
 ```ts
+import { bind, lunette, type PubOf } from '@lntt/wire'
 import { scope } from '@lntt/scope'
 
-// What the chain exposes, built once at boot — see `@lntt/wire`.
-type Deps = {
-  readonly posts: {
-    getPost(id: string): Post | NotFound
-    publishPost(id: string, actor: string): Post | NotFound
-  }
-}
+// The chain, built once at boot, and what it exposes — see `@lntt/wire`.
+const chain = lunette()
+  .provide('repo', () => makeRepo())
+  .expose('posts', (ctx) => bind({ getPost, publishPost })(ctx.repo))
+
+type Deps = PubOf<typeof chain>
 
 const showPost = scope<{ readonly id: string }>()
   .step(async ({ posts }: Deps, { id }) => posts.getPost(id))
 
-await showPost(app, { id: '1' })   // Post | NotFound
+const { app: deps } = await chain.build()
+await showPost(deps, { id: '1' })   // Post | NotFound
 ```
 
 That is all of it. `scope()` starts one, `.step` adds to it, and **the value it
-hands back IS the function that runs it, from the first line** — there is no
-`.build()`, no closing verb, nothing to call at the end.
+hands back IS the function that runs it, from the first line** — no closing
+verb, and nothing to build (the `build()` above is the CHAIN's, the other
+lifetime).
 
-A scope takes two arguments, split by LIFETIME: the **app** — the chain wire
-built once at boot, alive as long as the process — and the **scope execution
-parameters**, everything that belongs to this one invocation. `scope<Args>()`
-declares the second by hand, which is what a scope with no host does;
-`scope(carrier)` takes it from a carrier instead (below), and then a mount
-builds it for you out of the host's own request.
+A scope takes two arguments, split by LIFETIME. First the **app**: the chain
+wire built once at boot, alive as long as the process, and what every later
+snippet here calls `deps`. Second the **scope execution parameters**: everything
+that belongs to this one invocation. `scope<Args>()` declares the second by
+hand, which is what a scope with no host does; `scope(carrier)` takes it from a
+carrier instead (below), and then a **mount** — the small wrapper each host
+subpath ships, which turns a scope into the handler that host expects — builds
+them for you out of the request and calls the scope with both.
 
 ## One primitive: `.step`
 
 A **step** wraps the rest of the fold: it reads the app and the ctx as they
 stand, and either continues inward with what it populates or hands back
-something of its own and stops. Everything else the builder offers is sugar over
-this one verb.
+something of its own and stops. Every verb the builder offers is sugar over this
+one — a verb is a function from its own arguments TO A STEP.
 
 A step says three things, and each one rides a position the signature already
 has — so a step is a plain function and declares nothing beside itself:
@@ -55,7 +59,7 @@ has — so a step is a plain function and declares nothing beside itself:
 ```ts
 import { scope, type Next } from '@lntt/scope'
 
-const publish = scope<{ readonly id: string; readonly token: string }>()
+const publish = scope<{ readonly id: string; readonly token: string }>()   // `Deps` as above
   .step(async (_app: {}, { token }, next: Next<{ actor: string }>) =>
     token === '' ? { error: 'unauthorized' as const } : next({ actor: token }),
   )
@@ -66,8 +70,11 @@ The first parameter accumulates: what every step asks of the app is what the
 scope demands of the chain, checked at the call and at the mount. The second is
 the run's parameters plus everything the steps before it populated — `actor` is
 readable in the leaf because the step above it put it there, and it is typed
-because that step said so. The ctx is READ-ONLY, shallowly, whatever the carrier
-declared.
+because that step said so. Written INLINE it needs no annotation of its own: the
+scope supplies its type, which is why it is bare in every snippet here. A step
+written as a standalone function annotates what it reads, and that annotation is
+what makes it portable — it names an entry rather than a host. The ctx is
+READ-ONLY, shallowly, whatever the carrier declared.
 
 **The third one is a declaration, not an inference** — measured. `Add` occurs
 only in a parameter position of `next`, so a step written
@@ -113,12 +120,21 @@ argument, and that is its whole job.
 
 It is **chosen exactly once**, in `scope(carrier())`, and it is **pure
 declaration** — no runtime value, no fold work, never a step. Which is why there
-is no `.extend(carrier)`: `scope().extend(http).extend(rpc)` was expressible and
-failed only later, at the mount, by accident.
+is no `.extend(carrier)`: as a step, two carriers would be expressible on one
+scope and would fail only later, at the mount, by accident.
 
 ```ts
+import expressLib from 'express'
+import { scope } from '@lntt/scope'
+import { express, expressCarrier } from '@lntt/scope/express'
+
+const { route, handler, mw } = express(deps)   // the mounts, curried with the app
+
 const showPost = scope(expressCarrier())
   .step(async ({ posts }: Deps, { res }) => res.json(posts.getPost('1')))
+
+const app = expressLib()
+app.get('/posts/1', handler(showPost))
 ```
 
 **The words are the host's, not the core's.** No HTTP name appears anywhere in
@@ -131,8 +147,8 @@ the schema's to say, and it is said per BRANCH rather than per scope — the
 reason is *A verb is per branch; a type argument is per scope*, below.
 
 `scope()` with no carrier reads nothing of the request and mounts on all four
-hosts — the one wholly portable shape. Between the two there is a middle: the
-EXTRACTION of an entry is per host, everything downstream of it is not.
+hosts — the one wholly portable shape. Between the two there is a middle, and
+**Reading a request** below is where it lives.
 
 ## Extending the builder
 
@@ -142,9 +158,9 @@ EXTRACTION of an entry is per host, everything downstream of it is not.
 ```
 
 An extension contributes **verbs**, and a verb is a function from its own
-arguments TO A STEP — so the fold work happens when the verb is CALLED, and
-`.step` stays the only thing that ever adds to the fold. `@lntt/scope/guard`
-ships three:
+arguments TO A STEP — so the fold work happens when the verb is CALLED, and a
+STEP stays the only thing that ever joins the fold: `.extend` itself pushes
+none. `@lntt/scope/guard` ships three:
 
 | verb | what it does |
 |---|---|
@@ -152,10 +168,18 @@ ships three:
 | `.refine(name, check, onError)` | REPLACES an entry the ctx already holds |
 | `.validate(name, schema, onError)` | `refine` with the check supplied by a [Standard Schema](https://standardschema.dev) |
 
+**Extension** covers two things, and the two arrive by different verbs. One
+contributes VERBS and is added with `.extend`, as `guards` is. The other is a
+plain STEP that populates a ctx entry from the host's own request, and is added
+with `.step`, as `headers` is below — see **Reading a request** for that half.
+
 ```ts
+import { expressCarrier, headers } from '@lntt/scope/express'
+import { fail, guards } from '@lntt/scope/guard'
+
 const withActor = scope(expressCarrier())
   .extend(guards)
-  .step(headers)
+  .step(headers)   // an extraction step: it populates `ctx.headers`
   .guard(
     (_app: {}, { headers: h }) =>
       h['x-actor-id'] ? { actor: h['x-actor-id'] } : fail([{ message: 'unauthorized' }]),
@@ -179,10 +203,10 @@ core stays dependency-free for anyone importing it:
 
 | subpath | the mount factory | it hands back |
 |---|---|---|
-| `@lntt/scope/express` | `express(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it — plus `params`, `query`, `cookies`, `headers`, `body(encoding, onError)` |
-| `@lntt/scope/hono` | `hono(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it — plus `params`, `query`, `cookies`, `headers`, `body(encoding, onError)` |
+| `@lntt/scope/express` | `express(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it — and, exported beside the factory, the read steps `params`, `query`, `cookies`, `headers`, `body(encoding, onError)` |
+| `@lntt/scope/hono` | `hono(deps)` | `{ route, handler, mw }` — `route(pattern, scope)` checks the pattern, `handler(scope)` skips it — and, exported beside the factory, the read steps `params`, `query`, `cookies`, `headers`, `body(encoding, onError)` |
 | `@lntt/scope/trpc` | `trpc(t, deps)` | `{ carrier, procedure, middleware }` — a resolver and a middleware, the two tRPC has |
-| `@lntt/scope/react-router` | `reactRouter(deps)` | `{ loader, action }` — two shapes, never a middleware — plus `query`, `cookies`, `headers`, `body(encoding, onError)` |
+| `@lntt/scope/react-router` | `reactRouter(deps)` | `{ loader, action }` — two shapes, never a middleware — and the read steps `query`, `cookies`, `headers`, `body(encoding, onError)`; `params` needs none, the carrier brings it |
 | `@lntt/scope/guard` | — | `{ guards, fail }` — the extension: `.guard(check, onError)` adds an entry, `.refine(name, check, onError)` replaces one, `.validate(name, schema, onError)` is refine with the check given by a Standard Schema |
 
 tRPC's carrier comes OUT of the factory rather than being imported beside it,
@@ -217,7 +241,7 @@ downstream, and the mount says so. A middleware that must read the input narrows
 it by hand.
 
 **No carrier declares what a scope reads**, on any of the four. A carrier's type
-arguments are for what the run BRINGS — Hono's env is the only one left — and
+arguments are for what the run BRINGS — Hono's env is the only one — and
 what a scope reads of an entry is the schema's to say.
 
 The reason is not tidiness: a type argument is fixed at `scope(carrier<X>())`,
@@ -354,11 +378,11 @@ listed by what they catch rather than by how they are built.
 
 | the mistake | where it lands | what it says |
 |---|---|---|
-| the chain does not expose what the steps ask of the app | the call, and the mount, alike | `__ERROR_chain_Pub_missing_deps`, carrying what is missing |
+| the chain does not expose what the steps ask of the app | the call, and the mount, alike | `__ERROR_chain_Pub_missing_deps`, carrying what the scope demands |
 | a step hands back nothing — `return` forgotten in front of `next(…)` | the `.step` argument | ⛔ this step returns nothing — did you forget `return` in front of `next(…)`? |
 | a step populates a ctx key another step already populated | the `.step` argument | ⛔ this ctx key is already populated: `actor` — an extension may REPLACE it, a step may not |
 | `guard` adds a key already populated | the check argument | ⛔ … — `refine` replaces an entry, `guard` may only add |
-| `validate` or `refine` names an entry the ctx has not got | the name argument | the valid names, listed: `"wrong"` is not assignable to `"params" \| "req" \| "res"` — and `never` on a scope holding nothing to refine |
+| `validate` or `refine` names an entry the ctx has not got | the name argument | the valid names, listed: `"wrong"` is not assignable to `"params" \| "req" \| "res" \| "next"` — and `never` on a scope holding nothing to refine |
 | two extensions contribute one verb name, or a verb shadows the scope's own surface | the `.extend` argument | ⛔ a verb under this name is already contributed: … / ⛔ a verb cannot be named: … |
 | a step reads a ctx the scope does not hold | the `.step` argument | the missing member, named — contravariance, not a gate of ours, and the one check a consumer's `strictFunctionTypes: false` turns off |
 | a scope written for another host | the mount argument | the run's parameters are not assignable — contravariance again |
