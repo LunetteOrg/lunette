@@ -32,8 +32,8 @@ the `errore` library (errors as values) applied to DI.
 ```
 
 **`@lntt/integration` is SET ASIDE**, deliberately, while the umbrella work
-on the scope runtime (#30) is open. It lives on `origin/story-30/scope-impl` — 27 files, verified present —
-along with most of the extensions. Porting it against a surface still in motion
+on the scope runtime (#30) is open. It lives on `origin/story-30/scope-impl`
+— 27 files, verified present — along with most of the extensions. Porting it against a surface still in motion
 is the work done twice; its last state on THIS branch is in the history, one
 `git show` away.
 

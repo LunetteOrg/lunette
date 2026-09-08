@@ -2933,28 +2933,31 @@ false positives: #38 and #44 read as live work purely because this document
 still said `Capability`/`CarrierGuard` survive for the mount. They exist nowhere
 under `packages/`.
 
-**What the residue turned out to be, measured before deleting.** Of eighteen
-traps, the ones that still bind were already in the code, in the code's own
-words:
-the gate riding the ARGUMENT and defaulted parameters on the ALIAS
-(`index.ts`), an intersection that cannot refine so `Ctx` uses `Omit`, vacuous
-truth on a param-less pattern (`route-gate.ts`), an invariant phantom blocking
-inference, a state member constrained to the wrong shape, `infer` through a
-generic factory instantiating to constraints (`index.ts` and `guard/index.ts`),
-and reading-versus-parsing failing for opposite reasons (`guard/index.ts`).
-A twelfth — an invariant phantom whose actual type is `never` not extending
-`any` in a conditional position — is written where the shape actually ships, on
-`LocalsOf` in `express/index.ts`. Two more had no counterpart. Two are
-constraints and were written into the code: why the chain gate carries a named
-member holding `Need` rather than a message literal (the message could not
-carry a type, and what the reader needs printed is what the scope demands), and
-why intersecting a fresh call signature per step does not rescue `this` (two
-call signatures in an intersection become overloads, and the stale one resolves
-first). The MEASURED section's numbers compare the shipped shape against
-rejected ones, which is this record's job and not a comment's — the ones worth
-carrying are below, and what is not below is about machinery that is gone. The rest — intent inference, carrier-and-extension brands, a
-declaration read by value — is about machinery that is gone. That is
-archaeology, and git keeps it.
+**What the residue turned out to be, checked before deleting.** Of the eighteen
+traps, most were already in the code, in the code's own words: the gate riding
+the ARGUMENT and defaulted parameters on the ALIAS (`index.ts`), an intersection
+that cannot refine so `Ctx` uses `Omit`, vacuous truth on a param-less pattern
+(`route-gate.ts`), an invariant phantom blocking inference, a state member
+constrained to the wrong shape, `infer` through a generic factory instantiating
+to constraints (`index.ts` and `guard/index.ts`), and reading-versus-parsing
+failing for opposite reasons (`guard/index.ts`).
+
+Three were still binding and written down nowhere, so they went into the source
+where each one bites: an invariant phantom whose actual type is `never` not
+extending `any` in a conditional position, on `LocalsOf` in `express/index.ts`;
+why the chain gate carries a named member holding `Need` rather than a message
+literal — a literal could not carry a type, and what the reader needs printed is
+what the scope demands; and why intersecting a fresh call signature per step
+does not rescue `this`, since two call signatures in an intersection become
+overloads and the stale one resolves first.
+
+The traps left behind are about machinery that is gone — intent inference, the
+word mechanism, carrier-and-extension brands, a declaration read by value. That
+is archaeology, and git keeps it.
+
+The MEASURED section is the other half, and its numbers compare the shipped
+shape against rejected ones — this record's job, not a comment's. They are all
+below.
 
 **The runtime numbers, and why they are here rather than on `runSteps`.** The
 retired document also held a runtime table, and it is evidence against three
@@ -3010,12 +3013,23 @@ promise the callable returns.
   interpreter interrupts it and runs its finalizers. The axis is the quality of
   concurrency once asked for, never its discovery — the other half of the
   generators row above, aimed at the same proposal.
+- **The machinery is nearly free to HAVE and paid per scope**: +0.8% at zero
+  scopes, then 250 → 615 instantiations per scope, linearly, with no
+  super-linear term. What a scope costs is what a scope costs; adding the
+  package to a project that builds none costs nothing worth naming.
+- **On the real `examples/app`**, both sides measured from a worktree at the
+  pre-change commit: 207,153 → 222,755 instantiations (+7.5%), check 0.36s →
+  0.41s. The method is the finding: **a figure read out of a file is not a
+  measurement**. The stale number a table was carrying, read as the "before",
+  turned +7.5% into a reported +65% — which is the same failure the `Grown`
+  bullet above records from the other side.
 - **Gating a schema against its entry's RAW type** was measured in both
   directions and neither ships; what could work is a check reading the schema's
   OUTPUT, or one a schema opts into, and both need a real case — the 422 that
   stands in for it is not silent.
 
-**The two type-level numbers, re-measured on the shipped package** (`tsc
+**The type-level numbers.** The first is re-measured on the shipped package;
+the second is quoted from the retired document, on the 21-step fixture it names (`tsc
 --extendedDiagnostics` over `@lntt/scope`, baseline 329,128 instantiations and
 112,033 types):
 
