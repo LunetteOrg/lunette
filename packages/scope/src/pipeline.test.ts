@@ -95,8 +95,8 @@ describe('Hono: the same scope shape, in its own idiom', () => {
 
 describe('what the ORDER says, and where it is caught', () => {
   it('a guard reading an entry nothing populated yet is refused', () => {
-    // Written the other way round — the guard before `ex.headers` — this file
-    // answered 500 at runtime AND failed `tsc`. The same mistake, twice, and the
+    // Written the other way round — the guard before `ex.headers` — this
+    // answers 500 at runtime AND fails `tsc`. The same mistake, twice, and the
     // compile error is the one that arrives first.
     const refused = () => {
       scope(ex.expressCarrier())

@@ -3,8 +3,7 @@
 // scope chain seeded with the *inferred* app Pub (App & Invocation); the
 // type-level cost of re-seeding was swept over K routes (K = 0/10/20/40)
 // with `tsc --extendedDiagnostics`. This committed instance is a
-// representative K; the full curve lives in the doc. Retire once the
-// strong-typed scope kit ships with its own perf test.
+// representative K; the full curve lives in the doc.
 import { describe, it } from 'vitest'
 import { Lunette, lunette } from '../../src/index.ts'
 

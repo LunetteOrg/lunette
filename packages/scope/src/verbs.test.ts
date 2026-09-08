@@ -166,7 +166,8 @@ describe('an extension enriches the builder, and nothing else', () => {
     // `Surface` with `Record<string, (...a: any[]) => any>` keeps the call below
     // an error — `noUncheckedIndexedAccess` makes the property "possibly
     // undefined" — so the directive stays used and the widening goes unnoticed.
-    // Measured: that mutation left all 81 tests green and zero type errors.
+    // Measured: that mutation leaves the whole suite green and zero type
+    // errors.
     //
     // Asking whether the name is a KEY has no such escape.
     //
@@ -498,8 +499,9 @@ describe('every name reachable on a scope is refused as a verb', () => {
 // It pushes its step by a different route — the wrapper in `make`, not `.step`
 // — so the immutability that `fold.test.ts` pins for the primitive has to be
 // pinned here too. A base carrying verbs is exactly the thing meant to be
-// shared, and nothing checked that calling one twice from the same base did not
-// accumulate.
+// shared, and it takes a test calling one TWICE from the same base to pin: a
+// suite that calls each verb once stays green while the base accumulates under
+// everyone.
 describe('branching a base that carries verbs', () => {
   it('leaves the base untouched, and each call independent', async () => {
     const base = scope<{}>().extend(pins)

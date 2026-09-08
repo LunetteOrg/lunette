@@ -80,9 +80,9 @@ declare const PASSED: unique symbol
 // `Record<string, number>` — a tally, a bag of headers, a wide row — would then
 // be EXCLUDED by `ValueOf` and the scope would declare `never`, which is
 // assignable to everything: every consumer downstream compiles and receives at
-// runtime a value the types called impossible. Requiring the key costs nothing: nobody
-// constructs a `Passed`, and the only value that ever stands for one is the
-// assertion inside the fold.
+// runtime a value the types called impossible. Requiring the key costs nothing:
+// nobody constructs a `Passed`, and the only value that ever stands for one is
+// the assertion inside the fold.
 export interface Passed {
   readonly [PASSED]: true
 }
@@ -250,14 +250,13 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 // instead, and a verb named `name` or `length` throws from inside `.extend`,
 // because a function's own properties are not writable.
 //
-// The alphabet is CLOSED, and closing it takes THREE categories — a count this
-// list got wrong twice, each time by declaring closure over a partial
-// enumeration. They differ in HOW they fail, which is why they are named apart
-// rather than merged into one flat list.
+// The alphabet is CLOSED, and closing it takes FOUR categories. A partial
+// enumeration is the trap: each category is invisible until someone names it,
+// and they differ in HOW they fail, which is why they are named apart rather
+// than merged into one flat list.
 //
 //   OWN properties of a function (`name`, `length`, `prototype`, `caller`,
-//   `arguments`). Assignment THROWS, so the failure is at least loud — which is
-//   exactly why these were the ones noticed first.
+//   `arguments`). Assignment THROWS, so the failure is at least loud.
 //
 //   INHERITED members: `bind`, `call`, `apply`, `toString`, `constructor` from
 //   `Function.prototype`, and `valueOf`, `hasOwnProperty`, `isPrototypeOf`,
@@ -292,9 +291,9 @@ export type Surface<S extends State> = Scope<S> & S['verbs']
 // `U` sits on the ALIAS, not the method, for the reason `ReturnGate`'s does —
 // a defaulted parameter in a method's own list is caller-overridable.
 // ONE list, read twice. The type derives from the array, so the two halves of
-// this gate cannot drift apart — which they could while both were written out
-// by hand, and which nothing would have reported. Same move the barrel made:
-// no second list to keep in step with the first.
+// this gate cannot drift apart — written out by hand they could, with nothing
+// reporting it. No second list to keep in step with the first, here as at the
+// barrel.
 const RESERVED = [
   // what the builder installs
   'steps',

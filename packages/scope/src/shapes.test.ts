@@ -252,12 +252,12 @@ describe('a step that hands back nothing', () => {
 })
 
 // ── a step may not re-populate a ctx key ─────────────────────────────────────
-// The types intersected where the runtime overwrote, and `never` made the
-// disagreement silent: assignable to everything, so every later use compiled
-// while the run handed back the second step's value. Refused now, because the
-// difference between a refinement and a collision is intent and no type can
-// read it — and because under parallel steps last-writer-wins is not even
-// deterministic.
+// Unrefused, the types INTERSECT where the runtime OVERWRITES, and `never`
+// makes the disagreement silent: assignable to everything, so every later use
+// compiles while the run hands back the second step's value. It is refused
+// rather than resolved because the difference between a refinement and a
+// collision is intent and no type can read it — and because under parallel
+// steps last-writer-wins is not even deterministic.
 describe('two steps populating the same ctx key', () => {
   it('is REFUSED at the step that wrote the second, with the key named', () => {
     const refused = () => {
@@ -311,10 +311,10 @@ describe('two steps populating the same ctx key', () => {
 })
 
 // ── the runtime halves of what `contract.test-d.ts` states as types ──────────
-// They lived there as `expect(...)` calls, which never ran: a `*.test-d.ts` is
-// typechecked and never executed. The TYPE claims stay there, where they
-// belong; these are the halves that have to actually happen, because a type
-// says nothing about what the runtime does when it gets there.
+// An `expect(...)` written beside those type claims never runs: a `*.test-d.ts`
+// is typechecked and never executed. The TYPE claims belong there; these are the
+// halves that have to actually happen, because a type says nothing about what
+// the runtime does when it gets there.
 describe('what the type contract claims, happening', () => {
   it('a base that stops early hands its value back, rather than reaching the no-leaf throw', async () => {
     const base = scope(fixture).step(async (_app: {}, ctx, next: Next<{}>) =>
