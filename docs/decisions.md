@@ -3052,15 +3052,23 @@ promise the callable returns.
   commit, since a figure read out of a file is not a measurement.
 - **Gating a schema against its entry's RAW type** was measured in both
   directions and neither ships, and the reason is worth keeping because it is
-  not "we did not get to it". `Raw extends InferInput<S>` rejects every schema,
-  valid ones included. The reverse, `InferInput<S> extends Raw`, rejects
+  not "we did not get to it". Re-measured here on zod 4.5.4, the version this
+  package pins, over `Query = Record<string, string | string[]>`:
+
+  `Raw extends InferInput<S>` rejects every keyed object schema, including
+  `z.object({ page: z.string() })`, which is a valid declaration over a query
+  string. The reverse, `InferInput<S> extends Raw`, rejects
   `z.object({ page: z.coerce.number() })` — the most ordinary query schema
-  there is — because zod reports that schema's `InferInput` as `number`, which
-  is exactly what a schema that genuinely mishandles a query string reports.
-  The two are indistinguishable on the INPUT face, so no test there can
-  separate them, and rejecting a valid declaration is worse than catching
-  nothing. What could work is a check reading the schema's OUTPUT, or one a
-  schema opts into; both need a real case.
+  there is — because zod 4 erases a coercing schema's input to `unknown`, and
+  `{ page: unknown }` is not assignable to the raw entry.
+
+  That erasure is what closes the question rather than deferring it: the input
+  face of a coercing schema carries nothing to test against, so a rule loose
+  enough to admit `unknown` admits everything, and any rule tight enough to
+  catch the mistaken `z.number()` rejects the coercing schema with it. Since
+  rejecting a valid declaration is worse than catching nothing, neither
+  direction ships. What could work is a check reading the schema's OUTPUT, or
+  one a schema opts into; both need a real case.
 
   The consequence, measured on the shipped mounts: a coercing schema compiles
   and its leaf reads a real `number` (`?page=3` arrives as `3`), and the
