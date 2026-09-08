@@ -1,8 +1,8 @@
 import type { Next } from '@lntt/scope'
 import type { ZodType } from 'zod'
 
-// The raw read, kept apart from the schema check (trap 18, docs/design/
-// scope-api.md): Hono has no framework-level body parser the way Express's
+// The raw read, kept apart from the schema check because the two fail for
+// opposite reasons: Hono has no framework-level body parser the way Express's
 // `express.json()` is, so a step has to do the read itself — but a genuine
 // parse/IO failure here still only THROWS, unlike a well-formed-but-invalid
 // body, which `validated` answers on its own. Populates `raw`, not `body`:

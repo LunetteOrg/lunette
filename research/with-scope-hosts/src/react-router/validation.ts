@@ -2,8 +2,8 @@ import { data } from 'react-router'
 import type { Next } from '@lntt/scope'
 import type { ZodType } from 'zod'
 
-// The raw read, kept apart from the schema check (trap 18, docs/design/
-// scope-api.md): React Router has no framework-level body parser either, so
+// The raw read, kept apart from the schema check because the two fail for
+// opposite reasons: React Router has no framework-level body parser either, so
 // a step reads the body itself — a genuine parse/IO failure here THROWS,
 // unlike a well-formed-but-invalid body, which `validated` answers on its
 // own by RETURNING (not throwing) a data() envelope — a 422 does not need

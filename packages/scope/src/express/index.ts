@@ -211,6 +211,12 @@ type LocalsDerivedBy<S extends State> = S['acc'] extends Record<string, any>
 // so nothing downstream reads them on its own — but a handler written against
 // one (`RequestHandler<P, any, any, ParsedQs, LocalsOf<typeof withActor>>`)
 // then reads `res.locals.actor` typed, and the declaration stops being a lie.
+// `any` in every position it does not read, and the `never` fallback is the
+// hazard to know: an invariant parameter whose actual type is `never` does not
+// extend `any` in a conditional position, so a shape that stops matching
+// collapses here SILENTLY — assignable to everything, complained about nowhere.
+// It holds because a mount always hands back a concrete `RequestHandler`; read
+// off anything else, `never` is the answer and not an error.
 export type LocalsOf<Mw> = Mw extends RequestHandler<any, any, any, any, infer L> ? L : never
 
 export const express = <App extends object>(deps: App) => {

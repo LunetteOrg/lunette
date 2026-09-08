@@ -128,17 +128,26 @@ export type AnyStep = (
 //
 //   A SCOPE IS THE FUNCTION THAT RUNS IT, from the first line. A call signature
 //   can read `S`; it cannot read `Self`, because `this` binds to the receiver of
-//   a METHOD call and calling an object directly binds it to `void`.
+//   a METHOD call and calling an object directly binds it to `void`. Nor does
+//   intersecting a fresh concrete call signature per step rescue it: two call
+//   signatures in an intersection become OVERLOADS, and the stale one resolves
+//   first.
 //
-//   `result` accumulates as a UNION. Under intersection it cannot: `A & B` over
-//   a type that is not a key collapses, which is why the other union-valued axes
-//   are maps of NAMES.
+//   `returns` accumulates as a UNION. Under intersection it cannot: `A & B` over
+//   a type that is not a key collapses, which is why a union-valued axis cannot
+//   be carried that way at all.
 
 // ── gate: the CHAIN does not expose what the scope demands ───────────────────
 // `Need` and `Pub` are two independently inferred generics with no shared
 // annotated slot, so contravariance cannot relate them and a brand is required.
 // The conditional vanishes on success (`X & unknown` is `X`) and becomes an
 // unsatisfiable branded object on failure, so the error lands on the call.
+//
+// An OBJECT carrying a named member rather than a message literal, because it
+// carries a TYPE the message could not: the failure prints
+// `__ERROR_chain_Pub_missing_deps: { readonly posts: … }`, naming what the
+// scope demands. The message-typed gates elsewhere have nothing to carry —
+// their subject is a key or a verb NAME, which interpolates into the string.
 //
 // A SUPERSET is fine: a chain exposing more than the scope requires passes.
 //
@@ -235,6 +244,10 @@ export type Ctx<S extends State> = Readonly<Omit<S['args'], keyof S['acc']> & S[
 // What a scope IS to whoever holds one: the callable builder, plus the verbs its
 // extensions declared. The verbs are a plain record with no call signature of
 // their own, so intersecting them creates no overload.
+//
+// The obvious shortcut here — skip the intersection while `verbs` is empty —
+// breaks the inference of `S` through `this`, and every verb then sees
+// `Scope<State>` instead of the scope it was called on.
 //
 // A verb's signature is the extension's to write, with `this: Surface<S>` — how
 // it reads the accumulated state without knowing it, and how it can GROW or
@@ -414,6 +427,10 @@ type CtxGate<S extends State, Add, U = Collides<S, Add>> = [U] extends [never]
   ? unknown
   : `⛔ this ctx key is already populated: ${U & string} — an extension may REPLACE it, a step may not`
 
+// EVERY MEMBER IS LISTED, and the repetition is deliberate: the DRY form
+// (`Omit<S, keyof P> & P`, naming only what changes) costs more, not less —
+// it rebuilds the state through an intersection, which is the shape carrying
+// it in a type parameter exists to avoid.
 type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Surface<{
   need: S['need'] & Need2
   args: S['args']

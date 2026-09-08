@@ -2301,8 +2301,10 @@ than an inconvenience:
 A sugar available on half the hosts, meaning something different on each half, is
 what principle 5 refuses. Note the lexicon entry that has been describing `guard`
 as "stop with one of the carrier's words" was stale from §43 onward, and is now
-corrected in `docs/design/scope-api.md`: a guard is a SHAPE a plain step already
-has, not a verb.
+corrected here: a guard is a SHAPE a plain step already has — read the ctx,
+either continue inward or hand something back — rather than a mechanism of its
+own. The next entry gives it a verb anyway, in an extension, for the ergonomics
+and not for the mechanism.
 
 **What was NOT weighed, and did not need to be.** #63 said `guard`'s case is a
 LEGIBILITY claim, judged on real examples, and named #59 as where it becomes
@@ -2568,7 +2570,7 @@ carrier IS the minimal native mount, shipped, not a package to avoid. There is
 no "with adapter" path left to contrast a "without" one against — the two
 converged, which was the win #60 shipped, not a gap this issue needs to
 re-open. Nothing a rewrite of `bare-express` could still teach is not already
-on the page in `packages/scope/README.md` and `docs/design/scope-api.md`.
+on the page in `packages/scope/README.md`.
 
 **`two-chains` ports without a comparable rewrite of its thesis.** `@lntt/wire`
 (`lunette`, `layer`, `.use`, `.expose`, `chain.build`) is unchanged by the scope
@@ -2584,8 +2586,7 @@ directly rather than returning a value for an adapter to render.
 described.** `gated = scope(expressCarrier()).extend(guards).guard(findAuth,
 onError)` is built once; `auditScope` and `recordScope` both call `.step()` on
 that SAME value. No mechanism beyond what the builder already is — which is
-exactly what closing #67 (this record's decision, `docs/design/scope-api.md`)
-said the reusable unit already was.
+exactly what decision 55 says the reusable unit already is.
 
 **One casualty of dropping `@lntt/integration`'s per-pack build: the
 "each product is built lazily, only when its own route is first hit" claim.**
@@ -2635,8 +2636,8 @@ Express's OWN 400 for malformed JSON, which was true only because
 **`research/with-scope-hosts/src/{hono,react-router,trpc}` remain unported.**
 Each carries the same pre-#60 hand-rolled carrier and needs the same treatment;
 they land as their own slices of #59 rather than in this one, for the reason
-`docs/design/scope-api.md` gives for slicing at all — reviewing four hosts'
-worth of changes as one PR is the shape to avoid.
+slicing exists at all — reviewing four hosts' worth of changes as one PR is the
+shape to avoid.
 
 ### 52. `params`, a fifth read extension: route params are VALIDATED, not merely cast
 
@@ -2770,9 +2771,9 @@ other side.
 to route and the schema exists to validate: each is there for a reason of its
 own, and neither was written to be compared. That is the difference from the
 declaration, whose only job WAS to be compared — a third name kept in sync by
-hand. It is also the shape `docs/design/scope-api.md` described from the start
-and that never shipped; the pre-#30 branch built it, and this is that gate, on
-the settled core.
+hand. It is also the shape described before anything was built and that never
+shipped; the pre-#30 branch built it, and this is that gate, on the
+settled core.
 
 The reading is §45's, unchanged and now shared: ONE DIRECTION (the schema
 demands, the route supplies, a superset passes); optionality is meaning on both
@@ -2899,3 +2900,234 @@ loses `c.req.param('id')` typed as `string` from the pattern, and gains a
 host, and everything §45 says about transparent mounts except the params half of
 the Express row: a `route` hands back `RequestHandler` at the router's own
 params width now, since nothing narrower is declared.
+
+### 54. `docs/design/scope-api.md` is retired; the traps and the numbers live in the code
+
+**Decision.** Delete the scope API design document. What it carried that
+nothing else did — the traps that each cost a measurement, and the builder's
+cost breakdown — is written at the line it constrains, across `index.ts`,
+`route-gate.ts`, `guard/index.ts` and `express/index.ts`. Everything else it held has a
+better home already: the contract is `packages/scope/README.md` and the code,
+the rejected roads are this file, and the work order is the issue graph and the
+project board — which is where `CLAUDE.md` says order lives, never in a file,
+since a file is right only for whoever stands on the branch that last edited
+it.
+
+**Alternatives.** *Freeze it as an archive*, with a header saying it is
+historical — rejected: 1156 lines of which half describe machinery that never
+shipped stay in `docs/`, and someone reopens them believing it. *Rewrite it as
+the contract it claims to be* — rejected: that is what `packages/scope/README.md`
+now is, and a second document for the same audience is duplication that leaves
+a reader guessing which of the two is current. *Move the residue into a new short document* — rejected on
+measurement, below.
+
+**Why.** It was doing four jobs and three had moved out from under it. Nine
+inline "superseded / never shipped / retired" blocks had accumulated, and its
+own header said most of what followed described the vocabulary design that was
+tried and dropped. Identifiers the shipped code does not have: `Outcome`,
+`__vocabulary`, `IntentsOf`, `Word`, `Capability`, `CarrierGuard`.
+
+The cost was not the upkeep. `CLAUDE.md` said READ IT FIRST, so whoever obeyed
+met a document that contradicted itself in its third line — and it manufactured
+false positives: #38 and #44 read as live work purely because this document
+still said `Capability`/`CarrierGuard` survive for the mount. They exist nowhere
+under `packages/`.
+
+**What the residue turned out to be, checked before deleting.** Of the eighteen
+traps, most were already in the code, in the code's own words: the gate riding
+the ARGUMENT, defaulted parameters on the ALIAS and an intersection that cannot
+refine so `Ctx` uses `Omit` (all `index.ts`), vacuous truth on a param-less
+pattern (`route-gate.ts`), an invariant phantom blocking inference, a state member
+constrained to the wrong shape, `infer` through a generic factory instantiating
+to constraints (`index.ts` and `guard/index.ts`), and reading-versus-parsing
+failing for opposite reasons (`guard/index.ts`).
+
+Three were still binding and written down nowhere, so they went into the source
+where each one bites: an invariant type PARAMETER whose actual type is `never` not
+extending `any` in a conditional position, on `LocalsOf` in `express/index.ts`;
+why the chain gate carries a named member holding `Need` rather than a message
+literal — a literal could not carry a type, and what the reader needs printed is
+what the scope demands; and why intersecting a fresh call signature per step
+does not rescue `this`, since two call signatures in an intersection become
+overloads and the stale one resolves first.
+
+The traps left behind are about machinery that is gone — intent inference, the
+word mechanism, carrier-and-extension brands, a declaration read by value. That
+is archaeology, and git keeps it.
+
+The MEASURED section is the other half, and its numbers compare the shipped
+shape against rejected ones — this record's job, not a comment's. They are all
+below.
+
+**The runtime numbers, and why they are here rather than on `runSteps`.** The
+retired document also held a runtime table, and it is evidence against three
+optimisations someone will propose again. Node, ns per run, warmed, comparisons
+valid only within a run:
+
+| run | | 5 steps | 20 steps | |
+|---|---|---|---|---|
+| 1 | continuation passing (shipped) | 749 | 4,670 | |
+| 1 | composed once, memoised on first call | 700 | 4,522 | −6.5% / −3.2% |
+| 2 | ctx merged by spread (shipped) | 1,251 | 6,213 | |
+| 2 | ctx as a prototype chain | 3,193 | 12,336 | **+155%** |
+| 2 | steps synchronous, no `await` per level | 649 | 3,580 | −48% |
+| 3 | continuation passing (the baseline of its own run) | 810 | 4,626 | |
+| 3 | generators + an interpreter | 2,210 | 10,637 | **+173%** |
+
+Each run has its own baseline and only within-run comparisons hold: the
+generators row is 2.7× the 810 above it, not the 749 at the top.
+
+The whole fold is **1–6 µs** against an HTTP request of hundreds of µs to
+milliseconds — under 1% — so pre-composing its closures buys 3–6% of something
+that is not where the time goes. A prototype-chain ctx is **2.5× slower**, not
+faster: the chain deepens per step and every read walks it, so the explicit
+spread costs nothing and earns the isolation it is written for. Generators plus
+an interpreter are **2.7×**, and that is with a simplified interpreter. The
+−48% for synchronous steps is the price of `async` being the contract: a step
+may throw synchronously, and a plain function would let that escape past the
+promise the callable returns.
+
+**Also inventoried, so it is not lost with the file.**
+
+- **`scope(carrier)` against `.extend(carrier)`**: 636.7 versus 638.5
+  instantiations per scope — **no type-level simplification at all**. What the
+  constructor form buys is a category that cannot be confused and errors that
+  land at the definition rather than at the mount, which is worth having and is
+  not a performance argument.
+- **The check for a step that returns nothing** cost +9.1% as a gate of its own
+  and +7.1% merged with the word check that used to sit beside it, since both
+  asked about the same `Awaited<Ret>`. With the word check gone `ReturnGate`
+  stands alone, so the merged figure is history; what it bought is stated on
+  the gate itself.
+- **A verb's signature DECLARED against computed**, on a workload using no verb
+  at all: 6,637 → 5,056 instantiations (**−23.8%**), types −19.8%. The computed
+  machinery resolved on every `Surface<S>`, so every scope paid for it, verbs
+  or not. That is the other half of the trap on `Extension`: `infer` through a
+  generic factory instantiates to constraints, so the computed form was both
+  slower and wrong.
+- **Effect systems do not discover parallelism either.** `Effect.all([a, b])`
+  is the same authored claim a `.parallel(a, b)` would be, and a program
+  written in sequence stays sequential. What owning a scheduler buys is what
+  happens on FAILURE: `Promise.all` rejects while the losing branch runs to
+  completion, its errors unhandled and its resources unreleased, where an
+  interpreter interrupts it and runs its finalizers. The axis is the quality of
+  concurrency once asked for, never its discovery — the other half of the
+  generators row above, aimed at the same proposal.
+- **The machinery is nearly free to HAVE and paid per scope**: +0.8% at zero
+  scopes, then 250 → 615 instantiations per scope, linearly, with no
+  super-linear term. What a scope costs is what a scope costs; adding the
+  package to a project that builds none costs nothing worth naming.
+- **On the real `examples/app`**, both sides measured from a worktree at the
+  pre-change commit: 207,153 → 222,755 instantiations (+7.5%), check 0.36s →
+  0.41s. The method is the finding: **a figure read out of a file is not a
+  measurement**. The stale number a table was carrying, read as the "before",
+  turned +7.5% into a reported +65% — the same failure the `Grown` bullet below
+  records from the other side.
+- **The builder's state in a type PARAMETER against phantoms read through
+  `Self`**: −8.3% and −5.2% instantiations on two workloads, types −15.8% and
+  −16.9%, solving to ≈−54 per scope and −11 per step. Not repeated here because
+  it is already where it constrains, on the state parameter in
+  `packages/scope/src/index.ts`, with the workload in
+  `research/parameterised-builder`.
+- **`returns` as a raw union, projected at the readers, against extracting
+  eagerly**: 24,349 → 24,057, a wash. Kept for the reason the numbers did not
+  show: eager extraction is LOSSY, and a step that WRAPS — replacing what came
+  back — was dropped from what the scope reported. The raw union keeps the
+  material to narrow.
+- **The rest of the cost breakdown** on that same 21-step fixture: the `returns`
+  accumulation 6%, one whole member of `State` 1.3%, and `DepGuard` ~0 — it
+  rides the call, not each step. The other half of "a new axis is affordable".
+- **`.parallel(a, b)`, parked with its safety analysis done.** Two of the three
+  conditions come free from the signature: children take no `next`, so wrapping
+  is inexpressible, and both read `Ctx<S>`, so a cross-dependency between them
+  is refused by contravariance. The third is the ctx-key collision (#51). No
+  issue tracks the verb itself, and this is the analysis not to redo.
+- **A lazy `ctx.body` getter was rejected**, not overlooked: an async accessor
+  on a synchronous ctx is worse than the read it replaces, and it is the ambient
+  magic the design refuses. The eager read is what makes "every step runs where
+  it was written" observable.
+- **Two gaps stay open and are worth naming**: the step primitive with the
+  callable scope, and `validate`, were never measured against what they
+  replaced. Both would have to be taken from a worktree at the pre-change
+  commit, since a figure read out of a file is not a measurement.
+- **Gating a schema against its entry's RAW type** was measured in both
+  directions and neither ships; what could work is a check reading the schema's
+  OUTPUT, or one a schema opts into, and both need a real case — the 422 that
+  stands in for it is not silent.
+
+**The type-level numbers.** The first is re-measured on the shipped package,
+against a baseline of 329,128 instantiations and 112,033 types
+(`tsc --extendedDiagnostics` over `@lntt/scope`). The second is quoted from the
+retired document, on the 21-step fixture it names, whose own baseline was
+24,349:
+
+- **DRYing `Grown`.** Rebuilding the state through `Omit<S, keyof P> & P` so it
+  names only the members that change: 363,347 instantiations (**+10.4%**) and
+  118,247 types (**+5.5%**). The repetition is the optimisation, and it is the
+  same intersection cost the state parameter avoids, arriving from the other
+  side. The retired document put this at +47% on a 21-step fixture that still
+  carried the word check — which is why the code now states the constraint and
+  leaves the number here: a figure measured on a shape that no longer exists
+  reproduces as something else.
+- **Where the builder's cost is**, on that same fixture: `Ctx`'s `Omit` 16% and
+  `Surface`'s intersection 15% of a chain's instantiations, against ~9% for all
+  of `State`'s members together — so a new axis is affordable and neither
+  derived type is reducible. The `Surface` half has a trap with it, and that one
+  IS in the code: skipping the intersection while `verbs` is empty breaks the
+  inference of `S` through `this`.
+
+**What this does not touch.** `docs/design/scope-runtime.md` stays: it is an
+open design exploration with the performance record two spikes cite by name.
+
+### 55. A reusable sequence of steps needs no packaging: the unit is the scope VALUE
+
+**Decision.** Ship no mechanism for reusing a sequence of steps across carriers
+— no packaged fragment, no generic function over an abstract state. The unit
+that needed reusing already exists: the SCOPE VALUE. `.step`, `.guard` and
+`.extend` each return a NEW value and never touch the one they were called on,
+so a shared prefix is a value kept and branched from twice.
+
+```ts
+const base     = scope(expressCarrier()).extend(guards).step(headers)
+const authBase = base.guard(findActor, onError)
+
+const routeA = authBase.step(leafA)
+const routeB = authBase.step(leafB)
+```
+
+**Alternatives.** *A packaged unit* — a value holding a sequence, applied to a
+scope of any carrier. Rejected: it needs a generic over an abstract state, and
+what it would buy is what `authBase` above already is. *A helper function
+taking a scope and returning one* — the same thing with a different spelling,
+and it loses the concrete type: `authBase`'s type is inferred once, at its own
+line, where a generic helper would have to reconstruct it.
+
+*A function generic over "any scope", appending steps from OUTSIDE the builder*,
+so the identical sequence could be handed to two hosts at one call site. This
+one does not merely lose something — it does not compile, and the reason is
+structural rather than about guards: a single generic `.step()` over an
+abstract `S extends State` fails the moment the step reads a concrete ctx
+field, because `Ctx<S>`'s `Omit<S['args'], keyof S['acc']> & S['acc']` does not
+reduce for a naked type parameter, so two derivations of "the same" type never
+structurally unify. Measured, minimized to one `.step()` with no guard in it.
+
+**What DOES work, and is deliberately not shipped.** A raw-function combinator
+outside the builder, generic on its OWN parameters rather than on `State`,
+compiles and runs correctly on two real hosts (Express and Hono). It is unshipped
+because it answers a case nobody has. Written down so the next reader does not
+conclude from the paragraph above that nothing can work — and if a cross-host
+case does show up, it is a STEP's job rather than a new abstraction's: a step
+already carries the contract such a thing would need, its own `Need`/`Add`/`Ret`
+checked at the argument like every other step, so a bespoke "sequence" type
+would be a second name for what the primitive is.
+
+**Why.** The question was whether a sequence needs its own mechanism, and the
+answer is that immutability already gives one. Verified by running the shape:
+two Express routes sharing one `authBase`, independent leaves, both correct. No
+new export, and every leaf branching from the prefix is an ordinary `.step()`
+the builder already offers.
+
+**Where this verdict comes from.** It was reached while the scope API document
+was the working record, and is written here because that document is retired
+(decision 54) and this is the claim it held that lived nowhere else.
+
