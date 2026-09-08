@@ -165,6 +165,16 @@ export interface GuardVerbs {
     verbs: S['verbs']
   }>
 
+  // THE NAME IS CONSTRAINED, NOT GATED — here and on `validate` below, which
+  // declares the same `N` — and the difference is the editor's:
+  // `N extends keyof Ctx<S> & string` types the parameter as the union of the
+  // entries this scope holds, so it COMPLETES, and a typo is told what it could
+  // have written. Written as a gate instead — a message intersected onto the
+  // argument, the way this extension's own `AddGate` is — the parameter becomes
+  // `string & <the message>`: nothing to enumerate, so the completion is gone,
+  // and a typo degrades to "not assignable to `never`", which names none of the
+  // entries it could have been. Nothing fails to say so.
+  //
   // `N` is constrained to a key the ctx ALREADY holds. Refining what nothing
   // populated is not a refinement — it is an addition, and `guard` is the verb
   // for that. The check returns the VALUE, not `{ [name]: value }`: the name is

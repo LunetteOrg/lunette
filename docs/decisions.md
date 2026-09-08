@@ -3051,9 +3051,38 @@ promise the callable returns.
   replaced. Both would have to be taken from a worktree at the pre-change
   commit, since a figure read out of a file is not a measurement.
 - **Gating a schema against its entry's RAW type** was measured in both
-  directions and neither ships; what could work is a check reading the schema's
-  OUTPUT, or one a schema opts into, and both need a real case — the 422 that
-  stands in for it is not silent.
+  directions and neither ships, and the reason is worth keeping because it is
+  not "we did not get to it". Re-measured here on zod 4.5.4, the version this
+  workspace resolves (the package declares the range `^4.5.4`), over `Query = Record<string, string | string[]>`:
+
+  `Raw extends InferInput<S>` rejects every keyed object schema, including
+  `z.object({ page: z.string() })`, which is a valid declaration over a query
+  string. The reverse, `InferInput<S> extends Raw`, rejects
+  `z.object({ page: z.coerce.number() })` — the most ordinary query schema
+  there is — because zod 4 erases a coercing schema's input to `unknown`, and
+  `{ page: unknown }` is not assignable to the raw entry.
+
+  The erasure is what defeats both, since neither reads the input face as
+  anything but a whole: the coercing schema's `{ page: unknown }` is too loose
+  for one direction and not assignable for the other. Since rejecting a valid
+  declaration is worse than catching nothing, neither ships.
+
+  What is NOT claimed here is impossibility. A per-KEY rule exempting the
+  positions zod erased — `IsUnknown<I[K]> extends true ? true : I[K] extends
+  Raw[K]` — accepts the coercing schema, accepts `z.string()`, and rejects the
+  mistaken `z.number()`: measured, on those same three schemas. It is a
+  traversal rather than one `extends`, and what it really says is "wherever zod
+  erased, anything goes", which is most of a query schema. It is written down so
+  the next attempt starts here rather than at the two directions that do not
+  work. A check reading the schema's OUTPUT, or one a schema opts into, is the
+  other road; both need a real case.
+
+  The consequence, measured on the shipped mounts: a coercing schema compiles
+  and its leaf reads a real `number` (`?page=3` arrives as `3`), and the
+  mistaken `z.number()` over the same entry compiles too and answers 422
+  through the author's own `onError`, saying `expected number, received
+  string`. No false rejection, and the error names itself on the first
+  request.
 
 **The type-level numbers.** The first is re-measured on the shipped package,
 against a baseline of 329,128 instantiations and 112,033 types
