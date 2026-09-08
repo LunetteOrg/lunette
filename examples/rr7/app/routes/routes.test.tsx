@@ -24,9 +24,14 @@ const loaderArgs = (id: string) =>
     context: {},
   }) as unknown as PostRoute.LoaderArgs
 
-const actionArgs = (id: string, init?: RequestInit) =>
+// What a browser really sends to an action: the cookies it holds, never a
+// custom header — which is why this host's guard reads a cookie.
+const actionArgs = (id: string, cookie?: string) =>
   ({
-    request: new Request(`http://localhost/posts/${id}/publish`, { method: 'POST', ...init }),
+    request: new Request(`http://localhost/posts/${id}/publish`, {
+      method: 'POST',
+      ...(cookie ? { headers: { cookie } } : {}),
+    }),
     params: { id },
     context: {},
   }) as unknown as PublishRoute.ActionArgs
@@ -63,32 +68,33 @@ describe('rr7 + scope: the loader', () => {
   })
 })
 
-describe('rr7 + scope: the publish action and the SHARED guard', () => {
-  it('no actor header: 401, from the guard', async () => {
+describe('rr7 + scope: the publish action, guarded by the session cookie', () => {
+  it('no session cookie: 401, from the guard', async () => {
     expect(await statusOfThrown(() => publish(actionArgs('1')))).toBe(401)
   })
 
   it('a malformed id: 400 before the guard even runs', async () => {
-    const status = await statusOfThrown(() =>
-      publish(actionArgs('abc', { headers: { 'x-actor-id': 'u1' } })),
-    )
+    const status = await statusOfThrown(() => publish(actionArgs('abc', 'actor=u1')))
     expect(status).toBe(400)
   })
 
   it('known post, authed: a returned redirect, which React Router follows', async () => {
-    const res = await publish(actionArgs('1', { headers: { 'x-actor-id': 'u1' } }))
+    const res = await publish(actionArgs('1', 'actor=u1'))
     expect(res.status).toBe(302)
     expect(res.headers.get('location')).toBe('/posts/1')
   })
 })
 
-describe('rr7 + scope: the create action, body read and validated', () => {
-  const args = (payload: unknown) =>
+describe('rr7 + scope: the create action, the form its component submits', () => {
+  // WHAT A `<Form>` REALLY SENDS: url-encoded fields, which is what this
+  // route's action reads. The express and hono entries post JSON to theirs;
+  // the encoding is the host's own shape, not a preference.
+  const args = (fields: Record<string, string> | string) =>
     ({
       request: new Request('http://localhost/posts', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: typeof payload === 'string' ? payload : JSON.stringify(payload),
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: typeof fields === 'string' ? fields : new URLSearchParams(fields).toString(),
       }),
       params: {},
       context: {},
@@ -104,8 +110,20 @@ describe('rr7 + scope: the create action, body read and validated', () => {
     expect(await statusOfThrown(() => create(args({ title: '' })))).toBe(422)
   })
 
-  it('malformed JSON: 422 from `body()`’s own reader', async () => {
-    expect(await statusOfThrown(() => create(args('{not json')))).toBe(422)
+  it('a body the encoding cannot read: 422 from `body()`’s own reader', async () => {
+    // sent as JSON where the action declared `form` — the reader answers,
+    // there is no framework parser to race it
+    const wrong = {
+      request: new Request('http://localhost/posts', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{"title":"New","content":"Body"}',
+      }),
+      params: {},
+      context: {},
+    } as unknown as PostsRoute.ActionArgs
+
+    expect(await statusOfThrown(() => create(wrong))).toBe(422)
   })
 })
 

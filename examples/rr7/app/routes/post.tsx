@@ -1,4 +1,4 @@
-import { data, useLoaderData } from 'react-router'
+import { data, Form, useLoaderData } from 'react-router'
 import { z } from 'zod'
 import { scope } from '@lntt/scope'
 import { reactRouter, reactRouterCarrier } from '@lntt/scope/react-router'
@@ -56,7 +56,17 @@ export default function Post() {
     <article>
       <h1>{post.title}</h1>
       <p>{post.content}</p>
-      {post.published ? <span data-published="yes">published</span> : null}
+      {post.published ? (
+        <span data-published="yes">published</span>
+      ) : (
+        // Submits to the publish action, which is a route module of its own
+        // with no component — a shape React Router has and the other hosts do
+        // not. The session cookie the browser sends with this is what that
+        // action's guard reads.
+        <Form method="post" action={`/posts/${post.id}/publish`}>
+          <button type="submit">publish</button>
+        </Form>
+      )}
     </article>
   )
 }

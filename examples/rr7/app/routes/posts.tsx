@@ -14,14 +14,17 @@ const CreatePostSchema = z.object({
   content: z.string().min(1),
 })
 
-// The SAME two steps `examples/express` and `examples/hono` use for a body,
-// against a Fetch `Request` instead of a Node stream — the read extension is
-// the half that knows which host it is on, and it is the only half.
+// `body('form')`, where the other two entries read `body('json')`, and the
+// difference is the HOST rather than a preference: a React Router action is
+// what an HTML `<Form>` submits to, so what arrives is
+// `application/x-www-form-urlencoded`. Same step, same `.validate` after it —
+// the ENCODING is the per-route choice, and the schema does not change because
+// form values are strings either way.
 export const action = mount(
   scope(reactRouterCarrier())
     .extend(guards)
     .step(
-      body('json', (issues) => {
+      body('form', (issues) => {
         throw data({ issues }, { status: 422 })
       }),
     )
@@ -35,9 +38,9 @@ export const action = mount(
 // return type the way `useLoaderData` reads a loader's, so what the step handed
 // back — the created post — is typed here with nothing annotated.
 //
-// `<Form method="post">` posts to THIS route's action. The action reads the
-// body with `body('json', …)`, so a real form would submit JSON through
-// `useSubmit`; the plain form below is the shape, not a working submit.
+// `<Form method="post">` posts to THIS route's action, which reads it with
+// `body('form', …)` — so this really is the pair a React Router app writes,
+// not a shape standing in for one.
 export default function NewPost() {
   const created = useActionData<typeof action>()
 
