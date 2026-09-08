@@ -44,8 +44,11 @@ them for you out of the request and calls the scope with both.
 
 A **step** wraps the rest of the fold: it reads the app and the ctx as they
 stand, and either continues inward with what it populates or hands back
-something of its own and stops. Every verb the builder offers is sugar over this
-one — a verb is a function from its own arguments TO A STEP.
+something of its own and stops. Every verb that touches the fold is sugar over
+this one — a verb is a function from its own arguments TO A STEP.
+
+The **fold** is the ordered list of steps, run from the outside in; its **leaf**
+is the innermost one, the step that does not call `next`.
 
 A step says three things, and each one rides a position the signature already
 has — so a step is a plain function and declares nothing beside itself:
@@ -59,11 +62,11 @@ has — so a step is a plain function and declares nothing beside itself:
 ```ts
 import { scope, type Next } from '@lntt/scope'
 
-const publish = scope<{ readonly id: string; readonly token: string }>()   // `Deps` as above
+const publish = scope<{ readonly id: string; readonly token: string }>()
   .step(async (_app: {}, { token }, next: Next<{ actor: string }>) =>
     token === '' ? { error: 'unauthorized' as const } : next({ actor: token }),
   )
-  .step(async ({ posts }: Deps, { id, actor }) => posts.publishPost(id, actor))
+  .step(async ({ posts }: Deps, { id, actor }) => posts.publishPost(id, actor))   // `Deps` as above
 ```
 
 The first parameter accumulates: what every step asks of the app is what the
@@ -318,7 +321,7 @@ so the typed RPC client keeps working end to end:
 
 ```ts
 const app = new Hono()
-  .get('/posts/:id', route(showPost))
+  .get(...route('/posts/:id', showPost))
   .get(...route('/health', health))
 
 const client = hc<typeof app>('http://localhost')
@@ -333,7 +336,7 @@ with what the scope knows filled in, never the widest thing that compiles.
 
 | subpath | what the mount carries through |
 |---|---|
-| express | the LOCALS a middleware derives (`LocalsOf<typeof mw>`) |
+| express | the LOCALS a middleware derives — `LocalsOf<…>` read off what `mw(scope)` handed back, not off `mw` itself |
 | hono | what the leaf returned, value and status, for `hc<typeof app>()` |
 | trpc | the resolver's return type (`inferRouterOutputs`, and what `.output(schema)` checks), the INPUT a scope declares (checked against `.input(schema)`), and a middleware's CONTEXT OVERRIDE — what its steps derived reaches every procedure that `.use`s it |
 | react-router | what the loader or action returned, which is `useLoaderData<typeof loader>()` |
@@ -382,7 +385,7 @@ listed by what they catch rather than by how they are built.
 | a step hands back nothing — `return` forgotten in front of `next(…)` | the `.step` argument | ⛔ this step returns nothing — did you forget `return` in front of `next(…)`? |
 | a step populates a ctx key another step already populated | the `.step` argument | ⛔ this ctx key is already populated: `actor` — an extension may REPLACE it, a step may not |
 | `guard` adds a key already populated | the check argument | ⛔ … — `refine` replaces an entry, `guard` may only add |
-| `validate` or `refine` names an entry the ctx has not got | the name argument | the valid names, listed: `"wrong"` is not assignable to `"params" \| "req" \| "res" \| "next"` — and `never` on a scope holding nothing to refine |
+| `validate` or `refine` names an entry the ctx has not got | the name argument | the valid names, listed: `"wrong"` is not assignable to `"res" \| "params" \| "req" \| "next"` — and `never` on a scope holding nothing to refine |
 | two extensions contribute one verb name, or a verb shadows the scope's own surface | the `.extend` argument | ⛔ a verb under this name is already contributed: … / ⛔ a verb cannot be named: … |
 | a step reads a ctx the scope does not hold | the `.step` argument | the missing member, named — contravariance, not a gate of ours, and the one check a consumer's `strictFunctionTypes: false` turns off |
 | a scope written for another host | the mount argument | the run's parameters are not assignable — contravariance again |
