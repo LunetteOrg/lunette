@@ -3062,13 +3062,20 @@ promise the callable returns.
   there is — because zod 4 erases a coercing schema's input to `unknown`, and
   `{ page: unknown }` is not assignable to the raw entry.
 
-  That erasure is what closes the question rather than deferring it: the input
-  face of a coercing schema carries nothing to test against, so a rule loose
-  enough to admit `unknown` admits everything, and any rule tight enough to
-  catch the mistaken `z.number()` rejects the coercing schema with it. Since
-  rejecting a valid declaration is worse than catching nothing, neither
-  direction ships. What could work is a check reading the schema's OUTPUT, or
-  one a schema opts into; both need a real case.
+  The erasure is what defeats both, since neither reads the input face as
+  anything but a whole: the coercing schema's `{ page: unknown }` is too loose
+  for one direction and not assignable for the other. Since rejecting a valid
+  declaration is worse than catching nothing, neither ships.
+
+  What is NOT claimed here is impossibility. A per-KEY rule exempting the
+  positions zod erased — `IsUnknown<I[K]> extends true ? true : I[K] extends
+  Raw[K]` — accepts the coercing schema, accepts `z.string()`, and rejects the
+  mistaken `z.number()`: measured, on those same three schemas. It is a
+  traversal rather than one `extends`, and what it really says is "wherever zod
+  erased, anything goes", which is most of a query schema. It is written down so
+  the next attempt starts here rather than at the two directions that do not
+  work. A check reading the schema's OUTPUT, or one a schema opts into, is the
+  other road; both need a real case.
 
   The consequence, measured on the shipped mounts: a coercing schema compiles
   and its leaf reads a real `number` (`?page=3` arrives as `3`), and the
