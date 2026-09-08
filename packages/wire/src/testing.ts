@@ -14,7 +14,7 @@
 //   await modules.run({ db: fake<Db>({ query: async () => rows }) },
 //     async (app) => { ...assertions... })
 //
-// `override` remains for POSITIONAL replacements, with the pitfall stated
+// `override` is for POSITIONAL replacements, with the pitfall stated
 // where it bites: it affects DOWNSTREAM layers only — already-wired closures
 // are not rewritten, and the original layer still runs.
 //

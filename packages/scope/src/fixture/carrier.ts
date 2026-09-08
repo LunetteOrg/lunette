@@ -66,8 +66,8 @@ export const answered = <V>(passed: Passed): Answered<V> => passed as unknown as
 
 // ── a carrier written WRONG, on purpose ──────────────────────────────────────
 // `ArgsOf` has a fallback for a carrier that declares something unusable, and
-// the branch was dead in the suite — nothing ever declared a non-object
-// `__args`, so nothing checked that the fallback fails CLOSED rather than open.
+// it takes a carrier declaring a non-object `__args` to reach it: unreached, the
+// fallback could fail OPEN and nothing would say so.
 //
 // A carrier is a hand-written declaration, so this is not contrived: it is
 // what a typo produces.

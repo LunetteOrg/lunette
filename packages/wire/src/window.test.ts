@@ -231,8 +231,8 @@ describe('.by — the window derived from a key argument', () => {
   it('record form: ONE key recipe serves leaves with different args', async () => {
     opened.length = 0
 
-    // this is what taking the key OUT of the leaf signature unlocks: the
-    // old args-mirroring form could never type a record.
+    // this is what taking the key OUT of the leaf signature unlocks: a form
+    // that mirrors the args cannot type a record.
     const count = async ({ conn }: { conn: { tenant: string } }) =>
       `count:${conn.tenant}`
     const find = async ({ conn }: { conn: { tenant: string } }, id: string) =>

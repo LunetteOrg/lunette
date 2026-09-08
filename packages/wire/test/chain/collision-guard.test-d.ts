@@ -203,7 +203,7 @@ describe('non-string PropertyKeys: symbols labelled, numbers rejected', () => {
   })
 
   it("the hazard that motivated the ban: 42 and '42' are one runtime key", () => {
-    // Under a PropertyKey-wide guard this program was GREEN and threw at
+    // Under a PropertyKey-wide guard this program is GREEN and throws at
     // runtime ({ 42: x } owns the key "42", colliding with the string
     // '42' the type system considers distinct). The ban makes it red.
     void lunette()

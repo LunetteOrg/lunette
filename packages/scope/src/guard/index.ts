@@ -24,11 +24,11 @@
 // gate that refuses a step re-populating a key. The four read extensions only
 // ADD, so they stay plain steps. The line falls where the gate already is.
 //
-// WHY THIS IS NOT IN THE CORE. Principle 6 — extensions are dialects, never
-// verbs grafted into the core — and the cost of a verb there is paid by every
-// scope that never calls it. Nor is it per carrier: nothing in here is
-// host-specific, because the one part that knew about a host (how to fail) lives
-// in the caller now.
+// WHY THIS IS NOT IN THE CORE. An extension is a dialect, never a verb grafted
+// into the core, and the cost of a verb there is paid by every scope that never
+// calls it. Nor is it per carrier: nothing in here is host-specific, because the
+// one part that knows about a host — how to fail — lives in the caller's
+// `onError`.
 
 import type { AnyStep, Collides, Ctx, Extension, Scope, State, Surface } from '../index.ts'
 

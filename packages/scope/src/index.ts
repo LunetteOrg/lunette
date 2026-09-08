@@ -643,7 +643,7 @@ function make(steps: readonly AnyStep[], verbs: Verbs): Built {
       // Checking `taken` first hides the reserved name behind it: the author
       // fixes what was named, re-runs, and only then meets the other one — the
       // same masking `hasOwn` rather than `in` avoids just above, arriving by a
-      // different door. `make`'s sweep stays as the backstop for verbs that arrive by
+      // different door. `make`'s sweep is the backstop for verbs that arrive by
       // some other route than this one.
       refuseReserved(Object.keys(ext.methods))
       const taken = Object.keys(ext.methods).filter((k) => Object.hasOwn(verbs, k))

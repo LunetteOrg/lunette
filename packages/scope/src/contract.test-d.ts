@@ -107,8 +107,8 @@ describe('what a step knows of the app', () => {
 
 // ── what a scope tells anything OUTSIDE the builder ──────────────────────────
 // `StateOf` and `ResultOf` are how a mount asks what a scope's steps can
-// produce, so it can check what its own render path covers. Public and, until
-// now, pinned nowhere.
+// produce, so it can check what its own render path covers. Public, so what they
+// answer is a contract and pinned here.
 describe('what a scope accumulated, read from outside', () => {
   const s = scope(fixture)
     .step(async (_app: {}, ctx, next: Next<{ user: string }>) =>

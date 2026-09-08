@@ -172,10 +172,10 @@ type AnswerGate<S extends State, Then = unknown> = [Unsendable<S>] extends [neve
 // be assignable to, and `strictFunctionTypes` does the rest — a parameter is
 // contravariant, so a scope demanding args the mount does not bring is refused
 // at the argument. It is the shape `trpc.procedure` and `reactRouter` already
-// had for free by naming `S['args']` in a real parameter position; the two
-// mounts that take a `Scope<S>` and cast had nothing checking that axis at all,
-// so a Hono scope mounted here compiled and died on `c.json is not a function`
-// on every request.
+// had for free by naming `S['args']` in a real parameter position. A mount that
+// takes a `Scope<S>` and casts checks that axis nowhere, so without this a Hono
+// scope mounted here compiles and dies on `c.json is not a function` on every
+// request.
 //
 // `app` is `never` because the CHAIN is `DepGuard`'s to judge: it is assignable
 // to any app type, so this member says nothing about the deps and the two gates
@@ -362,10 +362,9 @@ export const express = <App extends object>(deps: App) => {
 // a Fetch shim being built around a Node stream.
 export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from '../reads.ts'
 
-// THE FIFTH READ EXTENSION, and Express-only: no Fetch-family equivalent
-// ships today, since `req.params` needs no adaptation the way headers or
-// cookies do — Express's own router already hands back a plain string-keyed
-// record.
+// THE FIFTH READ EXTENSION, and Express-only: the Fetch family needs no
+// equivalent, since `req.params` needs no adaptation the way headers or cookies
+// do — Express's own router already hands back a plain string-keyed record.
 //
 // FIXED shape, not generic over a declared param set. A generic
 // `params = async <P>(...) => next({ params: req.params as P })` was tried

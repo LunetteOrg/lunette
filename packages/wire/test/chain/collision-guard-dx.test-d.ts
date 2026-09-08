@@ -14,9 +14,9 @@
 // Scope: the keyed form (constraint on the key literal), the patch form
 // (same trick on fn's return type), the mount form (fragment
 // requirements at the mount point), the honest cost of the real verbs'
-// overload sets, and the brand property (a private symbol on the real chain;
-// the prototypes below key theirs by name, which is what the last section
-// measures the cost of).
+// overload sets, the brand property (a private symbol on the real chain, where
+// the prototypes below key theirs by name), and the non-string keys the message
+// cannot print.
 
 import { describe, expectTypeOf, it } from 'vitest'
 import { lunette } from '../../src/index.ts'
@@ -146,7 +146,7 @@ describe('prototype B2: argument constraint, object-branded message', () => {
       .provide('auth', (ctx) => {
         expectTypeOf(ctx.mailer).toEqualTypeOf<string>()
 
-        // THE HONEST COST — the sparring point for the decision record:
+        // THE HONEST COST, and the reason the two sides are weighed at all:
         // past the red line the accumulated type claims db: number & string
         // (= never here), i.e. the type LIES about the runtime until the
         // collision is fixed. The return-type guard can never lie (the
@@ -437,9 +437,9 @@ describe('the real overload set: TS2769 wraps, the message survives', () => {
 // deliberately, by writing the exact message into the patch (the guard
 // lifts; only the runtime net catches the collision) — and it competes
 // with a legitimate domain key named 'collision' (the error then demands
-// the user's own property equal the guard message). The house idiom
-// closes both: the brand
-// property is an UNEXPORTED unique symbol — nobody outside chain.ts can
+// the user's own property equal the guard message). The house idiom closes
+// both: the brand property is an UNEXPORTED unique symbol — nobody outside
+// chain.ts can
 // name it, so it cannot be produced (short of a cast, which defeats any
 // guard, on either side) and never meets user keys.
 // Diagnostics print it as '[collision]' / '[requirement]'; the message
@@ -496,9 +496,9 @@ describe('the brand property is a private symbol', () => {
 // ({ [collision]: never } — red, but mute). So the two kinds are split:
 //
 // SYMBOLS get a label. There is no `${symbol}` at the type level — a
-// unique symbol has no name a template can print. The oracle killed the
-// tempting alternative (carrying K in the brand payload so tsc prints
-// the binding): inside the payload tsc prints an anonymous
+// unique symbol has no name a template can print. The tempting alternative
+// — carrying K in the brand payload so tsc prints the binding — dies on what
+// tsc actually emits: inside the payload it prints an anonymous
 // 'unique symbol', while the ARGUMENT side of the same diagnostic
 // already prints 'typeof theSym' for free. So: label in the message,
 // binding name from tsc itself.
