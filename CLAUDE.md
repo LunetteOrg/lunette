@@ -16,8 +16,8 @@ the `errore` library (errors as values) applied to DI.
                         The core is ONE file, `index.ts` — where `export`
                         means public, since there is nowhere else for a name to
                         live. On it ship four carriers with their host mounts
-                        (express, hono, trpc, react-router), their read steps,
-                        and the guard extension, each a subpath. The contract is
+                        (express, hono, trpc, react-router), the read steps each
+                        host admits, and the guard extension, each a subpath. The contract is
                         packages/scope/README.md — READ IT FIRST — and the traps
                         a rewrite must inherit rather than rediscover are stated
                         at the line each one constrains, in the source
@@ -121,40 +121,29 @@ the tracker when relevant — never from here.
   apply = fixed deps, `.with` = per call, `.by` = per call keyed) · window
   · opener (window arg 1) · bridge (window arg 2) · bag · guard · seed —
   and, for the scope runtime, a lexicon of its own: scope (`scope()`
-  agnostic, `scope(carrier)` chooses one) · scope execution (one run:
-  `postScope(app, params)`) · scope
-  execution parameters (the second argument — what belongs to THIS run; carried
-  as `State['args']` and declared by a carrier's `__args`. NOT `seed`, which is
-  wire's build-once, the other lifetime, and not `params`, which is the name of
-  an entry a carrier puts INSIDE them) · carrier (chosen
-  once, pure declaration — no runtime value — never a step) · extension (a STEP
-  that populates an entry, and sometimes contributes a verb; added like any
-  other step) · step (the primitive — distinct from wire's LAYER, a different
-  mechanism, §33) · verb (a method a step contributes to the BUILDER — not a
-  WORD, which is a value a step returns) · leaf (the innermost step, the one
-  that does not call `next`) · entry (a ctx key a validation verb may name:
-  either arrives in the execution parameters or is derived by an extension) ·
-  enrichment (what a guard returns) · transport feature (RETIRED at the definition site — what a
-  step needs of the transport is the ctx it ANNOTATES, checked by contravariance;
-  the name survives only at the MOUNT) ·
-  intent (a word a carrier coins) · vocabulary (`State['vocabulary']`, a
-  carrier's `__vocabulary`: every word a scope MAY say — the supply side
-  `ReturnGate` reads a step's return against) · intents (`IntentsOf`: the words
-  the steps written so far actually SAY — the demand side, and what a MOUNT asks
-  about. NOT a state member: it is COMPUTED from `State['returns']`, since the
-  state carries what steps return and nothing projected from it) · registry (opaque: steps write, mounts
-  read) · effects · outcome (RETIRED with §42 — the fold produces nothing of its
-  own, so there is no `ok`/`abort` and no branch: a scope hands back what its
-  leaf RETURNED, and whether that went well is the carrier's statement. What was
-  a third branch left with §41, and the other two with §42) · `Word<I>` (all the
-  core knows of a word: it carries an `intent` and DECLARES its name. No brand,
-  no constructor, no predicate — a carrier writes its own types) · `Passed`
-  (what `next` hands back: an opaque marker for "the rest of the fold answered,
-  whatever it said". A step that only observes passes it on; one that DECORATES
-  states what it expects, which is §42's one cost) · capability (an OPEN
-  alphabet — the core enumerates none; demand is open, supply is a written-out
-  set, so an unclaimed one mounts nowhere, and widening a host's set is a claim
-  about machinery, §34) · dialect.
+  agnostic, `scope(carrier)` chooses one) · scope execution (one run) · scope
+  execution parameters (the second argument — what belongs to THIS run;
+  carried as `State['args']` and declared by a carrier's `__args`. NOT
+  `seed`, which is wire's build-once, the other lifetime, and not `params`,
+  which is the name of an entry a carrier puts INSIDE them) · carrier (chosen
+  once, pure declaration — no runtime value — never a step) · extension (two
+  things, added by different verbs: a STEP that populates a ctx entry, added
+  with `.step`, and a value contributing VERBS, added with `.extend`) · step
+  (the primitive — distinct from wire's LAYER, a different mechanism) · verb
+  (a method an extension contributes to the BUILDER) · leaf (the innermost
+  step, the one that does not call `next`) · entry (a ctx key a validation
+  verb may name: either arrives in the execution parameters or is populated
+  by a step) · enrichment (what a guard returns) · `Passed` (what `next`
+  hands back: an opaque marker for "the rest of the fold answered, whatever
+  it said". A step that only observes passes it on; one that DECORATES
+  asserts what it expects) · gate (a conditional intersected onto an
+  ARGUMENT, so the error lands on the line that contains the mistake) ·
+  dialect.
+
+  What a step needs of the transport is NOT a declared name: it is the ctx it
+  ANNOTATES, refused by contravariance where the scope does not hold it. There
+  is no vocabulary, no intent, no capability and no outcome — a scope hands
+  back what its leaf RETURNED, in its host's own shape (decisions 42 and 43).
 - **Tests**: vitest with typecheck (`*.test-d.ts` included via the
   `typecheck` block in each `vitest.config.ts`; `pnpm typecheck` runs
   `tsc --noEmit` and is the separate gate). Always verify by running:

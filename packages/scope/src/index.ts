@@ -143,12 +143,11 @@ export type AnyStep = (
 // The conditional vanishes on success (`X & unknown` is `X`) and becomes an
 // unsatisfiable branded object on failure, so the error lands on the call.
 //
-// An OBJECT carrying a named member, not a message string, and that is measured
-// rather than stylistic: a gate that resolves the callable ITSELF to a string
-// literal makes the call print `Type 'String' has no call signatures` — the
-// reason never reaches the reader. An object type is printed whole, member
-// included. The message-typed gates below can afford a literal because they
-// ride an ARGUMENT, where the literal is printed as the parameter's type.
+// An OBJECT carrying a named member rather than a message literal, because it
+// carries a TYPE the message could not: the failure prints
+// `__ERROR_chain_Pub_missing_deps: { readonly posts: … }`, naming what the
+// scope demands. The message-typed gates elsewhere have nothing to carry —
+// their subject is a key or a verb NAME, which interpolates into the string.
 //
 // A SUPERSET is fine: a chain exposing more than the scope requires passes.
 //

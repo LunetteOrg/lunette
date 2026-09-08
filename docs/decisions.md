@@ -2301,8 +2301,8 @@ than an inconvenience:
 A sugar available on half the hosts, meaning something different on each half, is
 what principle 5 refuses. Note the lexicon entry that has been describing `guard`
 as "stop with one of the carrier's words" was stale from §43 onward, and is now
-corrected in `CLAUDE.md`'s own lexicon: a guard is a SHAPE a plain step already
-has, not a verb.
+corrected here: a guard is a SHAPE a plain step already has — read the ctx,
+either continue inward or hand something back — and not a verb of its own.
 
 **What was NOT weighed, and did not need to be.** #63 said `guard`'s case is a
 LEGIBILITY claim, judged on real examples, and named #59 as where it becomes
@@ -2932,25 +2932,57 @@ still said `Capability`/`CarrierGuard` survive for the mount. They exist nowhere
 under `packages/`.
 
 **What the residue turned out to be, measured before deleting.** Of eighteen
-traps, the ones that still bind were already in the code, in the code's own
-words: the gate riding the ARGUMENT and defaulted parameters on the ALIAS
+traps, eleven still bind and were already in the code, in the code's own words:
+the gate riding the ARGUMENT and defaulted parameters on the ALIAS
 (`index.ts`), an intersection that cannot refine so `Ctx` uses `Omit`, vacuous
 truth on a param-less pattern (`route-gate.ts`), an invariant phantom blocking
 inference, a state member constrained to the wrong shape, `infer` through a
-generic factory instantiating to constraints, and reading-versus-parsing failing
-for opposite reasons (`guard/index.ts`). Four had no counterpart. Two are
-constraints and were written into the code: why the chain gate is an OBJECT and
-not a message string (a gate resolving the callable itself to a literal makes
-the call print `Type 'String' has no call signatures`, and the reason never
-reaches the reader), and why intersecting a fresh call signature per step does
-not rescue `this` (two call signatures in an intersection become overloads, and
-the stale one resolves first). Two were NUMBERS comparing the shipped shape
-against a rejected one, which is this record's job and not a comment's — they
-are below. The rest — intent inference, carrier-and-extension brands, a
+generic factory instantiating to constraints (`index.ts` and `guard/index.ts`),
+and reading-versus-parsing failing for opposite reasons (`guard/index.ts`).
+A twelfth — an invariant phantom whose actual type is `never` not extending
+`any` in a conditional position — is written where the shape actually ships, on
+`LocalsOf` in `express/index.ts`. Two more had no counterpart. Two are
+constraints and were written into the code: why the chain gate carries a named
+member holding `Need` rather than a message literal (the message could not
+carry a type, and what the reader needs printed is what the scope demands), and
+why intersecting a fresh call signature per step does not rescue `this` (two
+call signatures in an intersection become overloads, and the stale one resolves
+first). The MEASURED section's numbers compare the shipped shape against
+rejected ones, which is this record's job and not a comment's — they are
+below. The rest — intent inference, carrier-and-extension brands, a
 declaration read by value — is about machinery that is gone. That is
 archaeology, and git keeps it.
 
-**The two numbers, re-measured on the shipped package** (`tsc
+**The runtime numbers, and why they are here rather than on `runSteps`.** The
+retired document also held a runtime table, and it is evidence against three
+optimisations someone will propose again. Node, ns per run, warmed, comparisons
+valid only within a run:
+
+| | 5 steps | 20 steps | |
+|---|---|---|---|
+| continuation passing (shipped) | 749 | 4,670 | |
+| composed once, memoised on first call | 700 | 4,522 | −6.5% / −3.2% |
+| ctx merged by spread (shipped) | 1,251 | 6,213 | |
+| ctx as a prototype chain | 3,193 | 12,336 | **+155%** |
+| steps synchronous, no `await` per level | 649 | 3,580 | −48% |
+| generators + an interpreter | 2,210 | 10,637 | **+173%** |
+
+The whole fold is **1–6 µs** against an HTTP request of hundreds of µs to
+milliseconds — under 1% — so pre-composing its closures buys 3–6% of something
+that is not where the time goes. A prototype-chain ctx is **2.5× slower**, not
+faster: the chain deepens per step and every read walks it, so the explicit
+spread costs nothing and earns the isolation it is written for. Generators plus
+an interpreter are **2.7×**, and that is with a simplified interpreter. The
+−48% for synchronous steps is the price of `async` being the contract: a step
+may throw synchronously, and a plain function would let that escape past the
+promise the callable returns.
+
+**Also inventoried, so it is not lost with the file.** Gating a schema against
+its entry's RAW type was measured in both directions and neither ships; what
+could work is a check reading the schema's OUTPUT, or one a schema opts into,
+and both need a real case — the 422 that stands in for it is not silent.
+
+**The two type-level numbers, re-measured on the shipped package** (`tsc
 --extendedDiagnostics` over `@lntt/scope`, baseline 329,128 instantiations and
 112,033 types):
 
