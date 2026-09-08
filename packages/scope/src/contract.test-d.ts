@@ -178,8 +178,8 @@ describe('a carrier declared wrong', () => {
 })
 
 // ── the ctx a step reads is READ-ONLY, whatever the carrier declared ─────────
-// `Ctx<S>` used to carry exactly the modifiers the carrier wrote, so a carrier
-// that forgot `readonly` handed its steps a mutable ctx and nothing said so.
+// Carrying exactly the modifiers the carrier wrote would let a carrier that
+// forgot `readonly` hand its steps a mutable ctx with nothing saying so.
 // That is the wrong side of the split this repo is built on: the engine is
 // guaranteed by tests, the types guarantee the USER's world, and a guarantee
 // the user has to remember to ask for is not one.

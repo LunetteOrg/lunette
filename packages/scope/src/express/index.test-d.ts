@@ -24,10 +24,10 @@ const { route, handler, mw } = express({})
 // Read straight off `req` it is `string | string[] | undefined` — Express's own
 // dictionary width, plus what `noUncheckedIndexedAccess` makes of an index
 // signature — and every part of that union is a case the router really produces
-// (a repeated param, a pattern that does not carry the name). The declaration
-// used to narrow all three away on the strength of a NAME check alone. That
-// narrowing is gone, and `.validate('params', …)` is what earns it back, having
-// actually looked at the value.
+// (a repeated param, a pattern that does not carry the name). A declaration on
+// the CARRIER would narrow all three away on the strength of a NAME check
+// alone; `.validate('params', …)` earns the narrowing instead, having actually
+// looked at the value.
 const byId = scope(expressCarrier()).step(async (_app: {}, { req, res }) => {
   expectTypeOf(req.params.id).toEqualTypeOf<string | string[] | undefined>()
   return res.json({ id: req.params.id })
@@ -55,8 +55,8 @@ describe('what a scope reads of the URL: `params`, then `validate`', () => {
       })
 
     // and after the schema `id` is `string` because something LOOKED at it:
-    // the narrowing the carrier's declaration used to assert, now earned
-    // rather than asserted — and the SAME schema is what `route` reads below.
+    // a narrowing earned rather than asserted — and the SAME schema is what
+    // `route` reads below.
     withId.step(async (_app: {}, { params: p }) => {
       expectTypeOf(p.id).toEqualTypeOf<string>()
       return undefined

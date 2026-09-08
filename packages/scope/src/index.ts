@@ -482,7 +482,7 @@ export interface Scope<S extends State> {
   // populates — so a step is a bare function and declares nothing.
   //
   // `ctx` is typed `Ctx<S>`, and that one position does the work an alphabet of
-  // transport features was going to do. Under `strictFunctionTypes` a
+  // declared transport features would do. Under `strictFunctionTypes` a
   // function-typed parameter is contravariant, so a step ANNOTATING a wider ctx
   // than the scope holds is refused right here, naming the missing member. A
   // step reading what the scope has not got is not a rule the core enforces — it

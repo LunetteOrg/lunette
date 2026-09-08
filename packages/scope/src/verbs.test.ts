@@ -269,11 +269,12 @@ describe('a verb cannot take a name the surface already owns', () => {
   it('reports the RESERVED name first, in the order the type gate reports them', () => {
     // The two halves have to agree on more than the verdict. `VerbGate` nests
     // `Own` outside `Taken`, so a name that is both reserved and already
-    // contributed is reported as reserved; the runtime used to check `taken`
-    // in `.extend` and reach the reserved sweep only afterwards, so it said the
-    // opposite. The author fixes the name it named, re-runs, and only then
-    // meets the other one — which is the masking the `hasOwn`-not-`in` note
-    // above exists to prevent, arriving by a different door.
+    // contributed is reported as reserved, and `.extend` sweeps for reserved
+    // names before it asks which are taken. The other order hides the reserved
+    // name behind the taken one: the author fixes the name it named, re-runs,
+    // and only then meets the second — which is the masking the
+    // `hasOwn`-not-`in` note above exists to prevent, arriving by a different
+    // door.
     const both = {
       methods: {
         header: () => (async () => 'x') as unknown as AnyStep,
@@ -336,7 +337,7 @@ describe('a verb cannot take a name the surface already owns', () => {
   })
 
   it('refuses one named `name`, which would otherwise throw from inside the core', () => {
-    // A function's `name` is not writable, so this used to surface as
+    // A function's `name` is not writable, so unrefused this surfaces as
     // `TypeError: Cannot assign to read only property 'name' of function` —
     // pointing at `make`, never at the extension that caused it.
     const shadowsName = {
@@ -376,11 +377,11 @@ describe('awaiting a scope', () => {
 })
 
 // ── two extensions cannot both own a verb name ───────────────────────────────
-// The two halves used to disagree and neither said so. `Surface` intersects, so
-// a shared name becomes an OVERLOAD LIST where TypeScript prefers the EARLIER
-// signature for arguments it accepts; `.extend`'s merge is `{ ...verbs,
-// ...ext.methods }` and keeps the LATER factory. So the call site was checked
-// against one extension and served by the other.
+// Unrefused, the two halves disagree with nothing saying so. `Surface`
+// intersects, so a shared name becomes an OVERLOAD LIST where TypeScript
+// prefers the EARLIER signature for arguments it accepts; `.extend`'s merge is
+// `{ ...verbs, ...ext.methods }` and keeps the LATER factory — the call site
+// checked against one extension and served by the other.
 interface TagString {
   tag<S extends State>(this: Scope<S>, v: string): Surface<S>
 }

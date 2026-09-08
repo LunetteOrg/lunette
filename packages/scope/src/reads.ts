@@ -230,11 +230,11 @@ export const wrongEncoding = (contentType: string | undefined, encoding: Encodin
 // Only the `form` branch needs one, and only because `formData()` is the
 // platform's own multipart reader and there is no other door to it.
 //
-// The CONTENT-TYPE is checked FIRST, on every path. It used to be checked only
-// where a parser had run before us, on the reasoning that elsewhere a mismatch
-// fails in the parse itself — true for form, and NOT true for json: bytes that
-// happen to parse were accepted whatever the client called them. That gap has a
-// name, and it is not tidiness. `text/plain` is one of the three content-types a
+// The CONTENT-TYPE is checked FIRST, on every path, and not left to the parse
+// to catch. A mismatch does fail in the parse for form, and does NOT for json:
+// bytes that happen to parse would be accepted whatever the client called them.
+// That gap has a name, and it is not tidiness. `text/plain` is one of the three
+// content-types a
 // browser may send cross-origin with NO preflight, so a JSON endpoint that
 // accepts it is reachable by a forged cross-site request that
 // `application/json` would have stopped at the preflight. Requiring the encoding
@@ -249,10 +249,9 @@ export const parseBody = (
   if (encoding === 'json') {
     // `fatal: true`, and the default is why: a non-fatal decoder REPLACES every
     // invalid byte with U+FFFD and hands back a string, so a payload that is not
-    // UTF-8 arrived as mojibake and failed later — as a parse error if it was
-    // lucky, and as silently wrong data if the damage happened inside a string.
-    // The comment below used to claim the refusal that the decoder was not
-    // performing.
+    // UTF-8 would arrive as mojibake and fail later — as a parse error if it
+    // were lucky, and as silently wrong data where the damage fell inside a
+    // string. Fatal, the refusal happens here, on the bytes.
     //
     // Any `charset` the client names is ignored on purpose: RFC 8259 requires
     // JSON exchanged between systems to be UTF-8, so a payload in anything else

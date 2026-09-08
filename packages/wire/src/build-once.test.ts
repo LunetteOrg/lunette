@@ -280,8 +280,8 @@ describe('buildOnce after dispose', () => {
     await once.dispose()
     await once.dispose()
 
-    // The chain absorbs a repeated teardown, which is exactly why the second
-    // call used to reach it and leave no trace.
+    // The chain absorbs a repeated teardown, which is exactly why a second
+    // call reaching it would leave no trace.
     expect(calls).toBe(1)
     expect(torn).toEqual(['pg://twice'])
   })

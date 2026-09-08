@@ -27,15 +27,16 @@ import { fetchReads } from '../reads.ts'
 // from those bindings at the composition root, and a scope then reads
 // them as ordinary typed deps.
 //
-// AND IT IS THE ONLY TYPE ARGUMENT LEFT. The carrier used to take the ROUTE PATTERN too
-// (`honoCarrier<'/posts/:id'>()`), which typed `c.req.param('id')` as `string`
-// and gave `route` something to compare a mounted pattern against. It went with
-// Express's own declaration: the pattern was then written TWICE by hand —
-// once on the carrier, once at the mount — and what the gate compares is now
-// the `.validate('params', …)` schema, which is written once and checks the
-// value rather than the name. `c.req.param('id')` is `string | undefined` here,
-// as it is on any scope that names no pattern; `ctx.params` is where a scope
-// reads a param it has actually checked.
+// AND IT IS THE ONLY TYPE ARGUMENT. A ROUTE PATTERN is not a second one
+// (`honoCarrier<'/posts/:id'>()`): it would type `c.req.param('id')` as
+// `string` and give `route` something to compare a mounted pattern against, at
+// the cost of writing `/posts/:id` TWICE by hand — once on the carrier, once at
+// the mount — and it is fixed at the first call, so one base value could not
+// serve two routes reading different params. What the gate compares is the
+// `.validate('params', …)` schema instead, written once and checking the value
+// rather than the name. `c.req.param('id')` is `string | undefined` here, as it
+// is on any scope that names no pattern; `ctx.params` is where a scope reads a
+// param it has actually checked.
 export interface HonoCarrier<E extends Env = BlankEnv> {
   readonly __args?: { readonly c: Context<E> }
 }
@@ -86,8 +87,8 @@ type Optional<K> = K extends `${infer N}?` ? N : never
 // NO GATE OF OURS: what the mount brings is written as a FUNCTION the scope
 // must be assignable to, and `strictFunctionTypes` refuses one demanding args
 // the mount does not bring — the shape `trpc.procedure` and `reactRouter`
-// already had by naming `S['args']` in a real parameter position. An Express
-// scope mounted here used to compile and die reading `c` off `{ req, res }`.
+// already had by naming `S['args']` in a real parameter position. Without it an
+// Express scope mounted here compiles and dies reading `c` off `{ req, res }`.
 // The reasoning, and why this is a function rather than a message, is written
 // out in the Express carrier.
 //
@@ -156,10 +157,9 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
     //
     // WHAT `route` COMPARES IS THE SCHEMA, the same on both hosts: a
     // scope says what the URL carries once, in `.validate('params', schema,
-    // onError)`, and the gate reads that against the mounted pattern. It used
-    // to read a pattern declared on the carrier, which meant writing
-    // `/posts/:id` twice by hand and checking a param's NAME where the schema
-    // checks its value.
+    // onError)`, and the gate reads that against the mounted pattern. A pattern
+    // declared on the carrier would mean writing `/posts/:id` twice by hand,
+    // and would check a param's NAME where the schema checks its value.
     //
     // WHY `handler` cannot check the pattern differs from Express's, and is
     // worth knowing: the path IS the type parameter of `app.get`, so the

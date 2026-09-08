@@ -377,12 +377,11 @@ export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from
 // So `ctx.params` starts WIDE (`ParamsDictionary`), exactly the way
 // `body('json')` starts `unknown` — trusted from the framework's own router,
 // refined by `.validate('params', schema, onError)` where a route wants a
-// check on the VALUE. It is now the ONE way a scope says what it reads of the
-// URL: the carrier's own `expressCarrier<{ id: string }>()` declaration, and
-// the route-pattern check `route` built on it, are gone. What their
-// removal costs is a compile-time refusal of a pattern missing a NAME; what
-// they never gave is the FORMAT, which is where a bad `:id` actually goes
-// wrong.
+// check on the VALUE. That schema is the ONE place a scope says what it reads
+// of the URL, and it does both jobs: it checks the value at runtime, and it is
+// what `route` compares the mounted pattern against. A declaration on the
+// CARRIER could only ever check a param's NAME, and never its FORMAT — which is
+// where a bad `:id` actually goes wrong.
 export const params = async (
   _app: {},
   { req }: { readonly req: Request },
@@ -445,10 +444,10 @@ export const cookies = async (
 // unsafe: the encoding check below closes the case where the data would be
 // WRONG, and what is left is which of two correct answers the client gets.
 //
-// THE READ BELOW HAS A CEILING, `DEFAULT_BODY_LIMIT` unless a
-// caller raises it — the recommendation above no longer trades `express.json()`'s
-// 100 kB default for nothing. Node has no size limit of its own, so this is the
-// only one standing on the unparsed path.
+// THE READ BELOW HAS A CEILING, `DEFAULT_BODY_LIMIT` unless a caller raises it,
+// so the recommendation above does not trade `express.json()`'s 100 kB default
+// for nothing. Node has no size limit of its own, so this is the only one
+// standing on the unparsed path.
 export const body =
   <E extends Encoding, R>(
     encoding: E,
