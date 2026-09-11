@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { scope } from '../index.ts'
-import { fail, guards, type StandardSchemaV1 } from './index.ts'
+import { scope } from '@lntt/scope'
+import { fail, guards, type StandardSchemaV1 } from '@lntt/scope/guard'
 
 // The three verbs are ONE machine at runtime, so what has to actually run is:
 // the addition arrives, a failure hands back what `onError` built and the steps

@@ -3210,9 +3210,10 @@ change. Building moves the risk to where it is testable: declaration emit must
 not widen a conditional, because our gates ARE branded conditionals and a
 relaxed one turns a compile error into a silence in someone else's editor. That
 is what `pnpm verify` exists to catch — build, then the `*.test-d.ts` contract
-recompiled against the built declarations, the suites that reach `@lntt/*` by
-name re-run through `exports` into `dist`, and the tarballs packed, unpacked and
-imported entry point by entry point. That last step is a check, not a listing:
+recompiled against the built declarations, every suite re-run through `exports`
+into `dist` — they reach `@lntt/*` by NAME, so the built JavaScript is what
+executes — and the tarballs packed, unpacked and imported entry point by entry
+point. That last step is a check, not a listing:
 a `files` list that drifted, a missing LICENSE or a `workspace:` range left in
 the manifest all pack successfully and would reach the registry unnoticed.
 

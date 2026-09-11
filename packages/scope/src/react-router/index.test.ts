@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { data, redirect } from 'react-router'
-import { scope, type Next } from '../index.ts'
-import { reactRouter, reactRouterCarrier } from './index.ts'
+import { scope, type Next } from '@lntt/scope'
+import { reactRouter, reactRouterCarrier } from '@lntt/scope/react-router'
 
 // A guard, written here rather than imported: what a guard IS belongs to no
 // carrier. It stops the way React Router stops — a THROWN `data(...)`.

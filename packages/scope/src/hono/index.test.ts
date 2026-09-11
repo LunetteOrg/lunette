@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { HTTPException } from 'hono/http-exception'
-import { scope, type Next } from '../index.ts'
+import { scope, type Next } from '@lntt/scope'
 import { z } from 'zod'
-import { guards } from '../guard/index.ts'
-import { hono, honoCarrier, params } from './index.ts'
+import { guards } from '@lntt/scope/guard'
+import { hono, honoCarrier, params } from '@lntt/scope/hono'
 
 // A guard, written here rather than imported: what a guard IS belongs to no
 // carrier. It stops the way Hono stops — `throw new HTTPException(…)`.

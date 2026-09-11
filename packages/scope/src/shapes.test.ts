@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import { scope, type Next } from './index.ts'
+import { scope, type Next } from '@lntt/scope'
 import { fixture, gone, refused, served, type Refusal, type Served } from './fixture/carrier.ts'
 
 // THE SHAPES A STEP TAKES — one per thing a step is for. There is no category

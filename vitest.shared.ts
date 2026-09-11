@@ -9,8 +9,13 @@ import { defineConfig } from 'vitest/config'
 // `LNTT_SOURCE=off` drops it, and the same suites reach `dist` instead: the
 // published entry points, resolved the way a consumer resolves them. That run
 // answers a question the sources cannot — whether what we SHIP still is what
-// the tests passed against.
-const conditions = process.env.LNTT_SOURCE === 'off' ? [] : ['@lntt/source']
+// the tests passed against. Suites gate their `typecheck` block on `onSources`,
+// because that block reads a tsconfig rather than these conditions: left on, it
+// would recheck the sources and report a contract nobody verified. The built
+// declarations are the job of the `tsconfig.verify.json` files.
+export const onSources = process.env.LNTT_SOURCE !== 'off'
+
+const conditions = onSources ? ['@lntt/source'] : []
 
 // Declared on BOTH sides: suites run through Vite's SSR pipeline, which
 // resolves with `ssr.resolve.conditions` and would otherwise fall through to

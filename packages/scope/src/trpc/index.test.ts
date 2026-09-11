@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { initTRPC, TRPCError } from '@trpc/server'
-import { scope, type Next } from '../index.ts'
-import { trpc } from './index.ts'
+import { scope, type Next } from '@lntt/scope'
+import { trpc } from '@lntt/scope/trpc'
 
 // The application's own context. It is named HERE, where tRPC's builder is
 // made, and nowhere else: the carrier reads it back off `t`.

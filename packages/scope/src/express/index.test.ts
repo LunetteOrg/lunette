@@ -3,9 +3,9 @@ import expressLib from 'express'
 import type { Request, Response } from 'express'
 import request from 'supertest'
 import { z } from 'zod'
-import { scope, type Next } from '../index.ts'
-import { guards } from '../guard/index.ts'
-import { express, expressCarrier, params } from './index.ts'
+import { scope, type Next } from '@lntt/scope'
+import { guards } from '@lntt/scope/guard'
+import { express, expressCarrier, params } from '@lntt/scope/express'
 
 // A guard, written here rather than imported: what a guard IS belongs to no
 // carrier, and the carrier's own claim is only that a step which stops

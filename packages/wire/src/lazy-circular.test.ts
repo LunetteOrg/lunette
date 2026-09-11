@@ -5,7 +5,7 @@
 //   the cycle becomes a getter at runtime
 
 import { describe, expect, it } from 'vitest'
-import { circular, lazy, lazyAsync, lunette } from './index.ts'
+import { circular, lazy, lazyAsync, lunette } from '@lntt/wire'
 
 describe('lazy — expensive creations deferred to the first call', () => {
   it('does not create until someone calls, creates ONCE only', () => {
