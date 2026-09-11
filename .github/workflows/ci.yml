@@ -85,15 +85,17 @@ jobs:
         run: pnpm verify:types
 
       # Every suite that reaches `@lntt/*` by NAME re-run through `exports`
-      # into `dist`: the two packages' own and the examples'. This executes the
-      # BUILT JavaScript — the emit, not the sources it came from. The
-      # prototypes that name no package run unchanged, on their own code.
+      # into `dist`: the two packages' own, the examples', and the one prototype
+      # that mounts them. This executes the BUILT JavaScript — the emit, not the
+      # sources it came from. The prototypes that name no package run unchanged,
+      # on their own code.
       - name: verify runtime
         run: pnpm verify:runtime
 
       # The tarball a consumer would install: packed, unpacked, every entry
-      # point `exports` names imported from it. A `files` list that drifts, a
-      # missing LICENSE or a `workspace:` range left in the manifest fails
-      # here — `npm pack --dry-run` would report all three as a success.
+      # point imported from it by specifier, and its declarations compiled in a
+      # consumer's program with `skipLibCheck` off. A `files` list that drifts,
+      # a dangling declaration map or an ambient type the package does not
+      # declare fails here, and passes everywhere else.
       - name: verify tarball
         run: pnpm verify:tarball

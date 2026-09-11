@@ -1,6 +1,6 @@
 # @lntt/scope
 
-The host-agnostic **scope runtime** for [`@lntt/wire`](../wire): ONE primitive —
+The host-agnostic **scope runtime** for [`@lntt/wire`](https://github.com/LunetteOrg/lunette/tree/main/packages/wire#readme): ONE primitive —
 a step wrapping the rest of the fold — and a scope that IS the function running
 it. Wire builds the app once at boot; `@lntt/scope` handles what happens **per
 request** — authentication, authorization, resource prefetch, and the use case

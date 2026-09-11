@@ -545,9 +545,9 @@ wrong even if runtime tests pass.
 **Decision.** Scoped packages under the `lntt` org (`lunette` was taken
 unscoped on npm). The core is `@lntt/wire` — descriptive, with DI
 pedigree (wiring, autowire, google/wire); evocative single-word
-candidates were explored at length and set aside. Framework dialects ship
-as subpaths of `@lntt/http` (`./hono`, `./express`) with **optional**
-peer dependencies — importing the agnostic entry pulls in no framework.
+candidates were explored at length and set aside. Framework dialects ship as
+subpaths with **optional** peer dependencies — importing the agnostic entry
+pulls in no framework — carried by `@lntt/scope`, which owns the host mounts.
 Test utilities are a subpath of the core (`@lntt/wire/testing`), not a
 package. `exports` resolve to the build, with the commented sources shipped
 beside it and reachable through a declared condition (decision 56).
@@ -3225,22 +3225,26 @@ relaxed one turns a compile error into a silence in someone else's editor. That
 is what `pnpm verify` exists to catch — build, then the `*.test-d.ts` contract
 recompiled against the built declarations, every suite re-run through `exports`
 into `dist` — they reach `@lntt/*` by NAME, so the built JavaScript is what
-executes — and the tarballs packed, unpacked and imported entry point by entry
-point. That last step is a check, not a listing:
-a `files` list that drifted, a missing LICENSE or a `workspace:` range left in
-the manifest all pack successfully and would reach the registry unnoticed.
+executes — and the tarballs packed, unpacked, imported entry point by entry
+point and compiled in a consumer's own program. That last step is a check, not
+a listing: a `files` list that drifted, a declaration map dangling over a source
+that did not ship, an ambient type the package leans on without declaring it —
+all of them pack successfully, and would reach the registry unnoticed.
 
 Prior art, read off the packages this repo installs: zod resolves `types`/`import`
 to built files and carries both `src` in `files` and a `"@zod/source"` condition;
 `@trpc/server` ships `files: ["dist", "src", …]`. None of them points a default
 export at a `.ts`.
 
-### 57. One version of TypeScript and one of Node, both the most recent
+### 57. One version of TypeScript and one of Node: the latest, and the current LTS
 
-**Decision.** TypeScript `>= 7` and Node `>= 24`, declared once — the compiler
-in a pnpm `catalog:` so no package pins its own, the runtime in `engines` — and
-both are exactly what CI runs. No matrix, no support window. Raising either
-floor is a MAJOR, with no case-by-case judgement.
+**Decision.** TypeScript `>= 7` — the latest release — and Node `>= 24`, the
+current LTS. One number per axis, and exactly what CI runs. The floors a
+CONSUMER sees are each package's own `peerDependencies.typescript` and
+`engines.node`; inside the workspace a pnpm `catalog:` pins the compiler, so no
+package pins its own copy and every file is checked by the one the gate runs.
+No matrix, no support window. Raising either floor is a MAJOR, with no
+case-by-case judgement.
 
 Consequences that follow from decision 56 rather than from taste: the packages
 are ESM-only, and `rewriteRelativeImportExtensions` is what lets the sources
@@ -3253,11 +3257,15 @@ verified, or a floor is a claim nobody checked. *Staying on TypeScript 5.x* —
 measured and unnecessary: 7.0.2 typechecks wire, scope, all six examples and the
 research prototypes with zero errors, `@ts-expect-error` directives included
 (one that stopped applying would itself be an error), `vitest --typecheck` runs
-on it, and its declaration emit is byte-identical to 5.9.3's on the file where
-the gates live.
+on it, and its declaration emit carries the same types as 5.9.3's — byte for
+byte across wire, and in scope differing only in which quote character a string
+literal is printed with.
 
 **Why.** Nothing is published yet, so this is the one moment when raising a
-floor costs nobody a major. Supporting three compilers would mean three CI runs
+floor costs nobody a major. The compiler tracks the LATEST because it IS the
+contract — the gates are conditional types, only as good as the checker reading
+them — while the runtime tracks LTS, because a floor above it would refuse
+consumers for nothing. Supporting three compilers would mean three CI runs
 and three ways a gate could behave differently, for consumers who do not exist.
 Dedicated builds for older TypeScript or Node can be added if a real case
 appears; until then, one number per axis is the whole policy.

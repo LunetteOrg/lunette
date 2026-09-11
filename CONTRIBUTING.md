@@ -69,8 +69,8 @@ explicitly:
   answer. `pnpm verify` builds, recompiles the type contract against the
   built declarations, re-runs every suite through `exports` into `dist`, and
   checks the tarballs a consumer would install.
-- **One version per axis:** TypeScript (pnpm `catalog:`) and Node are pinned
-  to the most recent, and CI runs exactly those. Raising either floor is a
+- **One version per axis:** TypeScript (pnpm `catalog:`) is pinned to the latest
+  release, Node to the current LTS, and CI runs exactly those. Raising either floor is a
   major.
 
 ## Accepting an outcome into the record

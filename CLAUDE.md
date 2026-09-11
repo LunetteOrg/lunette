@@ -170,8 +170,9 @@ the tracker when relevant — never from here.
   edit and its answer. `pnpm verify` is the other gate: it builds, recompiles the
   type contract against the BUILT declarations, re-runs every suite through `exports` into
   `dist` (they import `@lntt/*` by NAME, so the built JavaScript executes), and
-  packs, unpacks and imports each tarball entry point by entry point. TypeScript (pnpm `catalog:`) and Node are one
-  version each, the most recent, and CI runs exactly those.
+  packs, unpacks and imports each tarball entry point by entry point. TypeScript (pnpm `catalog:`) tracks the latest
+  release and Node the current LTS — one number each, and CI runs exactly
+  those.
 - **Workflow with the owner**: discuss the design FIRST (he enjoys
   sparring and wants to understand deeply), implement ONLY on an explicit
   go. Present alternatives as choices, never decide silently. API renames

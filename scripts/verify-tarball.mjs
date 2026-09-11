@@ -14,11 +14,10 @@
 //   5. the DECLARATIONS typecheck in a consumer's program, with `skipLibCheck`
 //      OFF — the gates here run with it on, which hides everything that is
 //      wrong INSIDE a `.d.ts`: a member that vanished from an emitted file, or
-//      an ambient name the package uses and does not declare. Two consumers,
-//      because the package stands on web globals (`Request`, `File`,
-//      `URLSearchParams`): one on the default `lib`, which carries them, and
-//      one on `lib: ES2023` plus `@types/node`, which is the other way to have
-//      them. Those two are the claim; a `lib` narrowed past both is not.
+//      an ambient name the package uses and does not declare. Three consumers,
+//      because two things have to be found somewhere: the web globals the read
+//      steps stand on (the default `lib` carries them, `@types/node` is the
+//      other way), and nothing of Node's beyond them.
 //
 // What is NOT checked here, and why: the manifest's dependency ranges. `pnpm
 // pack` rewrites `workspace:` and `catalog:` before packing and aborts when it
@@ -118,6 +117,18 @@ try {
     const fixtures = listed.filter((f) => /(^|\/)fixture\//.test(f))
     check(fixtures.length === 0, `no test fixture in the tarball${fixtures.length ? ` (${fixtures[0]})` : ''}`)
 
+    // Every source a declaration map points at, present. This is what "go to
+    // definition lands on the commented source" rests on, and `files` reaches
+    // the entry points by name while the maps reach everything behind them.
+    const dangling = listed
+      .filter((f) => f.endsWith('.d.ts.map'))
+      .flatMap((f) => {
+        const map = JSON.parse(readFileSync(join(out, f.replace(/^package\//, '')), 'utf8'))
+        return map.sources.map((src) => resolve(dirname(join(out, f.replace(/^package\//, ''))), src))
+      })
+      .filter((src) => !existsSync(src))
+    check(dangling.length === 0, `every declaration map reaches its source${dangling.length ? ` (${dangling[0]} is missing)` : ''}`)
+
     // The consumer reaches the package the way `node_modules` does, and imports
     // it BY SPECIFIER so that Node resolves the `exports` map.
     mkdirSync(join(consumer, 'node_modules', '@lntt'), { recursive: true })
@@ -163,13 +174,24 @@ try {
       .join(NL)
 
   // A subpath that mounts a framework brings that framework's declarations in
-  // with it, and those answer to their own author's `lib`. The narrow program
-  // below is about OURS, so it takes the entry points that stand alone.
-  const standsAlone = (s) => !/\/(express|hono|trpc|react-router)$/.test(s)
+  // with it, and those answer to their own author's config. Two exclusions, for
+  // two different programs: without DOM, only the entry points that mount
+  // nothing compile, because react-router's own types want it; without
+  // @types/node, everything compiles except the tRPC subpath, whose peer
+  // references Node itself. Measured, both.
+  const mountsNothing = (s) => !/\/(express|hono|trpc|react-router)$/.test(s)
+  const needsNoNodeTypes = (s) => !s.endsWith('/trpc')
 
+  const base = { target: 'ES2023', module: 'nodenext', moduleResolution: 'nodenext', strict: true, noEmit: true, skipLibCheck: false }
   const programs = [
-    ['the default lib', () => true, { target: 'ES2023', module: 'nodenext', moduleResolution: 'nodenext', strict: true, noEmit: true, skipLibCheck: false }],
-    ['lib ES2023 + @types/node, no DOM', standsAlone, { target: 'ES2023', lib: ['ES2023'], module: 'nodenext', moduleResolution: 'nodenext', strict: true, noEmit: true, skipLibCheck: false, types: ['node'] }],
+    ['the default lib', () => true, base],
+    ['lib ES2023 + @types/node, no DOM', mountsNothing, { ...base, lib: ['ES2023'], types: ['node'] }],
+    // The one that can see a Node type leaking into a declaration: `types: []`
+    // keeps @types/node out of the program, so a `Buffer` or `NodeJS.*` in an
+    // emitted `.d.ts` has nowhere to come from. It carries the host subpaths
+    // too, which is where the web globals the read steps stand on — `Request`,
+    // `File`, `URLSearchParams` — have to be found in `lib` or not at all.
+    ['the platform alone, no @types/node', needsNoNodeTypes, { ...base, types: [] }],
   ]
   for (const [what, keep, compilerOptions] of programs) {
     writeFileSync(join(consumer, 'uses.ts'), importsOf(keep))

@@ -73,8 +73,8 @@ export default defineConfig({
 
 What that takes back onto the consumer is the reason it is not the default.
 Compiling the sources means the `tsconfig` that compiles them has to suit them
-— the flag above, and any `lib` or `types` they stand on — and it means the
-runtime has to read `.ts` at all, which the built path never asks of it.
+— the flag above — and it means the runtime has to read `.ts` at all, which the
+built path never asks of it.
 
 ## The chain
 
@@ -98,7 +98,7 @@ A chain is `Lunette<Ctx, Pub, Seed>`:
 | `provide(fn, destroy?)` / `provide(key, fn, destroy?)` | private | sugar: a value, with an optional acquire/release teardown |
 | `expose(fn, destroy?)` / `expose(key, fn, destroy?)` | public | same, but the value also enters `Pub` |
 | `override(fn)` | preserved | replaces **existing** keys only (a typo will not compile); the type may change |
-| `pipe(fn)` | — | hands the chain to a *dialect* (e.g. `@lntt/http`) and returns whatever it returns |
+| `pipe(fn)` | — | hands the chain to a *dialect* (e.g. `@lntt/scope`) and returns whatever it returns |
 
 `provide`/`expose` are sugar over `use`: `expose(create, destroy)` is a
 public resource *with* a lifecycle in one call (acquire/release colocated),
@@ -111,7 +111,7 @@ rejects the offending argument on its exact line, naming the key in the
 message (`[collision]: '⛔ key already present in the context: db'`; the
 chain keeps typing past the red line); at runtime the same collision
 throws. Convention: **one top-level key per area**. The field guide to
-every diagnostic is `docs/patterns/reading-errors.md` at the repo root.
+every diagnostic is [`docs/patterns/reading-errors.md`](https://github.com/LunetteOrg/lunette/blob/main/docs/patterns/reading-errors.md).
 
 ### run and build
 

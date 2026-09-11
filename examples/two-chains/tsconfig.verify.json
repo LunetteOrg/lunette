@@ -3,6 +3,5 @@
   // no source condition, so `@lntt/wire` reaches `dist`. An example asserting
   // against the sources would not notice a declaration that lost the claim.
   "extends": "./tsconfig.json",
-  "compilerOptions": { "customConditions": [] },
-  "include": ["src/**/*.test-d.ts", "test/**/*.test-d.ts"]
+  "compilerOptions": { "customConditions": [] }
 }
