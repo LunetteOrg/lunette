@@ -1,4 +1,4 @@
-import type { Passed } from '../index.ts'
+import type { Passed } from '@lntt/scope'
 
 // A CARRIER, as a FIXTURE — this directory ships nothing. Not a real carrier,
 // but the same shape, so the tests read like real code instead of building an

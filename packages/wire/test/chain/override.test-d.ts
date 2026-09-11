@@ -1,14 +1,10 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { lunette } from '../../src/index.ts'
-// Real message types: imported so the contract cannot drift from the
-// text chain.ts actually prints (type-only, not on the public surface).
-import type {
-  AnyCtxMsg,
-  AnyPatchMsg,
-  MissingKeyMsg,
-  NeverPatchMsg,
-  NumKeyMsg,
-} from '../../src/chain.ts'
+import { lunette } from '@lntt/wire'
+// The expected messages are WRITTEN OUT, never imported from the type that
+// produces them: an expectation that comes from the same place as the
+// observation cannot notice the observation changing. Written here, these
+// assertions read the text the chain actually carries — the BUILT one, in the
+// verification run.
 
 declare const bugSym: unique symbol
 declare const anyValue: any
@@ -43,11 +39,9 @@ describe('override (types)', () => {
 
     // still a return-type guard — only the COLLISION guard moved onto the
     // argument: ASCII property name, emoji in the message value
-    expectTypeOf(chain).toEqualTypeOf<{ override: MissingKeyMsg<'bd'> }>()
-
-    // the one literal-text pin for the message family (the other
-    // assertions ride the imported type, which cannot drift)
-    expectTypeOf<MissingKeyMsg<'bd'>>().toEqualTypeOf<'⛔ overriding key missing from the context: bd'>()
+    expectTypeOf(chain).toEqualTypeOf<{
+      override: '⛔ overriding key missing from the context: bd'
+    }>()
 
     // @ts-expect-error — no continuing on the error type
     chain.run(async () => {})
@@ -63,7 +57,7 @@ describe('override (types)', () => {
       .override(() => ({ [bugSym]: 2 }))
 
     expectTypeOf(chain).toEqualTypeOf<{
-      override: MissingKeyMsg<typeof bugSym>
+      override: '⛔ overriding key missing from the context: (symbol key)'
     }>()
   })
 
@@ -85,7 +79,9 @@ describe('override (types)', () => {
       .override(() => ({ 42: 'x', bd: 2 }))
 
     expectTypeOf(chain).toEqualTypeOf<{
-      override: NumKeyMsg<42> | MissingKeyMsg<'bd'>
+      override:
+        | '⛔ numeric key not supported (it becomes a string at runtime): 42'
+        | '⛔ overriding key missing from the context: bd'
     }>()
   })
 
@@ -101,13 +97,17 @@ describe('override (types)', () => {
       .provide(() => ({ db: 1 }))
       .override(() => anyValue)
 
-    expectTypeOf(chain).toEqualTypeOf<{ override: AnyPatchMsg }>()
+    expectTypeOf(chain).toEqualTypeOf<{
+      override: '⛔ patch degraded to any: the guard cannot check keys — restore a real type'
+    }>()
   })
 
   it('an any context still wins the blame when both are any', () => {
     const chain = lunette<any>().override(() => anyValue)
 
-    expectTypeOf(chain).toEqualTypeOf<{ override: AnyCtxMsg }>()
+    expectTypeOf(chain).toEqualTypeOf<{
+      override: '⛔ context degraded to any: the guard cannot check keys — restore a real type'
+    }>()
   })
 
   // A WIDENED patch annotation (an index signature claims every string
@@ -151,7 +151,9 @@ describe('override (types)', () => {
       .provide(() => ({ db: 1 }))
       .override((): Record<number, unknown> => ({ 42: 2 }))
 
-    expectTypeOf(chain).toEqualTypeOf<{ override: NumKeyMsg<number> }>()
+    expectTypeOf(chain).toEqualTypeOf<{
+      override: `⛔ numeric key not supported (it becomes a string at runtime): ${number}`
+    }>()
   })
 
   // A NEVER patch (a throw-only stub — plausible while developing) must
@@ -164,6 +166,8 @@ describe('override (types)', () => {
         throw new Error('todo')
       })
 
-    expectTypeOf(chain).toEqualTypeOf<{ override: NeverPatchMsg }>()
+    expectTypeOf(chain).toEqualTypeOf<{
+      override: '⛔ patch type is never: the function never returns — give it a real return type'
+    }>()
   })
 })

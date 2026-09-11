@@ -162,8 +162,17 @@ the tracker when relevant — never from here.
   mount, run at least: a step that THROWS, a step that stops by RETURNING,
   and a step that acts AFTER `next`. Write those before the mount, not
   after the review.
-- **No build step** for now: `exports` point at the `.ts` sources (the
-  build/dist decision is deferred to npm publication).
+- **Build**: `@lntt/wire` and `@lntt/scope` emit ESM + declarations
+  (`pnpm build`); `exports` resolve there, and the commented sources ship
+  beside the build. Inside this workspace `@lntt/*` is imported BY NAME and
+  the `@lntt/source` condition — `tsconfig.base.json` and `vitest.shared.ts`,
+  one place each — resolves it to the SOURCES, so no build stands between an
+  edit and its answer. `pnpm verify` is the other gate: it builds, recompiles the
+  type contract against the BUILT declarations, re-runs every suite through `exports` into
+  `dist` (they import `@lntt/*` by NAME, so the built JavaScript executes), and
+  packs, unpacks and imports each tarball entry point by entry point. TypeScript (pnpm `catalog:`) tracks the latest
+  release and Node the current LTS — one number each, and CI runs exactly
+  those.
 - **Workflow with the owner**: discuss the design FIRST (he enjoys
   sparring and wants to understand deeply), implement ONLY on an explicit
   go. Present alternatives as choices, never decide silently. API renames

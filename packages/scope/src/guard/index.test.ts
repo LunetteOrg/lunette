@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { scope } from '../index.ts'
-import { fail, guards, type StandardSchemaV1 } from './index.ts'
+import { scope, type Next } from '@lntt/scope'
+import { fail, guards, type StandardSchemaV1 } from '@lntt/scope/guard'
 
 // The three verbs are ONE machine at runtime, so what has to actually run is:
 // the addition arrives, a failure hands back what `onError` built and the steps
@@ -179,5 +179,31 @@ describe('the extension adds no step of its own', () => {
 
     expect(extended.steps).toHaveLength(0)
     expect(extended.guard(() => ({}), () => null).steps).toHaveLength(1)
+  })
+})
+
+describe('a refusal is recognised across two copies of this module', () => {
+  // Two copies in one process is not exotic: two versions installed side by
+  // side, or one program resolving this package to the sources where another
+  // part of it resolves to the build. The failure marker has to be the SAME
+  // symbol in both, or `fail()` from one copy reads as a successful enrichment
+  // in the other — and the guarded step runs on a refused request.
+  it('stops the fold when `fail` came from the other copy', async () => {
+    // A second instance of this module, which the loader gives back for a
+    // specifier it has not seen before. Built from a variable so the specifier
+    // is not a literal the compiler tries to resolve.
+    const second = './index.ts?copy=2'
+    const other = (await import(second)) as typeof import('@lntt/scope/guard')
+
+    const run = scope<{ readonly token?: string }>()
+      .extend(guards)
+      .guard(
+        () => other.fail([{ message: 'unauthorized' }]),
+        () => ({ status: 401 }) as const,
+      )
+      .step(async (_app: {}, _ctx, next: Next<{ actor: string }>) => next({ actor: 'someone' }))
+      .step(async () => ({ status: 200, secret: 'TOP SECRET' }) as const)
+
+    expect(await run({}, {})).toEqual({ status: 401 })
   })
 })

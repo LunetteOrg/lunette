@@ -33,7 +33,49 @@ await dispose()                                  // teardown, reverse order
 pnpm add @lntt/wire
 ```
 
-Requires TypeScript 5.x with `strict: true`.
+Requires TypeScript 7 or newer with `strict: true`, and Node 24 or newer. ESM
+only.
+
+### Where the constraints are written
+
+The package ships its commented `.ts` sources beside the build, and the
+declarations carry maps into them: "go to definition" on any exported type
+lands on the source, where the constraint behind that type is written, not on
+a `.d.ts` that carries the shape without the reason. Nothing to configure —
+this is what a normal install already does, while still compiling `dist`.
+
+Resolving the sources is a separate, deliberate act: the package declares an
+`@lntt/source` export condition, met by nobody who has not asked for it.
+
+```jsonc
+// tsconfig.json — "moduleResolution": "bundler" | "node16" | "nodenext"
+{
+  "compilerOptions": {
+    "customConditions": ["@lntt/source"],
+    // The sources import each other with explicit `.ts` specifiers, so the
+    // consumer's compiler has to accept them, or errors land in code nobody
+    // wrote. Under node16/nodenext it also requires one of `noEmit`,
+    // `emitDeclarationOnly` or `rewriteRelativeImportExtensions`.
+    "allowImportingTsExtensions": true
+  }
+}
+```
+
+```ts
+// vite / vitest — on BOTH resolvers. Suites run through the SSR pipeline, and
+// `resolve.conditions` alone leaves them falling through to the build.
+const conditions = ['@lntt/source']
+export default defineConfig({
+  resolve: { conditions },
+  ssr: { resolve: { conditions } },
+})
+```
+
+What that takes back onto the consumer is the reason it is not the default.
+Compiling the sources means the `tsconfig` that compiles them has to suit them
+— the flag above — and it means whatever runs the code has to be a
+bundler or a loader that compiles `.ts`: Node refuses to strip types under
+`node_modules`, whatever flags it is given. The built path asks neither.
 
 ## The chain
 
@@ -57,7 +99,7 @@ A chain is `Lunette<Ctx, Pub, Seed>`:
 | `provide(fn, destroy?)` / `provide(key, fn, destroy?)` | private | sugar: a value, with an optional acquire/release teardown |
 | `expose(fn, destroy?)` / `expose(key, fn, destroy?)` | public | same, but the value also enters `Pub` |
 | `override(fn)` | preserved | replaces **existing** keys only (a typo will not compile); the type may change |
-| `pipe(fn)` | — | hands the chain to a *dialect* (e.g. `@lntt/http`) and returns whatever it returns |
+| `pipe(fn)` | — | hands the chain to a *dialect* (e.g. `@lntt/scope`) and returns whatever it returns |
 
 `provide`/`expose` are sugar over `use`: `expose(create, destroy)` is a
 public resource *with* a lifecycle in one call (acquire/release colocated),
@@ -70,7 +112,7 @@ rejects the offending argument on its exact line, naming the key in the
 message (`[collision]: '⛔ key already present in the context: db'`; the
 chain keeps typing past the red line); at runtime the same collision
 throws. Convention: **one top-level key per area**. The field guide to
-every diagnostic is `docs/patterns/reading-errors.md` at the repo root.
+every diagnostic is [`docs/patterns/reading-errors.md`](https://github.com/LunetteOrg/lunette/blob/main/docs/patterns/reading-errors.md).
 
 ### run and build
 

@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import { scope, type Next } from './index.ts'
+import { scope, type Next } from '@lntt/scope'
 import { fixture, refused, type Refusal } from './fixture/carrier.ts'
 
 // THE TYPE CONTRACT, in the half that has to RUN — the companion to

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { lunette } from './chain.ts'
-import { buildOnce } from './build-once.ts'
+import { lunette } from '@lntt/wire'
+import { buildOnce } from '@lntt/wire'
 
 // A chain that records every construction and teardown, so "once" is a
 // counted fact rather than a claim.

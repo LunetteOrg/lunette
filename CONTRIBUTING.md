@@ -62,7 +62,16 @@ explicitly:
   and `pnpm typecheck` (workspace root: `pnpm -r ...`); scope down with
   `pnpm --filter @lntt/wire exec vitest run src/with.test.ts`. Never
   declare green without having run.
-- **No build step for now:** `exports` point at the `.ts` sources.
+- **Build and verify:** `@lntt/wire` and `@lntt/scope` emit ESM +
+  declarations (`pnpm build`), and `exports` resolve there. Inside this
+  workspace `@lntt/*` is imported by NAME and the `@lntt/source` condition
+  resolves it to the sources, so no build stands between an edit and its
+  answer. `pnpm verify` builds, recompiles the type contract against the
+  built declarations, re-runs every suite through `exports` into `dist`, and
+  checks the tarballs a consumer would install.
+- **One version per axis:** TypeScript (pnpm `catalog:`) is pinned to the latest
+  release, Node to the current LTS, and CI runs exactly those. Raising either floor is a
+  major.
 
 ## Accepting an outcome into the record
 

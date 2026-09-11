@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { bind, lazy, lunette } from './index.ts'
-import { fake, test } from './testing.ts'
+import { bind, lazy, lunette } from '@lntt/wire'
+import { fake, test } from '@lntt/wire/testing'
 
 type Db = {
   query: (sql: string) => Promise<string[]>

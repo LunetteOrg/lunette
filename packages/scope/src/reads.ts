@@ -275,7 +275,11 @@ export const parseBody = (
   return new Request('http://body.invalid', {
     method: 'POST',
     headers: { 'content-type': contentType ?? '' },
-    body: bytes,
+    // Copied into a view whose buffer is an `ArrayBuffer` and not the wider
+    // `ArrayBufferLike`: the DOM's `BodyInit` refuses the wide one, so the
+    // annotation is what lets this compile in a program typed against the
+    // platform rather than against Node.
+    body: new Uint8Array(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)),
   })
     .formData()
     .then(

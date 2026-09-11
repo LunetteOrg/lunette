@@ -4,7 +4,7 @@
 // Destructuring the deps is plain JavaScript: no lunette feature involved.
 
 import { describe, expect, it } from 'vitest'
-import { bind, lunette } from './index.ts'
+import { bind, lunette } from '@lntt/wire'
 
 type OtpRepo = { consume: (code: string) => Promise<boolean> }
 type SendEmail = (to: string) => Promise<void>

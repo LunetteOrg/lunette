@@ -3,10 +3,10 @@ import expressLib from 'express'
 import request from 'supertest'
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { scope } from './index.ts'
-import { fail, guards } from './guard/index.ts'
-import * as ex from './express/index.ts'
-import * as ho from './hono/index.ts'
+import { scope } from '@lntt/scope'
+import { fail, guards } from '@lntt/scope/guard'
+import * as ex from '@lntt/scope/express'
+import * as ho from '@lntt/scope/hono'
 
 // THE TWO SLICES MEETING: an extension POPULATES an entry from the host, and a
 // verb REFINES it. `body('json')` gives `unknown`; `validate('body', schema,

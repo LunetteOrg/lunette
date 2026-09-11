@@ -1,10 +1,72 @@
 # @lntt/scope
 
-The host-agnostic **scope runtime** for [`@lntt/wire`](../wire): ONE primitive —
+The host-agnostic **scope runtime** for [`@lntt/wire`](https://github.com/LunetteOrg/lunette/tree/main/packages/wire#readme): ONE primitive —
 a step wrapping the rest of the fold — and a scope that IS the function running
 it. Wire builds the app once at boot; `@lntt/scope` handles what happens **per
 request** — authentication, authorization, resource prefetch, and the use case
 itself — without an onion, an AsyncLocalStorage, or a framework.
+
+## Install
+
+```sh
+pnpm add @lntt/scope
+```
+
+Requires TypeScript 7 or newer with `strict: true`, and Node 24 or newer. ESM
+only. Each host lives behind its own subpath — `@lntt/scope/express`,
+`/hono`, `/trpc`, `/react-router` — and carries its framework as an OPTIONAL
+peer, so the agnostic entry pulls in none of them.
+
+### Where the constraints are written
+
+The package ships its commented `.ts` sources beside the build, and the
+declarations carry maps into them: "go to definition" on any exported type
+lands on the source, where the constraint behind that type is written, not on
+a `.d.ts` that carries the shape without the reason. Nothing to configure —
+this is what a normal install already does, while still compiling `dist`.
+
+Resolving the sources is a separate, deliberate act: the package declares an
+`@lntt/source` export condition, met by nobody who has not asked for it.
+
+```jsonc
+// tsconfig.json — "moduleResolution": "bundler" | "node16" | "nodenext"
+{
+  "compilerOptions": {
+    "customConditions": ["@lntt/source"],
+    // The sources import each other with explicit `.ts` specifiers, so the
+    // consumer's compiler has to accept them, or errors land in code nobody
+    // wrote. Under node16/nodenext it also requires one of `noEmit`,
+    // `emitDeclarationOnly` or `rewriteRelativeImportExtensions`.
+    "allowImportingTsExtensions": true
+  }
+}
+```
+
+```ts
+// vite / vitest — on BOTH resolvers. Suites run through the SSR pipeline, and
+// `resolve.conditions` alone leaves them falling through to the build.
+const conditions = ['@lntt/source']
+export default defineConfig({
+  resolve: { conditions },
+  ssr: { resolve: { conditions } },
+})
+```
+
+What that takes back onto the consumer is the reason it is not the default.
+Compiling the sources means the `tsconfig` that compiles them has to suit them,
+and whatever RUNS the code has to be a bundler or a loader that compiles `.ts`:
+Node refuses to strip types under `node_modules`, whatever flags it is given.
+The built path asks neither.
+
+The read steps stand on the standard web types — `Request`, `Response`, `File`,
+`URLSearchParams` — so a program that narrows `lib` past the default needs them
+from somewhere: `"types": ["node"]` or `"lib": ["ES2023", "DOM"]`. This holds on
+either path: the declarations name those types too.
+
+One prerequisite is not about resolution at all, and applies however you
+install: `strictFunctionTypes` must stay on. The ctx lock is contravariance —
+a step annotating a wider ctx than the scope holds is refused because of it —
+so turning it off removes the refusal, from `dist` exactly as from the sources.
 
 ## A scope, whole
 
@@ -105,7 +167,7 @@ thrown error is infrastructure**: react to it — rollback, retry, nack. The piv
 is the same on every host, and each mount answers a throw in its host's own door
 (Express's error middleware, Hono's `HTTPException`, tRPC's `TRPCError`, a thrown
 `data()` on React Router). So a guard that refuses RETURNS its refusal; nothing
-is caught for you and nothing is normalised (§42).
+is caught for you and nothing is normalised.
 
 One shape is refused: a step that hands back nothing at all. Forgetting `return`
 in front of `next(…)` is silent and plausible — the inner steps run, the leaf
@@ -200,7 +262,7 @@ and a collision is intent, which no type can read.
 Framework-free by construction, and dependency-free: the core has none at all,
 not even types-only. A carrier ships as a SUBPATH of this package, carrying its
 host's mount with it — there is no separate adapter package, because a carrier
-that hands back its host's own mount helpers leaves one nothing to be (§43).
+that hands back its host's own mount helpers leaves one nothing to be.
 The four that ship take their frameworks as OPTIONAL peer dependencies, so the
 core stays dependency-free for anyone importing it:
 
@@ -404,13 +466,15 @@ they differ in is what the host makes different, and nothing else.
 
 ## Considered and closed
 
-A guard reusable across carriers as a packaged unit was considered (#67) and
-closed: a shared prefix is already a scope VALUE kept and branched from twice
-— `const authBase = base.guard(...)`, then `authBase.step(leafA)` and
-`authBase.step(leafB)` — with no mechanism beyond what `.step`/`.guard`
-already are. The verdict is decision 55 in `docs/decisions.md`.
+A guard reusable across carriers as a packaged unit was considered and closed:
+a shared prefix is already a scope VALUE kept and branched from twice — `const
+authBase = base.guard(...)`, then `authBase.step(leafA)` and
+`authBase.step(leafB)` — with no mechanism beyond what `.step`/`.guard` already
+are. The reasoning is in [the decision
+record](https://github.com/LunetteOrg/lunette/blob/main/docs/decisions.md).
 
 ## Status
 
-Research-grade, pre-1.0, not yet published. Part of the scope-runtime work
-tracked in issue #30.
+Research-grade and pre-1.0: the API is settled enough to build on and not yet
+frozen. Open work is tracked in [the
+issues](https://github.com/LunetteOrg/lunette/issues).

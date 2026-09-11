@@ -4,11 +4,11 @@ import expressLib from 'express'
 import type { Request, Response } from 'express'
 import request from 'supertest'
 import { Hono } from 'hono'
-import { scope } from './index.ts'
-import type { Cookies, Query, Headers_ } from './reads.ts'
-import * as ex from './express/index.ts'
-import * as ho from './hono/index.ts'
-import * as rr from './react-router/index.ts'
+import { scope } from '@lntt/scope'
+import type { Cookies, Query, HeaderEntries as Headers_ } from '@lntt/scope/hono'
+import * as ex from '@lntt/scope/express'
+import * as ho from '@lntt/scope/hono'
+import * as rr from '@lntt/scope/react-router'
 
 // WHAT THE READ EXTENSIONS ARE FOR, in the half that has to run: the extraction
 // is per host, and everything DOWNSTREAM of it is not. The step below is written

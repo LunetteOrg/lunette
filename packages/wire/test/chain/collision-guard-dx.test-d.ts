@@ -19,7 +19,7 @@
 // cannot print.
 
 import { describe, expectTypeOf, it } from 'vitest'
-import { lunette } from '../../src/index.ts'
+import { lunette } from '@lntt/wire'
 
 declare const fakeCollision: unique symbol
 

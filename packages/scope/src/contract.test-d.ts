@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { scope, type Next, type ResultOf } from './index.ts'
+import { scope, type Next, type ResultOf } from '@lntt/scope'
 import { answered, badArgs, fixture, refused, type Refusal } from './fixture/carrier.ts'
 
 // THE TYPE CONTRACT, which is what a `*.test-d.ts` file is for in this repo:

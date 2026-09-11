@@ -1,0 +1,32 @@
+{
+  // The build. The gate (`tsconfig.json`) checks; this one EMITS, and the two
+  // differ in exactly the ways emitting requires.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    // `nodenext` because the output is resolved by a consumer's Node, not by
+    // our bundler: it is what makes the emitted `exports` paths mean what they
+    // say. The gate stays on `bundler`, which is what vitest resolves with.
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    // Imports carry explicit `.ts` extensions; this rewrites them to `.js` in
+    // the emitted JavaScript. Declarations keep `.ts` and resolve to the
+    // `.d.ts` beside them, which consumers on TypeScript before this flag
+    // existed also do.
+    "rewriteRelativeImportExtensions": true,
+    "declaration": true,
+    // The reason the sources ship at all: "go to definition" lands on the
+    // commented `.ts`, where the constraints are written, rather than on a
+    // declaration that carries the types without them.
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    // The toolchain's globals belong to the gate, not to what ships: a
+    // published package that pulls @types/node into a consumer's program
+    // declares a dependency it does not have.
+    "types": []
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test-d.ts"]
+}

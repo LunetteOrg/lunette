@@ -33,8 +33,9 @@
 import type { AnyStep, Collides, Ctx, Extension, Scope, State, Surface } from '../index.ts'
 
 // ── Standard Schema, INLINED rather than depended on ─────────────────────────
-// This package ships `.ts` sources with no build step, so an import a consumer
-// has not installed fails in THEIR build. The spec is designed to be implemented
+// A type import of a package the consumer has not installed fails in THEIR
+// program: our declarations are read by their compiler, where a missing module
+// is an error we cannot catch here. The spec is designed to be implemented
 // structurally — libraries satisfy it by shape, not by importing it — and its
 // version rides the property name itself, so drift is visible rather than
 // silent. That buys ONE extension instead of two, and a `guard` usable with no
@@ -106,7 +107,13 @@ export type OutputOf<Sch extends StandardSchemaV1> = Extract<
 // inside itself, and would catch the real errors too: a repository losing its
 // connection served to the client as "invalid input". Reading and parsing fail
 // for opposite reasons, and a single `catch` over both is a measured bug.
-const FAILED: unique symbol = Symbol('lntt.scope.guard.failed')
+// REGISTERED, not fresh: `Symbol.for` returns the same symbol to every copy of
+// this module in the process, and `isFailure` below is what decides whether a
+// refusal stops the fold. A fresh `Symbol()` makes that check fail across two
+// copies — two versions installed side by side, or one program resolving this
+// package to the sources and another part of it to the build — and it fails
+// OPEN: the refusal reads as a successful enrichment and the guarded step runs.
+const FAILED: unique symbol = Symbol.for('lntt.scope.guard.failed') as typeof FAILED
 
 export interface Failure {
   readonly [FAILED]: true

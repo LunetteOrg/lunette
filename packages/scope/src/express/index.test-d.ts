@@ -1,13 +1,13 @@
 import expressLib from 'express'
 import { describe, expectTypeOf, it } from 'vitest'
-import { scope } from '../index.ts'
+import { scope } from '@lntt/scope'
 import type { Request, RequestHandler, Response } from 'express'
 import type { ParamsDictionary } from 'express-serve-static-core'
-import { express, expressCarrier, params, type LocalsOf } from './index.ts'
-import { guards } from '../guard/index.ts'
+import { express, expressCarrier, params, type LocalsOf } from '@lntt/scope/express'
+import { guards } from '@lntt/scope/guard'
 import { z } from 'zod'
-import { honoCarrier } from '../hono/index.ts'
-import type { Next } from '../index.ts'
+import { honoCarrier } from '@lntt/scope/hono'
+import type { Next } from '@lntt/scope'
 
 // THE TYPE CONTRACT for the two mounts and their gates. Every claim here is
 // type-level, so no runtime test could make it.

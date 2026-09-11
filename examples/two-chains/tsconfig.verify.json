@@ -1,0 +1,7 @@
+{
+  // The type claim this example makes, resolved the way a consumer resolves it:
+  // no source condition, so `@lntt/wire` reaches `dist`. An example asserting
+  // against the sources would not notice a declaration that lost the claim.
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "customConditions": [] }
+}
