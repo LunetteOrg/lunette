@@ -2,6 +2,18 @@
   "name": "@lntt/wire",
   "version": "0.0.0",
   "description": "Typed dependency wiring as a chain of layers \u2014 Effect-grade composition with plain functions: no monads, no decorators, no reflection.",
+  "keywords": [
+    "dependency-injection",
+    "di",
+    "typescript",
+    "type-safe",
+    "composition",
+    "inversion-of-control",
+    "functional",
+    "no-decorators",
+    "layers",
+    "lifecycle"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -21,7 +33,8 @@
       "@lntt/source": "./src/testing.ts",
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",

@@ -73,8 +73,9 @@ export default defineConfig({
 
 What that takes back onto the consumer is the reason it is not the default.
 Compiling the sources means the `tsconfig` that compiles them has to suit them
-— the flag above — and it means the runtime has to read `.ts` at all, which the
-built path never asks of it.
+— the flag above — and it means whatever runs the code has to be a
+bundler or a loader that compiles `.ts`: Node refuses to strip types under
+`node_modules`, whatever flags it is given. The built path asks neither.
 
 ## The chain
 

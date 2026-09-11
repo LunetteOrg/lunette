@@ -107,7 +107,13 @@ export type OutputOf<Sch extends StandardSchemaV1> = Extract<
 // inside itself, and would catch the real errors too: a repository losing its
 // connection served to the client as "invalid input". Reading and parsing fail
 // for opposite reasons, and a single `catch` over both is a measured bug.
-const FAILED: unique symbol = Symbol('lntt.scope.guard.failed')
+// REGISTERED, not fresh: `Symbol.for` returns the same symbol to every copy of
+// this module in the process, and `isFailure` below is what decides whether a
+// refusal stops the fold. A fresh `Symbol()` makes that check fail across two
+// copies — two versions installed side by side, or one program resolving this
+// package to the sources and another part of it to the build — and it fails
+// OPEN: the refusal reads as a successful enrichment and the guarded step runs.
+const FAILED: unique symbol = Symbol.for('lntt.scope.guard.failed') as typeof FAILED
 
 export interface Failure {
   readonly [FAILED]: true

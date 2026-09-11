@@ -3198,14 +3198,17 @@ under node16/nodenext that flag then demands one of `noEmit`,
 `emitDeclarationOnly` or `rewriteRelativeImportExtensions` — three decisions
 about their build, to install a library.
 
-Set those, and it works: the gates fire with their real messages, the emit is
-theirs alone, and on Node 24 it runs. Two results still decide against it. On a
-Node without type stripping the first import fails with
-`ERR_UNKNOWN_FILE_EXTENSION: Unknown file extension ".ts"`, printing a path
-inside our package — a first-boot failure the consumer cannot fix except by
-changing runtime or adding a bundler. And the sources stand on ambient types
-(`Request`, `File`, `URLSearchParams`), so a narrowed `lib` is one more thing
-their config has to get right for our code rather than for theirs.
+Set those, and it typechecks: the gates fire with their real messages and the
+emit is theirs alone. Then it does not RUN. From a real installation Node
+refuses outright — `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`, naming a file
+inside our package — because stripping types under `node_modules` is something
+it declines to do at any flag, and a `private constructor(private readonly …)`
+in the chain is syntax no stripping loader can erase anyway. So the source path
+is a BUNDLER's path, never a runtime's: a consumer on plain Node cannot use it,
+and one who tried would learn that at first boot, from a path they do not own.
+And the sources stand on ambient types (`Request`, `File`, `URLSearchParams`),
+so a narrowed `lib` is one more thing their config has to get right for our code
+rather than for theirs.
 
 What building does NOT remove is the half of the contract that is about
 CHECKING rather than compiling: `strictFunctionTypes` carries the ctx lock,

@@ -54,7 +54,9 @@ export default defineConfig({
 
 What that takes back onto the consumer is the reason it is not the default.
 Compiling the sources means the `tsconfig` that compiles them has to suit them,
-and the runtime has to read `.ts` at all, which the built path never asks of it.
+and whatever RUNS the code has to be a bundler or a loader that compiles `.ts`:
+Node refuses to strip types under `node_modules`, whatever flags it is given.
+The built path asks neither.
 
 The read steps stand on the standard web types — `Request`, `Response`, `File`,
 `URLSearchParams` — so a program that narrows `lib` past the default needs them
@@ -165,7 +167,7 @@ thrown error is infrastructure**: react to it — rollback, retry, nack. The piv
 is the same on every host, and each mount answers a throw in its host's own door
 (Express's error middleware, Hono's `HTTPException`, tRPC's `TRPCError`, a thrown
 `data()` on React Router). So a guard that refuses RETURNS its refusal; nothing
-is caught for you and nothing is normalised (§42).
+is caught for you and nothing is normalised.
 
 One shape is refused: a step that hands back nothing at all. Forgetting `return`
 in front of `next(…)` is silent and plausible — the inner steps run, the leaf
@@ -260,7 +262,7 @@ and a collision is intent, which no type can read.
 Framework-free by construction, and dependency-free: the core has none at all,
 not even types-only. A carrier ships as a SUBPATH of this package, carrying its
 host's mount with it — there is no separate adapter package, because a carrier
-that hands back its host's own mount helpers leaves one nothing to be (§43).
+that hands back its host's own mount helpers leaves one nothing to be.
 The four that ship take their frameworks as OPTIONAL peer dependencies, so the
 core stays dependency-free for anyone importing it:
 
@@ -464,13 +466,15 @@ they differ in is what the host makes different, and nothing else.
 
 ## Considered and closed
 
-A guard reusable across carriers as a packaged unit was considered (#67) and
-closed: a shared prefix is already a scope VALUE kept and branched from twice
-— `const authBase = base.guard(...)`, then `authBase.step(leafA)` and
-`authBase.step(leafB)` — with no mechanism beyond what `.step`/`.guard`
-already are. The verdict is decision 55 in `docs/decisions.md`.
+A guard reusable across carriers as a packaged unit was considered and closed:
+a shared prefix is already a scope VALUE kept and branched from twice — `const
+authBase = base.guard(...)`, then `authBase.step(leafA)` and
+`authBase.step(leafB)` — with no mechanism beyond what `.step`/`.guard` already
+are. The reasoning is in [the decision
+record](https://github.com/LunetteOrg/lunette/blob/main/docs/decisions.md).
 
 ## Status
 
-Research-grade, pre-1.0, not yet published. Part of the scope-runtime work
-tracked in issue #30.
+Research-grade and pre-1.0: the API is settled enough to build on and not yet
+frozen. Open work is tracked in [the
+issues](https://github.com/LunetteOrg/lunette/issues).

@@ -61,10 +61,13 @@ const targetsOf = (exports_, name) => {
     throw new Error(`${name}: "exports" is missing or is not a map of subpaths`)
   }
   return Object.entries(exports_).map(([sub, conditions]) => {
+    // A subpath may also be a bare path — `"./package.json": "./package.json"`,
+    // which tools read to learn a dependency's version.
+    if (typeof conditions === 'string') return { sub, conditions: { default: conditions }, importable: false }
     if (typeof conditions !== 'object' || conditions === null) {
       throw new Error(`${name}: subpath "${sub}" is not a condition map`)
     }
-    return { sub, conditions }
+    return { sub, conditions, importable: true }
   })
 }
 
@@ -134,7 +137,8 @@ try {
     mkdirSync(join(consumer, 'node_modules', '@lntt'), { recursive: true })
     execFileSync('cp', ['-R', out, join(consumer, 'node_modules', '@lntt', name)])
 
-    for (const { sub } of targetsOf(manifest.exports, manifest.name)) {
+    for (const { sub, importable } of targetsOf(manifest.exports, manifest.name)) {
+      if (!importable) continue
       const specifier = sub === '.' ? manifest.name : `${manifest.name}/${sub.slice(2)}`
       try {
         const exported = execFileSync(
@@ -167,6 +171,7 @@ try {
       .flatMap((name) => {
         const manifest = JSON.parse(readFileSync(join(consumer, 'node_modules', '@lntt', name, 'package.json'), 'utf8'))
         return targetsOf(manifest.exports, manifest.name)
+          .filter(({ importable }) => importable)
           .map(({ sub }) => (sub === '.' ? manifest.name : `${manifest.name}/${sub.slice(2)}`))
           .filter(keep)
       })
@@ -174,13 +179,22 @@ try {
       .join(NL)
 
   // A subpath that mounts a framework brings that framework's declarations in
-  // with it, and those answer to their own author's config. Two exclusions, for
-  // two different programs: without DOM, only the entry points that mount
-  // nothing compile, because react-router's own types want it; without
-  // @types/node, everything compiles except the tRPC subpath, whose peer
-  // references Node itself. Measured, both.
+  // with it, and those answer to their own author's config — react-router's
+  // want DOM, express's and tRPC's reference Node. So the two narrow programs
+  // take the entry points that mount nothing, and what they prove is about
+  // OURS: that the core and the guard need neither DOM nor Node's types.
   const mountsNothing = (s) => !/\/(express|hono|trpc|react-router)$/.test(s)
-  const needsNoNodeTypes = (s) => !s.endsWith('/trpc')
+
+  // A consumer with no @types/node ON DISK. `types: []` alone does not make one:
+  // it stops the automatic inclusion, while a peer's `/// <reference types="node" />`
+  // pulls the package in anyway — which is how a `Buffer` in an emitted `.d.ts`
+  // can pass a program that declared it wanted none.
+  const bare = join(work, 'bare-consumer')
+  mkdirSync(join(bare, 'node_modules', '@lntt'), { recursive: true })
+  writeFileSync(join(bare, 'package.json'), JSON.stringify({ type: 'module' }))
+  for (const name of packages) {
+    execFileSync('cp', ['-R', join(consumer, 'node_modules', '@lntt', name), join(bare, 'node_modules', '@lntt', name)])
+  }
 
   const base = { target: 'ES2023', module: 'nodenext', moduleResolution: 'nodenext', strict: true, noEmit: true, skipLibCheck: false }
   const programs = [
@@ -191,13 +205,13 @@ try {
     // emitted `.d.ts` has nowhere to come from. It carries the host subpaths
     // too, which is where the web globals the read steps stand on — `Request`,
     // `File`, `URLSearchParams` — have to be found in `lib` or not at all.
-    ['the platform alone, no @types/node', needsNoNodeTypes, { ...base, types: [] }],
+    ['the platform alone, no @types/node', mountsNothing, { ...base, types: [] }, bare],
   ]
-  for (const [what, keep, compilerOptions] of programs) {
-    writeFileSync(join(consumer, 'uses.ts'), importsOf(keep))
-    writeFileSync(join(consumer, 'tsconfig.json'), JSON.stringify({ compilerOptions, include: ['uses.ts'] }))
+  for (const [what, keep, compilerOptions, where = consumer] of programs) {
+    writeFileSync(join(where, 'uses.ts'), importsOf(keep))
+    writeFileSync(join(where, 'tsconfig.json'), JSON.stringify({ compilerOptions, include: ['uses.ts'] }))
     try {
-      execFileSync(process.execPath, [tsc, '--noEmit', '-p', 'tsconfig.json'], { cwd: consumer, stdio: ['ignore', 'pipe', 'pipe'] })
+      execFileSync(process.execPath, [tsc, '--noEmit', '-p', 'tsconfig.json'], { cwd: where, stdio: ['ignore', 'pipe', 'pipe'] })
       check(true, `the declarations typecheck on ${what}, with skipLibCheck off`)
     } catch (err) {
       const lines = String(err.stdout ?? '').split('\n').filter(Boolean)
