@@ -405,7 +405,9 @@ describe('an any context is refused by name, not with a false collision', () => 
   it('override does not run blind on an any context either', () => {
     const chain = lunette<any>().override(() => ({ db: 2 }))
 
-    expectTypeOf(chain).toEqualTypeOf<{ override: AnyCtxMsg }>()
+    expectTypeOf(chain).toEqualTypeOf<{
+      override: '⛔ context degraded to any: the guard cannot check keys — restore a real type'
+    }>()
   })
 
   it('mount is covered through the collision side of its overloads', () => {
