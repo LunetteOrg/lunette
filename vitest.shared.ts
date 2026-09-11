@@ -10,8 +10,16 @@ import { defineConfig } from 'vitest/config'
 // published entry points, resolved the way a consumer resolves them. That run
 // answers a question the sources cannot — whether what we SHIP still is what
 // the tests passed against.
+const conditions = process.env.LNTT_SOURCE === 'off' ? [] : ['@lntt/source']
+
+// Declared on BOTH sides: suites run through Vite's SSR pipeline, which
+// resolves with `ssr.resolve.conditions` and would otherwise fall through to
+// `import` — reaching `dist`, or failing when there is none.
 export default defineConfig({
   resolve: {
-    conditions: process.env.LNTT_SOURCE === 'off' ? [] : ['@lntt/source'],
+    conditions,
+  },
+  ssr: {
+    resolve: { conditions },
   },
 })
