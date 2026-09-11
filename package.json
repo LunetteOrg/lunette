@@ -8,7 +8,7 @@
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "verify": "pnpm build && pnpm verify:types && pnpm verify:runtime && pnpm verify:tarball",
-    "verify:types": "pnpm --filter \"@lntt/wire\" --filter \"@lntt/scope\" --filter \"@lntt/example-two-chains\" exec tsc --noEmit -p tsconfig.verify.json",
+    "verify:types": "pnpm --filter \"@lntt/wire\" --filter \"@lntt/scope\" --filter \"@lntt/example-*\" exec tsc --noEmit -p tsconfig.verify.json",
     "verify:runtime": "LNTT_SOURCE=off pnpm -r test",
     "verify:tarball": "node scripts/verify-tarball.mjs"
   },

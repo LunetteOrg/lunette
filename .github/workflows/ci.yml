@@ -84,9 +84,10 @@ jobs:
       - name: verify types
         run: pnpm verify:types
 
-      # Every suite re-run through `exports` into `dist`: the packages' own,
-      # the examples', the prototypes'. They reach `@lntt/*` by NAME, so this
-      # executes the BUILT JavaScript — the emit, not the sources it came from.
+      # Every suite that reaches `@lntt/*` by NAME re-run through `exports`
+      # into `dist`: the two packages' own and the examples'. This executes the
+      # BUILT JavaScript — the emit, not the sources it came from. The
+      # prototypes that name no package run unchanged, on their own code.
       - name: verify runtime
         run: pnpm verify:runtime
 

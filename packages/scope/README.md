@@ -34,23 +34,37 @@ Resolving the sources is a separate, deliberate act: the package declares an
   "compilerOptions": {
     "customConditions": ["@lntt/source"],
     // The sources import each other with explicit `.ts` specifiers, so the
-    // consumer's compiler has to accept them: without this, ten errors land in
-    // code nobody wrote. Under node16/nodenext it also requires one of
-    // `noEmit`, `emitDeclarationOnly` or `rewriteRelativeImportExtensions`.
+    // consumer's compiler has to accept them, or errors land in code nobody
+    // wrote. Under node16/nodenext it also requires one of `noEmit`,
+    // `emitDeclarationOnly` or `rewriteRelativeImportExtensions`.
     "allowImportingTsExtensions": true
   }
 }
 ```
 
 ```ts
-// vite / vitest
-export default defineConfig({ resolve: { conditions: ['@lntt/source'] } })
+// vite / vitest — on BOTH resolvers. Suites run through the SSR pipeline, and
+// `resolve.conditions` alone leaves them falling through to the build.
+const conditions = ['@lntt/source']
+export default defineConfig({
+  resolve: { conditions },
+  ssr: { resolve: { conditions } },
+})
 ```
 
-What that takes back onto the consumer is the reason it is not the default. The
-`tsconfig` re-enters the contract: under `strictFunctionTypes: false` the ctx
-lock is silently gone — a step annotating a wider ctx compiles. And the runtime
-has to read `.ts` at all, which the built path never asks of it.
+What that takes back onto the consumer is the reason it is not the default.
+Compiling the sources means the `tsconfig` that compiles them has to suit them,
+and the runtime has to read `.ts` at all, which the built path never asks of it.
+
+The read steps stand on the standard web types — `Request`, `Response`, `File`,
+`URLSearchParams` — so a program that narrows `lib` past the default needs them
+from somewhere: `"types": ["node"]` or `"lib": ["ES2023", "DOM"]`. This holds on
+either path: the declarations name those types too.
+
+One prerequisite is not about resolution at all, and applies however you
+install: `strictFunctionTypes` must stay on. The ctx lock is contravariance —
+a step annotating a wider ctx than the scope holds is refused because of it —
+so turning it off removes the refusal, from `dist` exactly as from the sources.
 
 ## A scope, whole
 

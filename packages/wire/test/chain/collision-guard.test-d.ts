@@ -12,17 +12,16 @@ import { describe, expectTypeOf, it } from 'vitest'
 import { lunette, type Lunette } from '@lntt/wire'
 
 declare const anyPubFrag: Lunette<{}, any, {}>
-// The real message types, imported so this contract cannot drift from
-// the text chain.ts actually prints (they are type-only and not part of
-// the public index.ts surface).
+// The message types and the guard's own computations, type-only and not on the
+// public surface. Every assertion that reads a message off a REAL chain writes
+// the text out instead: an expectation taken from the type that prints it
+// cannot notice that text changing.
 import type {
   AnyCtxMsg,
-  AnyPatchMsg,
   Clash,
   CollisionBrand,
   DupKeyMsg,
   NeverCtxMsg,
-  NeverPatchMsg,
   NumKeyMsg,
   NumKeys,
   WidenedPatchMsg,
@@ -535,14 +534,14 @@ describe('an any context is refused by name, not with a false collision', () => 
     // the sticky brand actually wires.
     type Ctx = { db: number }
 
-    expectTypeOf<BrandMsg<CollisionBrand<never, { p: 1 }>>>().toEqualTypeOf<NeverCtxMsg>()
-    expectTypeOf<BrandMsg<CollisionBrand<any, { p: 1 }>>>().toEqualTypeOf<AnyCtxMsg>()
-    expectTypeOf<BrandMsg<CollisionBrand<Ctx, never>>>().toEqualTypeOf<NeverPatchMsg>()
-    expectTypeOf<BrandMsg<CollisionBrand<Ctx, any>>>().toEqualTypeOf<AnyPatchMsg>()
+    expectTypeOf<BrandMsg<CollisionBrand<never, { p: 1 }>>>().toEqualTypeOf<'⛔ context collapsed to never: an upstream provider returns never — give it a real return type'>()
+    expectTypeOf<BrandMsg<CollisionBrand<any, { p: 1 }>>>().toEqualTypeOf<'⛔ context degraded to any: the guard cannot check keys — restore a real type'>()
+    expectTypeOf<BrandMsg<CollisionBrand<Ctx, never>>>().toEqualTypeOf<'⛔ patch type is never: the function never returns — give it a real return type'>()
+    expectTypeOf<BrandMsg<CollisionBrand<Ctx, any>>>().toEqualTypeOf<'⛔ patch degraded to any: the guard cannot check keys — restore a real type'>()
 
     // and the context always wins the blame
-    expectTypeOf<BrandMsg<CollisionBrand<never, any>>>().toEqualTypeOf<NeverCtxMsg>()
-    expectTypeOf<BrandMsg<CollisionBrand<any, never>>>().toEqualTypeOf<AnyCtxMsg>()
+    expectTypeOf<BrandMsg<CollisionBrand<never, any>>>().toEqualTypeOf<'⛔ context collapsed to never: an upstream provider returns never — give it a real return type'>()
+    expectTypeOf<BrandMsg<CollisionBrand<any, never>>>().toEqualTypeOf<'⛔ context degraded to any: the guard cannot check keys — restore a real type'>()
   })
 
   it('residual, pinned: an any KEY mints an index-signature context', () => {

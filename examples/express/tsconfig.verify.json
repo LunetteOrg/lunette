@@ -1,0 +1,8 @@
+{
+  // The type claim this example makes, resolved the way a consumer resolves it:
+  // no source condition, so `@lntt/*` reaches `dist`. An example is the widest
+  // use of the mounts there is, and asserting it against the sources would not
+  // notice a declaration that lost what it asserts.
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "customConditions": [] }
+}

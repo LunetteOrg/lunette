@@ -3190,15 +3190,28 @@ exercised daily rather than merely declared. `LNTT_SOURCE=off` and the
 resolved the way a consumer resolves them, into `dist`.
 
 **Alternatives.** *Sources only*, with `exports` pointing at `.ts`. Measured
-against a scratch consumer outside the workspace: it compiles (no extra flags),
-the gates fire with their real messages, the emit works, and on Node 24 it even
-runs. Two results decide against it. On a Node without type stripping it fails
-with `ERR_UNKNOWN_FILE_EXTENSION: Unknown file extension ".ts"`, printing a path
+against a scratch consumer outside the workspace, on TypeScript 7 with
+`module: nodenext` and nothing else: it does not compile. The sources import
+each other with explicit `.ts` specifiers, so every one of them is a `TS5097`
+in the consumer's program until they set `allowImportingTsExtensions`, and
+under node16/nodenext that flag then demands one of `noEmit`,
+`emitDeclarationOnly` or `rewriteRelativeImportExtensions` — three decisions
+about their build, to install a library.
+
+Set those, and it works: the gates fire with their real messages, the emit is
+theirs alone, and on Node 24 it runs. Two results still decide against it. On a
+Node without type stripping the first import fails with
+`ERR_UNKNOWN_FILE_EXTENSION: Unknown file extension ".ts"`, printing a path
 inside our package — a first-boot failure the consumer cannot fix except by
-changing runtime or adding a bundler. And under `strictFunctionTypes: false` the
-ctx lock is silently gone: a step annotating a wider ctx compiles. Sources-only
-puts both the consumer's `tsconfig` and their Node version inside our contract;
-building puts only the first, and only for whoever opts into the condition.
+changing runtime or adding a bundler. And the sources stand on ambient types
+(`Request`, `File`, `URLSearchParams`), so a narrowed `lib` is one more thing
+their config has to get right for our code rather than for theirs.
+
+What building does NOT remove is the half of the contract that is about
+CHECKING rather than compiling: `strictFunctionTypes` carries the ctx lock,
+being contravariance, so turning it off removes the refusal from `dist` exactly
+as from the sources. That prerequisite is stated in the README and belongs to
+every consumer.
 
 *`dist` only*, the shape hono and react-router ship. It costs the comments: in
 this library they carry the constraints, and a reader who follows a type into a

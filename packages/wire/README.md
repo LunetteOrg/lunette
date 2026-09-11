@@ -53,23 +53,28 @@ Resolving the sources is a separate, deliberate act: the package declares an
   "compilerOptions": {
     "customConditions": ["@lntt/source"],
     // The sources import each other with explicit `.ts` specifiers, so the
-    // consumer's compiler has to accept them: without this, ten errors land in
-    // code nobody wrote. Under node16/nodenext it also requires one of
-    // `noEmit`, `emitDeclarationOnly` or `rewriteRelativeImportExtensions`.
+    // consumer's compiler has to accept them, or errors land in code nobody
+    // wrote. Under node16/nodenext it also requires one of `noEmit`,
+    // `emitDeclarationOnly` or `rewriteRelativeImportExtensions`.
     "allowImportingTsExtensions": true
   }
 }
 ```
 
 ```ts
-// vite / vitest
-export default defineConfig({ resolve: { conditions: ['@lntt/source'] } })
+// vite / vitest — on BOTH resolvers. Suites run through the SSR pipeline, and
+// `resolve.conditions` alone leaves them falling through to the build.
+const conditions = ['@lntt/source']
+export default defineConfig({
+  resolve: { conditions },
+  ssr: { resolve: { conditions } },
+})
 ```
 
-What that takes back onto the consumer is the reason it is not the default. The
-`tsconfig` re-enters the contract: under `strictFunctionTypes: false` the ctx
-lock is silently gone — a step annotating a wider ctx compiles. And the runtime
-has to read `.ts` at all, which the built path never asks of it.
+What that takes back onto the consumer is the reason it is not the default.
+Compiling the sources means the `tsconfig` that compiles them has to suit them
+— the flag above, and any `lib` or `types` they stand on — and it means the
+runtime has to read `.ts` at all, which the built path never asks of it.
 
 ## The chain
 

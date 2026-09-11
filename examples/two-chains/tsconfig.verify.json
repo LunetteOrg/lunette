@@ -4,5 +4,5 @@
   // against the sources would not notice a declaration that lost the claim.
   "extends": "./tsconfig.json",
   "compilerOptions": { "customConditions": [] },
-  "include": ["test/**/*.test-d.ts"]
+  "include": ["src/**/*.test-d.ts", "test/**/*.test-d.ts"]
 }

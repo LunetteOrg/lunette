@@ -1,8 +1,12 @@
 {
-  // The same type contract, resolved the way a consumer resolves it: no source
-  // condition, so `@lntt/wire` and `@lntt/wire/testing` reach `dist`. A gate
-  // that survives declaration emit is a gate we know survives it — run after
+  // The type contract recompiled against the BUILT declarations: no source
+  // condition, so `@lntt/wire` and `@lntt/wire/testing` reach `dist`. Run after
   // `build`, it fails if an emitted `.d.ts` widened what the sources refuse.
+  //
+  // Two suites also read the guard's internal message types straight from the
+  // sources, which no subpath exports. The chain under assertion still comes
+  // from `dist`, so the comparison crosses the two sides rather than resting on
+  // one; what those particular types SAY is checked where they are written.
   "extends": "./tsconfig.json",
   "compilerOptions": { "customConditions": [] },
   "include": ["src/**/*.test-d.ts", "test/**/*.test-d.ts"]
