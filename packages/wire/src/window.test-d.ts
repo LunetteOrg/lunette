@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { bind, window, type With } from './index.ts'
+import { bind, window, type With } from '@lntt/wire'
 
 declare const atomic: unique symbol
 type Tx<D> = D & { readonly [atomic]: true }

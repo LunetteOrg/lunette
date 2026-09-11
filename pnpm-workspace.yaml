@@ -2,3 +2,9 @@ packages:
   - packages/*
   - research/*
   - examples/*
+
+# One version per tool, named once. A package that pins its own copy is a
+# package that can drift to a different compiler than the gate runs, and the
+# type contract is only a contract if every file is checked by the same one.
+catalog:
+  typescript: ^7.0.2

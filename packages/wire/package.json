@@ -1,20 +1,49 @@
 {
   "name": "@lntt/wire",
   "version": "0.0.0",
-  "description": "Typed dependency wiring as a chain of layers — Effect-grade composition with plain functions: no monads, no decorators, no reflection.",
+  "description": "Typed dependency wiring as a chain of layers \u2014 Effect-grade composition with plain functions: no monads, no decorators, no reflection.",
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./testing": "./src/testing.ts"
+    ".": {
+      "@lntt/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./testing": {
+      "@lntt/source": "./src/testing.ts",
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    }
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "pnpm run build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@lntt/wire": "workspace:*",
     "@types/node": "^24.13.2",
-    "typescript": "^5.9.2",
+    "typescript": "catalog:",
     "vitest": "^4.1.0"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts",
+    "!src/**/*.test-d.ts",
+    "!src/fixture/**"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "peerDependencies": {
+    "typescript": ">=7"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
   }
 }

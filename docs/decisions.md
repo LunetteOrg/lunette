@@ -549,8 +549,8 @@ candidates were explored at length and set aside. Framework dialects ship
 as subpaths of `@lntt/http` (`./hono`, `./express`) with **optional**
 peer dependencies — importing the agnostic entry pulls in no framework.
 Test utilities are a subpath of the core (`@lntt/wire/testing`), not a
-package. `exports` point at TypeScript sources for now; the build/dist
-question is deliberately deferred to publication.
+package. `exports` resolve to the build, with the commented sources shipped
+beside it and reachable through a declared condition (decision 56).
 
 ### 25. Events and CQRS need no new core concepts
 
@@ -2383,9 +2383,10 @@ the only part that knew about a host now lives in the caller. So a carrier-free
 extension on its own subpath, added with `.extend()`.
 
 ONE extension rather than two, with the **Standard Schema interface INLINED**.
-This package ships `.ts` sources with no build step, so an import a consumer has
-not installed fails in THEIR build — the bug fixed in #86 by adding
-`@types/express` to the peers. The spec is designed to be implemented
+A type import of a package the consumer has not installed fails in THEIR
+program — declarations are read by their compiler, where a missing module is an
+error we cannot catch here; the bug fixed in #86 by adding `@types/express` to
+the peers. The spec is designed to be implemented
 structurally and its version rides the property name (`~standard: { version: 1 }`),
 so drift is visible. It showed up immediately: the first copy added a
 `value?: undefined` to the failure branch and no real schema fitted any more. A
@@ -3160,3 +3161,85 @@ the builder already offers.
 was the working record, and is written here because that document is retired
 (decision 54) and this is the claim it held that lived nowhere else.
 
+
+---
+
+## Publication
+
+### 56. The build ships, the sources ship beside it, and one condition reaches them
+
+**Decision.** Each package builds to ESM JavaScript with declarations, and
+`exports` resolves `types` to the built `.d.ts` and `import` to the built `.js`
+— per subpath, so `@lntt/scope` keeps its six and `@lntt/wire` its two. The
+frameworks stay optional peers.
+
+The sources ship too, through three mechanisms that only work together:
+`files: ["dist", "src", …]` puts the commented `.ts` inside `node_modules`;
+`declarationMap` + `sourceMap` make "go to definition" land on them rather than
+on a declaration; and a declared condition, `"@lntt/source"`, resolves to them
+for whoever asks. Nobody else meets it — `types`/`import` are what a consumer
+gets by default. Suites and fixtures are excluded from the tarball: a test is
+never the destination of a "go to definition".
+
+This workspace declares that condition itself, in two places — `customConditions`
+in `tsconfig.base.json` and `resolve.conditions` in `vitest.shared.ts` — so
+every package here imports `@lntt/*` BY NAME and reaches the sources. An edit
+answers without a build in between, and the condition published for others is
+exercised daily rather than merely declared. `LNTT_SOURCE=off` and the
+`tsconfig.verify.json` files drop it: the same suites and the same type contract,
+resolved the way a consumer resolves them, into `dist`.
+
+**Alternatives.** *Sources only*, with `exports` pointing at `.ts`. Measured
+against a scratch consumer outside the workspace: it compiles (no extra flags),
+the gates fire with their real messages, the emit works, and on Node 24 it even
+runs. Two results decide against it. On a Node without type stripping it fails
+with `ERR_UNKNOWN_FILE_EXTENSION: Unknown file extension ".ts"`, printing a path
+inside our package — a first-boot failure the consumer cannot fix except by
+changing runtime or adding a bundler. And under `strictFunctionTypes: false` the
+ctx lock is silently gone: a step annotating a wider ctx compiles. Sources-only
+puts both the consumer's `tsconfig` and their Node version inside our contract;
+building puts only the first, and only for whoever opts into the condition.
+
+*`dist` only*, the shape hono and react-router ship. It costs the comments: in
+this library they carry the constraints, and a reader who follows a type into a
+`.d.ts` loses every one of them.
+
+**Why.** The shape of `exports` is the package's public surface as much as the
+types are, and it is the one thing that cannot be corrected without a breaking
+change. Building moves the risk to where it is testable: declaration emit must
+not widen a conditional, because our gates ARE branded conditionals and a
+relaxed one turns a compile error into a silence in someone else's editor. That
+is what `pnpm verify` exists to catch — build, then the `*.test-d.ts` contract
+and every suite re-run against `dist`, then the tarball listed.
+
+Prior art, read off the packages this repo installs: zod resolves `types`/`import`
+to built files and carries both `src` in `files` and a `"@zod/source"` condition;
+`@trpc/server` ships `files: ["dist", "src", …]`. None of them points a default
+export at a `.ts`.
+
+### 57. One version of TypeScript and one of Node, both the most recent
+
+**Decision.** TypeScript `>= 7` and Node `>= 24`, declared once — the compiler
+in a pnpm `catalog:` so no package pins its own, the runtime in `engines` — and
+both are exactly what CI runs. No matrix, no support window. Raising either
+floor is a MAJOR, with no case-by-case judgement.
+
+Consequences that follow from decision 56 rather than from taste: the packages
+are ESM-only, and `rewriteRelativeImportExtensions` is what lets the sources
+keep their explicit `.ts` import extensions while the emitted JavaScript carries
+`.js`.
+
+**Alternatives.** *A range wider than CI runs* — `>= 22` on Node, several TS
+majors. Rejected on the rule that makes the rest cheap: we declare only what is
+verified, or a floor is a claim nobody checked. *Staying on TypeScript 5.x* —
+measured and unnecessary: 7.0.2 typechecks wire, scope, all six examples and the
+research prototypes with zero errors, `@ts-expect-error` directives included
+(one that stopped applying would itself be an error), `vitest --typecheck` runs
+on it, and its declaration emit is byte-identical to 5.9.3's on the file where
+the gates live.
+
+**Why.** Nothing is published yet, so this is the one moment when raising a
+floor costs nobody a major. Supporting three compilers would mean three CI runs
+and three ways a gate could behave differently, for consumers who do not exist.
+Dedicated builds for older TypeScript or Node can be added if a real case
+appears; until then, one number per axis is the whole policy.

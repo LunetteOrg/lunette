@@ -4,8 +4,13 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "build": "pnpm -r --filter \"@lntt/wire\" --filter \"@lntt/scope\" build",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "verify": "pnpm build && pnpm verify:types && pnpm verify:runtime && pnpm verify:pack",
+    "verify:types": "pnpm --filter \"@lntt/wire\" --filter \"@lntt/scope\" exec tsc --noEmit -p tsconfig.verify.json",
+    "verify:runtime": "LNTT_SOURCE=off pnpm -r test",
+    "verify:pack": "pnpm --filter \"@lntt/wire\" --filter \"@lntt/scope\" exec npm pack --dry-run"
   },
   "packageManager": "pnpm@10.33.4",
   "pnpm": {

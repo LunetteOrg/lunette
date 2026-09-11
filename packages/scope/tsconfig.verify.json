@@ -1,0 +1,9 @@
+{
+  // The same type contract, resolved the way a consumer resolves it: no source
+  // condition, so `@lntt/scope` and its subpaths reach `dist`. A gate that
+  // survives declaration emit is a gate we know survives it — run after
+  // `build`, it fails if an emitted `.d.ts` widened what the sources refuse.
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "customConditions": [] },
+  "include": ["src/**/*.test-d.ts", "src/fixture", "test/**/*.test-d.ts"]
+}

@@ -33,7 +33,34 @@ await dispose()                                  // teardown, reverse order
 pnpm add @lntt/wire
 ```
 
-Requires TypeScript 5.x with `strict: true`.
+Requires TypeScript 7 or newer with `strict: true`, and Node 24 or newer. ESM
+only.
+
+### Where the constraints are written
+
+The package ships its commented `.ts` sources beside the build, and the
+declarations carry maps into them: "go to definition" on any exported type
+lands on the source, where the constraint behind that type is written, not on
+a `.d.ts` that carries the shape without the reason. Nothing to configure —
+this is what a normal install already does, while still compiling `dist`.
+
+Resolving the sources is a separate, deliberate act: the package declares an
+`@lntt/source` export condition, met by nobody who has not asked for it.
+
+```jsonc
+// tsconfig.json — "moduleResolution": "bundler" | "node16" | "nodenext"
+{ "compilerOptions": { "customConditions": ["@lntt/source"] } }
+```
+
+```ts
+// vite / vitest
+export default defineConfig({ resolve: { conditions: ['@lntt/source'] } })
+```
+
+What that takes back onto the consumer is the reason it is not the default. The
+`tsconfig` re-enters the contract: under `strictFunctionTypes: false` the ctx
+lock is silently gone — a step annotating a wider ctx compiles. And the runtime
+has to read `.ts` at all, which the built path never asks of it.
 
 ## The chain
 

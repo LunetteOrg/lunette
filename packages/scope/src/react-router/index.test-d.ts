@@ -1,8 +1,8 @@
 import { data, redirect } from 'react-router'
 import { describe, expectTypeOf, it } from 'vitest'
-import { scope } from '../index.ts'
-import { reactRouter, reactRouterCarrier } from './index.ts'
-import { guards } from '../guard/index.ts'
+import { scope } from '@lntt/scope'
+import { reactRouter, reactRouterCarrier } from '@lntt/scope/react-router'
+import { guards } from '@lntt/scope/guard'
 import { z } from 'zod'
 
 // THE TYPE CONTRACT: the mount is TRANSPARENT. React Router reads a route
