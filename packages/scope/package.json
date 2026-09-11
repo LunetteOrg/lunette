@@ -37,7 +37,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "prepublishOnly": "pnpm run build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
@@ -94,9 +94,13 @@
     "src",
     "!src/**/*.test.ts",
     "!src/**/*.test-d.ts",
-    "!src/fixture/**"
+    "!src/fixture/**",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

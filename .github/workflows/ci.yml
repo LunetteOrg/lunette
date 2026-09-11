@@ -9,11 +9,13 @@ name: CI
 # hide a type error behind it. They resolve `@lntt/*` to the SOURCES.
 #
 # `verify` asks the other question: is what we SHIP still what those gates
-# passed against? It builds, then re-runs the same type contract and the same
-# suites resolved the way a CONSUMER resolves them — through `exports`, into
-# `dist` — and prints the tarball. A declaration that widened a branded
-# conditional turns a compile error into a silence in someone else's editor,
-# and this is where that silence becomes a red build.
+# passed against? It builds, then checks the published package three ways: the
+# type contract recompiled against the BUILT declarations, the suites that
+# import `@lntt/*` by name re-run through `exports` into `dist`, and the
+# tarballs packed, unpacked and imported entry point by entry point. A
+# declaration that widened a branded conditional turns a compile error into a
+# silence in someone else's editor, and this is where that silence becomes a
+# red build.
 #
 # `pnpm -r` reaches `research/*` too, because `pnpm-workspace.yaml` lists it.
 # That is deliberate: research is excluded from CODE REVIEW (it is a proving
@@ -78,17 +80,20 @@ jobs:
       - name: build
         run: pnpm build
 
-      # The type contract against the BUILT declarations.
+      # The `*.test-d.ts` contract recompiled against the BUILT declarations.
       - name: verify types
         run: pnpm verify:types
 
-      # The same suites, importing through `exports` into `dist`.
+      # The suites that reach `@lntt/*` by NAME — the examples and the
+      # prototypes — re-run through `exports` into `dist`. The two packages'
+      # own suites import by relative path and stay on the sources; what the
+      # built JavaScript owes a consumer is checked by the step below.
       - name: verify runtime
-        if: ${{ !cancelled() }}
         run: pnpm verify:runtime
 
-      # What the tarball would contain: `dist`, the commented sources, no
-      # suites. A `files` list that drifts shows up here.
+      # The tarball a consumer would install: packed, unpacked, every entry
+      # point `exports` names imported from it. A `files` list that drifts, a
+      # missing LICENSE or a `workspace:` range left in the manifest fails
+      # here — `npm pack --dry-run` would report all three as a success.
       - name: verify tarball
-        if: ${{ !cancelled() }}
-        run: pnpm verify:pack
+        run: pnpm verify:tarball

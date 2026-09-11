@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { lunette } from '../../src/index.ts'
+import { lunette } from '@lntt/wire'
 // Real message types: imported so the contract cannot drift from the
 // text chain.ts actually prints (type-only, not on the public surface).
 import type {

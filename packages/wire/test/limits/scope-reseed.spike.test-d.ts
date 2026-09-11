@@ -5,7 +5,7 @@
 // with `tsc --extendedDiagnostics`. This committed instance is a
 // representative K; the full curve lives in the doc.
 import { describe, it } from 'vitest'
-import { Lunette, lunette } from '../../src/index.ts'
+import { Lunette, lunette } from '@lntt/wire'
 
 // Deliberately LOCAL, and not the `PubOf` @lntt/wire exports: this file measures
 // type-checking cost, and the shipped one reaches the same type by a different

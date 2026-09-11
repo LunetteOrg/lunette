@@ -9,7 +9,7 @@
 // collision, so no green program ever lies.
 
 import { describe, expectTypeOf, it } from 'vitest'
-import { lunette, type Lunette } from '../../src/index.ts'
+import { lunette, type Lunette } from '@lntt/wire'
 
 declare const anyPubFrag: Lunette<{}, any, {}>
 // The real message types, imported so this contract cannot drift from

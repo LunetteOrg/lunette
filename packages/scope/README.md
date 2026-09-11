@@ -30,7 +30,16 @@ Resolving the sources is a separate, deliberate act: the package declares an
 
 ```jsonc
 // tsconfig.json — "moduleResolution": "bundler" | "node16" | "nodenext"
-{ "compilerOptions": { "customConditions": ["@lntt/source"] } }
+{
+  "compilerOptions": {
+    "customConditions": ["@lntt/source"],
+    // The sources import each other with explicit `.ts` specifiers, so the
+    // consumer's compiler has to accept them: without this, ten errors land in
+    // code nobody wrote. Under node16/nodenext it also requires one of
+    // `noEmit`, `emitDeclarationOnly` or `rewriteRelativeImportExtensions`.
+    "allowImportingTsExtensions": true
+  }
+}
 ```
 
 ```ts

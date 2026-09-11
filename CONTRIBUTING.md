@@ -66,8 +66,9 @@ explicitly:
   declarations (`pnpm build`), and `exports` resolve there. Inside this
   workspace `@lntt/*` is imported by NAME and the `@lntt/source` condition
   resolves it to the sources, so no build stands between an edit and its
-  answer. `pnpm verify` builds and re-runs the type contract and every suite
-  the way a CONSUMER resolves them, into `dist`.
+  answer. `pnpm verify` builds, recompiles the type contract against the
+  built declarations, re-runs the by-name suites through `exports` into `dist`,
+  and checks the tarballs a consumer would install.
 - **One version per axis:** TypeScript (pnpm `catalog:`) and Node are pinned
   to the most recent, and CI runs exactly those. Raising either floor is a
   major.

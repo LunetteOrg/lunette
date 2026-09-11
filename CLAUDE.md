@@ -167,9 +167,10 @@ the tracker when relevant — never from here.
   beside the build. Inside this workspace `@lntt/*` is imported BY NAME and
   the `@lntt/source` condition — `tsconfig.base.json` and `vitest.shared.ts`,
   one place each — resolves it to the SOURCES, so no build stands between an
-  edit and its answer. `pnpm verify` is the other gate: it builds, then re-runs
-  the type contract and every suite resolved as a CONSUMER resolves them, into
-  `dist`, and lists the tarball. TypeScript (pnpm `catalog:`) and Node are one
+  edit and its answer. `pnpm verify` is the other gate: it builds, recompiles the
+  type contract against the BUILT declarations, re-runs the suites that reach
+  `@lntt/*` by name through `exports` into `dist`, and packs, unpacks and
+  imports each tarball entry point by entry point. TypeScript (pnpm `catalog:`) and Node are one
   version each, the most recent, and CI runs exactly those.
 - **Workflow with the owner**: discuss the design FIRST (he enjoys
   sparring and wants to understand deeply), implement ONLY on an explicit
