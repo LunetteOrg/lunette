@@ -122,4 +122,26 @@ describe('expose — visibility lives in the verb', () => {
 
     expect(teardowns).toEqual(['db'])
   })
+
+  // The run gets its OWN seed object, and only the outermost one: a layer that
+  // writes onto the bag it was handed must not reach the caller's seed, which a
+  // host may reuse for the next run, while what the seed CONTAINS stays the
+  // caller's — a depth no copy here could reach without cloning a request or an
+  // abort signal.
+  it('a write from the first layer does not reach the seed the caller passed', async () => {
+    const nested = { hits: 0 }
+    const seed = { env: 'test', nested }
+
+    await lunette<{ env: string; nested: { hits: number } }>()
+      .use(async (ctx, next) => {
+        ;(ctx as { env: string }).env = 'overwritten'
+        ctx.nested.hits += 1
+        return await next({})
+      })
+      .expose(() => ({ done: true }))
+      .run(seed, async (pub) => pub)
+
+    expect(seed.env).toBe('test')
+    expect(nested.hits).toBe(1)
+  })
 })

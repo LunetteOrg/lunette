@@ -90,7 +90,8 @@ the tracker when relevant — never from here.
   references to external repos or to the design's history. Conversation
   with the owner stays in Italian.
 - **CODE COMMENTS CITE NOTHING EXTERNAL.** No link to a decision file, no
-  `#N`, no PR or discussion numbers, in any `.ts` file — comments, test
+  `§N` — the sigil the record no longer uses, and still to be found in
+  `research/` — no `#N`, no PR or discussion numbers, in any `.ts` file — comments, test
   names and runtime strings alike. A comment has to stand on its own where
   it is read: a reader with the file open cannot follow a pointer, and a
   pointer decays the moment the thing it names is renumbered, superseded or

@@ -120,10 +120,13 @@ status: accepted
 number — its file is its identity — so a citation is a relative link whose
 text names the decision and reads as part of the sentence: `under [the
 returned/thrown convention](./errors-returned-domain-thrown-infrastructure.md)
-a throw means infrastructure`. From elsewhere in `docs/` the path is
-`../decisions/<slug>.md`; from a README that is read on GitHub or shipped to
-npm, the full `https://github.com/LunetteOrg/lunette/blob/main/…` URL. `#N`
-stays reserved for issues, PRs and discussions.
+a throw means infrastructure`. From elsewhere in the repository the path is
+relative too — `../decisions/<slug>.md` from `docs/`, `../docs/decisions/…`
+from a sibling directory, `docs/decisions/…` from the root. The exception is a
+file that is SHIPPED, where a relative path resolves against a tarball a reader
+does not have: a package README uses the full
+`https://github.com/LunetteOrg/lunette/blob/main/…` URL. `#N` stays reserved
+for issues, PRs and discussions.
 
 There is deliberately **no index file and no immutability ritual**: the
 directory listing is the index, and git carries the history of who changed

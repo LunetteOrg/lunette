@@ -1,5 +1,5 @@
 ---
-title: "'Needs a transaction' can live in the type (brand pattern)"
+title: '"Needs a transaction" can live in the type (brand pattern)'
 area: leaves-errors-windows
 status: accepted
 ---

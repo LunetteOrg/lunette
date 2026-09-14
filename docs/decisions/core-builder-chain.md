@@ -15,7 +15,7 @@ overload per arity, a permanent structural cost. (b) Order-free layers
 with runtime `requires` keys and topological resolution: order
 independence, but requirements end up declared twice (runtime key list +
 type annotation) with no way to enforce consistency — kept alive as
-[`research/order-free-layers/`](../research/order-free-layers/), prior
+[`research/order-free-layers/`](../../research/order-free-layers/), prior
 art for parallel boot. (c) An Effect-style tag registry: exactly the
 ceremony this project exists to avoid.
 

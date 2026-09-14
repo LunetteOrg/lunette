@@ -16,7 +16,7 @@ all?). The direction is settled here; the implementation and the docs follow,
 and what is still open is named at the end.
 
 **Alternatives**, all four built and measured side by side in
-[`research/collapsed-outcome/`](../research/collapsed-outcome/), whose four
+[`research/collapsed-outcome/`](../../research/collapsed-outcome/), whose four
 kernels share a byte-identical builder so a difference between them is one this
 question caused. (a) Keep the two branches — the status quo of [validation belonging to the carrier](./validation-belongs-carrier-outcome-has-two.md). (b) Collapse
 to one word, with `R` carrying the word's PAYLOAD. (c) Collapse to one word,

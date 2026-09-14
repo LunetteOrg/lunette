@@ -27,7 +27,7 @@ parameters the brands need. On the three HTTP packs that is four:
 SEVEN, because that mount is generic over the host's own context as well —
 `TContext`, `TMeta`, `TContextOverrides` come from the `ProcedureBuilder` it
 takes, and the deps are reconciled against the context rather than a pack's
-`Pub`, since on tRPC the app travels in the context ([the seeding cadences collapsing to two](./three-seeding-cadences-collapse-two-request.md)).
+`Pub`, since on tRPC the app travels in the context ([the entries sharing a composition root](./example-entries-share-shape-composition-root.md)).
 
 They are not knobs and nobody should ever write them: they exist only because a
 brand must NAME the axis it tests, and a brand has to sit in the same parameter
