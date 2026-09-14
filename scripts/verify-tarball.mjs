@@ -114,6 +114,13 @@ const shipped = (dir) =>
       ? [here]
       : []
   })
+// Every declaration in a build, wherever the emit put it.
+const declarations = (dir) =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const here = join(dir, entry.name)
+    if (entry.isDirectory()) return declarations(here)
+    return entry.name.endsWith('.d.ts') ? [here] : []
+  })
 // An ambient declaration binds a name for the compiler alone.
 const ambient = (statement) =>
   statement.modifiers?.some(
@@ -175,11 +182,16 @@ try {
     const here = join(root, 'packages', name)
     const newest = (files) =>
       files.reduce((at, file) => Math.max(at, statSync(file).mtimeMs), 0)
+    // Only what the build COMPILES counts: a suite is newer than `dist` all the
+    // time and says nothing about whether the build is current.
+    const compiled = shipped(join(here, 'src')).filter(
+      (file) =>
+        !/\.(test|test-d|bench)\.tsx?$/.test(file) &&
+        !file.includes('/fixture/'),
+    )
     const built = existsSync(join(here, 'dist'))
     check(
-      built &&
-        newest(shipped(join(here, 'dist'))) >=
-          newest(shipped(join(here, 'src'))),
+      built && newest(shipped(join(here, 'dist'))) >= newest(compiled),
       built
         ? 'the build is at least as new as the sources it comes from'
         : 'there is a build to check (run `pnpm build`)',
@@ -412,9 +424,10 @@ try {
 
   // A subpath that mounts a framework brings that framework's declarations in
   // with it, and those answer to their own author's config — react-router's
-  // want DOM, express's and tRPC's reference Node. So the two narrow programs
-  // take the entry points that mount nothing, and what they prove is about
-  // OURS: that the core and the guard need neither DOM nor Node's types.
+  // want DOM, express's and tRPC's reference Node. Only the program that
+  // NARROWS the lib excludes them: what it proves is about ours, that the core
+  // and the guard need neither DOM nor Node's types, and a framework's
+  // declarations would answer for their author instead.
   const mountsNothing = (s) => !/\/(express|hono|trpc|react-router)$/.test(s)
 
   // A consumer with no @types/node ON DISK. `types: []` alone does not make one:
@@ -449,9 +462,14 @@ try {
     ],
     // The one that can see a Node type leaking into a declaration: `types: []`
     // keeps @types/node out of the program, so a `Buffer` or `NodeJS.*` in an
-    // emitted `.d.ts` has nowhere to come from. It carries the host subpaths
-    // too, which is where the web globals the read steps stand on — `Request`,
-    // `File`, `URLSearchParams` — have to be found in `lib` or not at all.
+    // emitted `.d.ts` has nowhere to come from.
+    //
+    // Reached by SPECIFIER it would cover the mount-free entry points alone,
+    // and the file where a Node type is likeliest to leak — the read steps,
+    // standing on `Request`, `File` and `URLSearchParams` — hangs off the host
+    // subpaths, which cannot enter a program with no framework on disk. So
+    // every other declaration the package ships is added BY PATH: no framework
+    // is pulled in, and ours is still asked to stand on the platform alone.
     [
       'the platform alone, no @types/node',
       mountsNothing,
@@ -473,6 +491,18 @@ try {
     existsSync(floorTsc),
     'the floor compiler is installed to check the declarations against',
   )
+  // Every declaration the package ships that no mount-free specifier reaches:
+  // a host's own `index.d.ts` is left out, since it names a framework.
+  const ownDeclarations = packages.flatMap((name) => {
+    const at = join(bare, 'node_modules', '@lntt', name, 'dist')
+    return declarations(at)
+      .filter((file) => mountsNothing(dirname(file)))
+      .map(
+        (file) =>
+          `node_modules/@lntt/${name}/dist/${file.slice(at.length + 1)}`,
+      )
+  })
+
   for (const [
     what,
     keep,
@@ -484,7 +514,11 @@ try {
     writeFileSync(join(where, 'uses.ts'), importsOf(keep))
     writeFileSync(
       join(where, 'tsconfig.json'),
-      JSON.stringify({ compilerOptions, include: ['uses.ts'] }),
+      JSON.stringify({
+        compilerOptions,
+        include: ['uses.ts'],
+        ...(where === bare ? { files: ownDeclarations } : {}),
+      }),
     )
     try {
       execFileSync(
