@@ -1576,7 +1576,7 @@ their guard is removed.
 
 **SUPERSEDED by decision 43.** The `Handler<Need, S, R, Cap>` shape this decision
 is about belonged to `@lntt/integration` as a package separate from the carrier,
-which decision 43 dissolves — a carrier now ships its own mount helper (§60),
+which decision 43 dissolves — a carrier now ships its own mount helper (#60),
 with far fewer generic axes than the four-to-seven this recorded. The TypeScript
 lesson (self-reference through a computed type defeats inference) still holds
 and is worth knowing if a future mount signature grows generic again; the
@@ -1977,7 +1977,7 @@ export interface Carrier {
 
 — the shape of a run's second argument, and nothing coined. §40 built a whole
 axis (a carrier's words, checked twice — at the definition and at the mount) on
-the premise that a step needs a shared name to say a refusal WITH. §76 tested
+the premise that a step needs a shared name to say a refusal WITH. #76 tested
 that premise directly rather than arguing it further, and found it false.
 
 **What was measured.** `research/no-scope-hosts` first wrote the same three
@@ -2015,13 +2015,13 @@ weight in every host, vocabulary or not, was the step primitive and `Ctx`'s
 contravariant narrowing (a step reading what the scope has not got is refused
 at the argument) — exactly the mechanism §40 kept "either way".
 
-**What this retires.** §61 (outbound envelope as carrier vocabulary), §66 (a
+**What this retires.** #61 (outbound envelope as carrier vocabulary), #66 (a
 translating step from domain errors to carrier words) — both closed, WONTFIX,
-their reasoning superseded here. §64's "one factory, each carrier's own word"
+their reasoning superseded here. #64's "one factory, each carrier's own word"
 survives as "one factory, each carrier's own native shape" and is generalised
 further: the factory is parameterised by WHICH entry it validates (body,
 header, query, an RPC input), not only by schema, so the same mechanism that
-validates a body validates a header. §67's agnostic guard survives with its
+validates a body validates a header. #67's agnostic guard survives with its
 premise narrowed: the part of a guard that DERIVES (read a header, decide there
 is an actor) is shareable across hosts; the part that STOPS is not, because how
 a host ends a request differs by transport, not by vocabulary.
@@ -2043,7 +2043,7 @@ composition alone already provides.
 **Deferred.** Promoting `validated`/similar step-factories to `.extend()` verbs,
 so what a step populates is named at the call site rather than inferred from a
 lambda's body (#64, #69 for the verb-name-collision question it raises). The
-guard-fragment shape from §67 (shared derivation, per-host arrest). Neither is
+guard-fragment shape from #67 (shared derivation, per-host arrest). Neither is
 part of this decision — both are the next slice, on the settled premise that
 there is no vocabulary to design either one against.
 
