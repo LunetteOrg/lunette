@@ -27,22 +27,26 @@ describe('the tRPC carrier: what a run brings', () => {
   const { carrier, procedure } = trpc(t, greeter)
 
   const router = t.router({
-    greet: t.procedure.input((v) => v as { readonly who: string }).query(
-      procedure(
-        scope(carrier()).step(
-          async ({ greet }: typeof greeter, { input, ctx }) => ({
-            said: greet((input as { readonly who: string }).who),
-            by: ctx.actorId ?? 'anonymous',
-          }),
+    greet: t.procedure
+      .input((v) => v as { readonly who: string })
+      .query(
+        procedure(
+          scope(carrier()).step(
+            async ({ greet }: typeof greeter, { input, ctx }) => ({
+              said: greet((input as { readonly who: string }).who),
+              by: ctx.actorId ?? 'anonymous',
+            }),
+          ),
         ),
       ),
-    ),
 
     whoami: t.procedure.query(
       procedure(
         scope(carrier())
           .step(requireActor)
-          .step(async (_app: {}, { actor }: { readonly actor: string }) => ({ actor })),
+          .step(async (_app: {}, { actor }: { readonly actor: string }) => ({
+            actor,
+          })),
       ),
     ),
   })
@@ -59,10 +63,12 @@ describe('the tRPC carrier: what a run brings', () => {
     expect(result).toEqual({ said: 'hello ada', by: 'anonymous' })
   })
 
-  it('a step that stops throws tRPC\'s own error, and the leaf never runs', async () => {
-    await expect(caller({ actorId: undefined }).whoami()).rejects.toMatchObject({
-      code: 'UNAUTHORIZED',
-    })
+  it("a step that stops throws tRPC's own error, and the leaf never runs", async () => {
+    await expect(caller({ actorId: undefined }).whoami()).rejects.toMatchObject(
+      {
+        code: 'UNAUTHORIZED',
+      },
+    )
   })
 
   it('what the leaf returned is what the procedure resolves with', async () => {
@@ -92,7 +98,9 @@ describe('the tRPC carrier: `.input()` is still the read AND the check', () => {
         ),
     })
 
-    await expect(router.createCaller({ actorId: undefined }).strict({ who: '' })).rejects.toMatchObject({
+    await expect(
+      router.createCaller({ actorId: undefined }).strict({ who: '' }),
+    ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     })
     expect(ran).toBe(false)
@@ -107,16 +115,20 @@ describe('the tRPC carrier: `middleware`', () => {
   const authed = t.middleware(middleware(scope(carrier()).step(requireActor)))
 
   const router = t.router({
-    who: t.procedure.use(authed).query(({ ctx }) => ({ actor: ctx.actor, seen: ctx.actorId })),
+    who: t.procedure
+      .use(authed)
+      .query(({ ctx }) => ({ actor: ctx.actor, seen: ctx.actorId })),
   })
 
-  it('what the steps derived becomes tRPC\'s context override, reaching the procedure', async () => {
+  it("what the steps derived becomes tRPC's context override, reaching the procedure", async () => {
     const result = await router.createCaller({ actorId: 'u1' }).who()
     expect(result).toEqual({ actor: 'u1', seen: 'u1' })
   })
 
   it('a step that stops never reaches the procedure', async () => {
-    await expect(router.createCaller({ actorId: undefined }).who()).rejects.toMatchObject({
+    await expect(
+      router.createCaller({ actorId: undefined }).who(),
+    ).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
     })
   })

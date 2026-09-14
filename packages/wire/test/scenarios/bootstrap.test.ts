@@ -40,9 +40,18 @@ const createFakeDb = (url: string): FakeDb => {
 // db.transaction. THIS is the pattern that replaces the manual repo
 // wiring of a hand-written bootstrap.
 const makeRepos = (db: FakeDb) => ({
-  otpRepo: { source: db.kind, consume: async (code: string) => code === '1234' },
-  userRepo: { source: db.kind, create: async (email: string) => ({ id: 'u1', email }) },
-  sessionRepo: { source: db.kind, create: async (userId: string) => ({ id: 's1', userId }) },
+  otpRepo: {
+    source: db.kind,
+    consume: async (code: string) => code === '1234',
+  },
+  userRepo: {
+    source: db.kind,
+    create: async (email: string) => ({ id: 'u1', email }),
+  },
+  sessionRepo: {
+    source: db.kind,
+    create: async (userId: string) => ({ id: 's1', userId }),
+  },
 })
 type Repos = ReturnType<typeof makeRepos>
 
@@ -61,7 +70,10 @@ const makeVerifyOtp =
   }
 
 const makeRequestOtp =
-  (deps: { otpRepo: Repos['otpRepo']; sendEmail: (to: string) => Promise<void> }) =>
+  (deps: {
+    otpRepo: Repos['otpRepo']
+    sendEmail: (to: string) => Promise<void>
+  }) =>
   async (email: string) => {
     await deps.sendEmail(email)
     return 'otp-sent' as const
@@ -75,7 +87,10 @@ const authModule = (ctx: {
   sendEmail: (to: string) => Promise<void>
 }) => ({
   auth: {
-    requestOtp: makeRequestOtp({ otpRepo: ctx.repos.otpRepo, sendEmail: ctx.sendEmail }),
+    requestOtp: makeRequestOtp({
+      otpRepo: ctx.repos.otpRepo,
+      sendEmail: ctx.sendEmail,
+    }),
     // in a transaction: same use cases, repos rebuilt against tx
     // through the shared factory
     verifyOtp: (email: string, code: string) =>
@@ -95,7 +110,9 @@ const app = () => {
   teardowns.length = 0
   dbRef = undefined
   return lunette()
-    .provide(() => ({ env: { DATABASE_URL: 'pg://test', SENDGRID_API_KEY: 'sk' } as Env }))
+    .provide(() => ({
+      env: { DATABASE_URL: 'pg://test', SENDGRID_API_KEY: 'sk' } as Env,
+    }))
     .use(async (ctx, next) => {
       const db = createFakeDb(ctx.env.DATABASE_URL)
       dbRef = db

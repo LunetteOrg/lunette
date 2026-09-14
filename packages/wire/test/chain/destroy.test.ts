@@ -42,9 +42,13 @@ describe('provide/expose teardown via the destroy argument', () => {
   it('provide(create, destroy): value stays private, destroy still runs', async () => {
     const events: string[] = []
     const { app, dispose } = await lunette()
-      .provide('secret', () => 's', () => {
-        events.push('destroy secret')
-      })
+      .provide(
+        'secret',
+        () => 's',
+        () => {
+          events.push('destroy secret')
+        },
+      )
       .expose('pub', ({ secret }) => secret.toUpperCase())
       .build()
 
@@ -58,12 +62,20 @@ describe('provide/expose teardown via the destroy argument', () => {
   it('teardown runs in reverse (onion) order', async () => {
     const events: string[] = []
     const { dispose } = await lunette()
-      .provide('a', () => 1, () => {
-        events.push('destroy a')
-      })
-      .provide('b', () => 2, () => {
-        events.push('destroy b')
-      })
+      .provide(
+        'a',
+        () => 1,
+        () => {
+          events.push('destroy a')
+        },
+      )
+      .provide(
+        'b',
+        () => 2,
+        () => {
+          events.push('destroy b')
+        },
+      )
       .build()
 
     await dispose()

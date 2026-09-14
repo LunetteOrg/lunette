@@ -55,7 +55,9 @@ describe('two chains on one Express app', () => {
     expect((await fetch(`${url}/admin/audit`)).status).toBe(401)
     // …and a PRESENT but WRONG token the same way — an equality check, not
     // merely a presence one.
-    const wrong = await fetch(`${url}/admin/audit`, { headers: { authorization: 'nope' } })
+    const wrong = await fetch(`${url}/admin/audit`, {
+      headers: { authorization: 'nope' },
+    })
     expect(wrong.status).toBe(401)
     // …while the catalogue, which has no gate at all, serves anyone
     expect((await fetch(`${url}/items`)).status).toBe(200)
@@ -72,7 +74,9 @@ describe('two chains on one Express app', () => {
     expect(await after.json()).toEqual({ entries: ['someone looked'] })
 
     // the catalogue is untouched by any of it
-    const items = (await (await fetch(`${url}/items`)).json()) as { items: unknown[] }
+    const items = (await (await fetch(`${url}/items`)).json()) as {
+      items: unknown[]
+    }
     expect(items.items).toHaveLength(2)
 
     await close()

@@ -19,19 +19,17 @@ const requireActor = async (
 // `params` per route (`Route.LoaderArgs`), so the fixture does the same rather
 // than widening everything to `Params`. `context` is left off — the carrier
 // does not publish it, and a mount is handed a SUPERSET without complaint.
-const loaderArgs = (id: string) =>
-  ({
-    request: new Request(`http://localhost/posts/${id}`),
-    params: { id },
-    context: {},
-  })
+const loaderArgs = (id: string) => ({
+  request: new Request(`http://localhost/posts/${id}`),
+  params: { id },
+  context: {},
+})
 
-const actionArgs = (id: string, init: RequestInit) =>
-  ({
-    request: new Request(`http://localhost/posts/${id}/publish`, init),
-    params: { id },
-    context: {},
-  })
+const actionArgs = (id: string, init: RequestInit) => ({
+  request: new Request(`http://localhost/posts/${id}/publish`, init),
+  params: { id },
+  context: {},
+})
 
 const thrown = async (fn: () => unknown): Promise<unknown> => {
   try {
@@ -68,11 +66,13 @@ describe('the React Router carrier: what a run brings', () => {
       })),
     )
 
-    expect(await action(actionArgs('1', { method: 'POST' }))).toEqual({ method: 'POST' })
+    expect(await action(actionArgs('1', { method: 'POST' }))).toEqual({
+      method: 'POST',
+    })
   })
 })
 
-describe('the React Router carrier: stopping is the host\'s own door', () => {
+describe("the React Router carrier: stopping is the host's own door", () => {
   const { action: mount } = reactRouter({})
 
   const action = mount(
@@ -83,11 +83,16 @@ describe('the React Router carrier: stopping is the host\'s own door', () => {
 
   it('a step that stops THROWS a data() envelope, and the leaf never runs', async () => {
     const err = await thrown(() => action(actionArgs('1', { method: 'POST' })))
-    expect(err).toMatchObject({ data: { error: 'unauthorized' }, init: { status: 401 } })
+    expect(err).toMatchObject({
+      data: { error: 'unauthorized' },
+      init: { status: 401 },
+    })
   })
 
   it('what the leaf returned is handed back whole: a real redirect Response', async () => {
-    const res = await action(actionArgs('1', { method: 'POST', headers: { 'x-actor-id': 'u1' } }))
+    const res = await action(
+      actionArgs('1', { method: 'POST', headers: { 'x-actor-id': 'u1' } }),
+    )
     expect(res).toBeInstanceOf(Response)
     expect((res as Response).status).toBe(302)
     expect((res as Response).headers.get('location')).toBe('/posts/1')
@@ -103,10 +108,15 @@ describe('the React Router carrier: a step that stops by RETURNING', () => {
     // mistake. Pinned so the behaviour is a measured fact rather than a comment
     // — this mount hands back what the leaf returned, whatever that is.
     const loader = reactRouter({}).loader(
-      scope(reactRouterCarrier()).step(async () => data({ error: 'unauthorized' }, { status: 401 })),
+      scope(reactRouterCarrier()).step(async () =>
+        data({ error: 'unauthorized' }, { status: 401 }),
+      ),
     )
 
     const out = await loader(loaderArgs('1'))
-    expect(out).toMatchObject({ data: { error: 'unauthorized' }, init: { status: 401 } })
+    expect(out).toMatchObject({
+      data: { error: 'unauthorized' },
+      init: { status: 401 },
+    })
   })
 })

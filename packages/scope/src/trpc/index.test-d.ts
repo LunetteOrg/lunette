@@ -19,7 +19,7 @@ type Context = { readonly actorId: string | undefined; readonly tenant: string }
 const t = initTRPC.context<Context>().create()
 
 describe('what the carrier reads off the tRPC builder', () => {
-  it('hands a step the app\'s own context, inferred — no type argument written', () => {
+  it("hands a step the app's own context, inferred — no type argument written", () => {
     const { carrier } = trpc(t, {})
 
     scope(carrier()).step(async (_app: {}, ctx) => {
@@ -46,12 +46,17 @@ describe('what the carrier reads off the tRPC builder', () => {
 })
 
 describe('the mount is transparent: tRPC infers the output off the resolver', () => {
-  it('carries the leaf\'s value into the router\'s output types', () => {
+  it("carries the leaf's value into the router's output types", () => {
     const { carrier, procedure } = trpc(t, {})
 
     const router = t.router({
       getPost: t.procedure.query(
-        procedure(scope(carrier()).step(async (_app: {}, _ctx) => ({ id: '1', title: 'x' }))),
+        procedure(
+          scope(carrier()).step(async (_app: {}, _ctx) => ({
+            id: '1',
+            title: 'x',
+          })),
+        ),
       ),
     })
 
@@ -71,7 +76,11 @@ describe('a scope as a tRPC middleware', () => {
     const authed = t.middleware(
       middleware(
         scope(carrier()).step(
-          async (_app: {}, { ctx }: { readonly ctx: Context }, next: Next<{ actor: string }>) => {
+          async (
+            _app: {},
+            { ctx }: { readonly ctx: Context },
+            next: Next<{ actor: string }>,
+          ) => {
             if (ctx.actorId === undefined) throw new Error('no')
             return next({ actor: ctx.actorId })
           },
@@ -105,7 +114,9 @@ describe('what `.input(schema)` supplies against what the scope VALIDATES', () =
 
   const byId = scope(carrier())
     .extend(guards)
-    .step(async (_app: {}, _ctx, next: Next<{ seen: true }>) => next({ seen: true }))
+    .step(async (_app: {}, _ctx, next: Next<{ seen: true }>) =>
+      next({ seen: true }),
+    )
     .validate('input', Id, () => null)
     .step(async (_app: {}, { input }) => {
       expectTypeOf(input).toEqualTypeOf<{ id: string }>()
@@ -147,7 +158,9 @@ describe('the mount owes the scope its chain: `DepGuard` rides `middleware`', ()
   // mount, where a `Scope<S>` argument gives contravariance nothing to bite on
   // and the gate is written out.
   const { carrier, middleware } = trpc(t, {})
-  const needsDb = scope(carrier()).step(async ({ db }: { readonly db: string }) => db)
+  const needsDb = scope(carrier()).step(
+    async ({ db }: { readonly db: string }) => db,
+  )
 
   it('refuses a scope the curried chain does not satisfy', () => {
     // @ts-expect-error __ERROR_chain_Pub_missing_deps
@@ -178,7 +191,9 @@ describe('a middleware may not derive a ctx key the run itself brought', () => {
 describe('`middleware` takes a scope written for ITS carrier, and no other', () => {
   it('refuses a scope written for another host', () => {
     const { middleware } = trpc(t, {})
-    const forHono = scope(honoCarrier()).step(async (_app: {}, { c }) => c.json({}))
+    const forHono = scope(honoCarrier()).step(async (_app: {}, { c }) =>
+      c.json({}),
+    )
 
     // @ts-expect-error — this scope reads `c`; a tRPC run brings input and ctx
     middleware(forHono)
@@ -191,10 +206,12 @@ describe('`middleware` takes a scope written for ITS carrier, and no other', () 
     const { carrier, middleware } = trpc(t, {})
 
     middleware(
-      scope(carrier()).step(async (_app: {}, ctx, next: Next<{ found: string }>) => {
-        expectTypeOf(ctx.input).toEqualTypeOf<unknown>()
-        return next({ found: ctx.ctx.tenant })
-      }),
+      scope(carrier()).step(
+        async (_app: {}, ctx, next: Next<{ found: string }>) => {
+          expectTypeOf(ctx.input).toEqualTypeOf<unknown>()
+          return next({ found: ctx.ctx.tenant })
+        },
+      ),
     )
   })
 
@@ -215,7 +232,9 @@ describe('`middleware` takes a scope written for ITS carrier, and no other', () 
     const narrowsInput = scope(carrier())
       .extend(guards)
       .validate('input', z.object({ id: z.string() }), () => null)
-      .step(async (_app: {}, ctx, next: Next<{ found: string }>) => next({ found: ctx.input.id }))
+      .step(async (_app: {}, ctx, next: Next<{ found: string }>) =>
+        next({ found: ctx.input.id }),
+      )
 
     // @ts-expect-error ⛔ this middleware derives a ctx key the run itself brought: input
     middleware(narrowsInput)
@@ -238,7 +257,9 @@ describe('`middleware` takes a scope written for ITS carrier, and no other', () 
           },
           () => null,
         )
-        .step(async (_app: {}, ctx, next: Next<{ owner: string }>) => next({ owner: ctx.postId })),
+        .step(async (_app: {}, ctx, next: Next<{ owner: string }>) =>
+          next({ owner: ctx.postId }),
+        ),
     )
   })
 })

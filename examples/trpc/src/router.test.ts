@@ -8,16 +8,18 @@ const asUser: Context = { actorId: 'u1' }
 
 describe('trpc + scope: `.input(schema)` and `.validate(...)` from ONE schema value', () => {
   it('a known post: the domain result, straight back', async () => {
-    await expect(caller(anon).getPost({ id: '1' })).resolves.toMatchObject({ id: '1' })
+    await expect(caller(anon).getPost({ id: '1' })).resolves.toMatchObject({
+      id: '1',
+    })
   })
 
-  it('a malformed id never reaches the fold: tRPC\'s own `.input()` rejects it first', async () => {
+  it("a malformed id never reaches the fold: tRPC's own `.input()` rejects it first", async () => {
     // The SAME schema the scope validates with — so the two cannot disagree,
     // and on this host tRPC gets there first.
     await expect(caller(anon).getPost({ id: 'abc' })).rejects.toThrow()
   })
 
-  it('an unknown post, well-formed id: NOT_FOUND, tRPC\'s one door', async () => {
+  it("an unknown post, well-formed id: NOT_FOUND, tRPC's one door", async () => {
     await expect(caller(anon).getPost({ id: '999' })).rejects.toMatchObject({
       code: 'NOT_FOUND',
     })
@@ -32,14 +34,18 @@ describe('trpc + scope: the middleware guard', () => {
   })
 
   it('an authed call reaches the domain', async () => {
-    await expect(caller(asUser).publishPost({ id: '1' })).resolves.toMatchObject({
+    await expect(
+      caller(asUser).publishPost({ id: '1' }),
+    ).resolves.toMatchObject({
       id: '1',
       published: true,
     })
   })
 
   it('an authed call for an unknown post: NOT_FOUND', async () => {
-    await expect(caller(asUser).publishPost({ id: '999' })).rejects.toBeInstanceOf(TRPCError)
+    await expect(
+      caller(asUser).publishPost({ id: '999' }),
+    ).rejects.toBeInstanceOf(TRPCError)
   })
 })
 
@@ -48,7 +54,7 @@ describe('trpc + scope: the middleware guard', () => {
 // procedure does NOT see it — its context type is read off the ROOT builder
 // (`trpc(t, deps)`) and does not follow a procedure that grew it. Both halves
 // are pinned here, so the limit is measured rather than believed.
-describe('trpc + scope: where a middleware\'s context override actually lands', () => {
+describe("trpc + scope: where a middleware's context override actually lands", () => {
   // A router of this test's own, so the claim is CALLED and not merely typed.
   const probeRouter = t.router({
     whoami: authed.query(({ ctx }) => {
@@ -63,9 +69,11 @@ describe('trpc + scope: where a middleware\'s context override actually lands', 
   })
 
   it('and the guard still refuses an anonymous call on the way', async () => {
-    await expect(probeRouter.createCaller(anon).whoami()).rejects.toMatchObject({
-      code: 'UNAUTHORIZED',
-    })
+    await expect(probeRouter.createCaller(anon).whoami()).rejects.toMatchObject(
+      {
+        code: 'UNAUTHORIZED',
+      },
+    )
   })
 })
 
@@ -77,6 +85,8 @@ describe('trpc + scope: createPost, validated by the schema tRPC already ran', (
   })
 
   it('an invalid input is refused by `.input(schema)` before the fold', async () => {
-    await expect(caller(anon).createPost({ title: '', content: 'x' })).rejects.toThrow()
+    await expect(
+      caller(anon).createPost({ title: '', content: 'x' }),
+    ).rejects.toThrow()
   })
 })

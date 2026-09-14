@@ -66,6 +66,15 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm -r typecheck
 
+      # Biome, checking rather than writing: the same pass the pre-commit hook
+      # applies locally, so a commit that reached here past a missing hook — a
+      # fresh clone, `--no-verify`, an editor that commits its own way — is
+      # caught rather than trusted. Style is not a reason to hide a type error,
+      # so it runs after both and independently of them.
+      - name: lint
+        if: ${{ !cancelled() }}
+        run: pnpm lint
+
   verify:
     runs-on: ubuntu-latest
     steps:

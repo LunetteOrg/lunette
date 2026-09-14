@@ -74,7 +74,9 @@ describe('rr7 + scope: the publish action, guarded by the session cookie', () =>
   })
 
   it('a malformed id: 400 before the guard even runs', async () => {
-    const status = await statusOfThrown(() => publish(actionArgs('abc', 'actor=u1')))
+    const status = await statusOfThrown(() =>
+      publish(actionArgs('abc', 'actor=u1')),
+    )
     expect(status).toBe(400)
   })
 
@@ -94,14 +96,19 @@ describe('rr7 + scope: the create action, the form its component submits', () =>
       request: new Request('http://localhost/posts', {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: typeof fields === 'string' ? fields : new URLSearchParams(fields).toString(),
+        body:
+          typeof fields === 'string'
+            ? fields
+            : new URLSearchParams(fields).toString(),
       }),
       params: {},
       context: {},
     }) as unknown as PostsRoute.ActionArgs
 
   it('a valid body: the created post', async () => {
-    await expect(create(args({ title: 'New', content: 'Body' }))).resolves.toMatchObject({
+    await expect(
+      create(args({ title: 'New', content: 'Body' })),
+    ).resolves.toMatchObject({
       title: 'New',
     })
   })
@@ -156,7 +163,7 @@ describe('rr7 + scope: the typegen checks what the scope validated', () => {
 //
 // What this proves that a type assertion cannot: the value a step returned is
 // the value that reaches the markup, through every layer between.
-describe('rr7 + scope: the loader\'s value reaches the rendered HTML', () => {
+describe("rr7 + scope: the loader's value reaches the rendered HTML", () => {
   // THE CAST IS THE TEST'S SCAFFOLDING, and what it steps around is worth
   // knowing. This loader DEMANDS the params it validated (`{ id: string }`);
   // React Router's generic `RouteObject` supplies the wide `Params`, whose
@@ -180,7 +187,9 @@ describe('rr7 + scope: the loader\'s value reaches the rendered HTML', () => {
     const router = createStaticRouter(handler.dataRoutes, context)
     return {
       status: context.statusCode,
-      html: renderToString(<StaticRouterProvider router={router} context={context} />),
+      html: renderToString(
+        <StaticRouterProvider router={router} context={context} />,
+      ),
     }
   }
 

@@ -161,7 +161,10 @@ export const trpc = <T, App extends object>(_t: T, deps: App) => ({
       readonly input: Validated<S, 'input'>
       readonly ctx: CtxOf<T>
     }): Promise<ResultOf<Scope<S>>> =>
-      (sc as unknown as (app: App, a: object) => Promise<ResultOf<Scope<S>>>)(deps, args),
+      (sc as unknown as (app: App, a: object) => Promise<ResultOf<Scope<S>>>)(
+        deps,
+        args,
+      ),
 
   // A scope as a tRPC MIDDLEWARE: `t.middleware(middleware(scope))`. The
   // transparency that matters here is the CONTEXT OVERRIDE — tRPC reads what a
@@ -173,13 +176,7 @@ export const trpc = <T, App extends object>(_t: T, deps: App) => ({
   // contravariance. A `Scope<S>` argument does not, so the gate is written.
   middleware: <S extends State>(
     sc: Scope<S> & ArgsGate<T> & DepGuard<App, S['need']> & StripGate<S>,
-  ): TRPCMiddlewareFunction<
-    CtxOf<T>,
-    MetaOf<T>,
-    object,
-    S['acc'],
-    unknown
-  > =>
+  ): TRPCMiddlewareFunction<CtxOf<T>, MetaOf<T>, object, S['acc'], unknown> =>
     // The RETURN TYPE is written out rather than inferred, and that is what
     // makes the override arrive: `t.middleware(fn)` reads `$ContextOverrides`
     // off `fn`'s declared return (`Promise<MiddlewareResult<…>>`), so a generic
@@ -187,11 +184,21 @@ export const trpc = <T, App extends object>(_t: T, deps: App) => ({
     // read and the context silently does not grow (measured — the procedure
     // downstream then sees the bare context).
     ((opts) => {
-      const finished = (sc as unknown as { step: (s: unknown) => unknown }).step(
-        toNext(opts.next as unknown as (o: { readonly ctx: object }) => unknown),
+      const finished = (
+        sc as unknown as { step: (s: unknown) => unknown }
+      ).step(
+        toNext(
+          opts.next as unknown as (o: { readonly ctx: object }) => unknown,
+        ),
       ) as unknown as (app: App, args: object) => never
       // The fold's promise resolves to what `next` handed back, and a promise
       // of a promise is that promise once awaited — the only shape tRPC sees.
       return finished(deps, { input: opts.input, ctx: opts.ctx })
-    }) as TRPCMiddlewareFunction<CtxOf<T>, MetaOf<T>, object, S['acc'], unknown>,
+    }) as TRPCMiddlewareFunction<
+      CtxOf<T>,
+      MetaOf<T>,
+      object,
+      S['acc'],
+      unknown
+    >,
 })

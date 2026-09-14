@@ -13,12 +13,18 @@ export type NotFound = { readonly notFound: true }
 export type PostRepo = { readonly posts: Map<string, Post> }
 
 export const makeRepo = (): PostRepo => ({
-  posts: new Map([['1', { id: '1', title: 'Hello', content: 'World', published: false }]]),
+  posts: new Map([
+    ['1', { id: '1', title: 'Hello', content: 'World', published: false }],
+  ]),
 })
 
-export const getPost = (deps: PostRepo, id: string): Post | NotFound => deps.posts.get(id) ?? { notFound: true }
+export const getPost = (deps: PostRepo, id: string): Post | NotFound =>
+  deps.posts.get(id) ?? { notFound: true }
 
-export type CreatePostInput = { readonly title: string; readonly content: string }
+export type CreatePostInput = {
+  readonly title: string
+  readonly content: string
+}
 
 export const createPost = (deps: PostRepo, input: CreatePostInput): Post => {
   const post: Post = {

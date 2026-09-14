@@ -40,6 +40,7 @@ describe('lazy — expensive creations deferred to the first call', () => {
             if (db.created()) db().end()
           }
         })
+        // biome-ignore lint/complexity/noCommaOperator: touching the lazy dep and discarding it is exactly what the test measures
         .expose(({ db }) => ({ reports: { run: () => (db(), 'ok') } }))
 
     // nobody uses the db: no connection, no closing

@@ -27,7 +27,9 @@ describe('`guard`: adds an entry, or stops with what `onError` built', () => {
       .extend(guards)
       .guard(
         (_app: {}, { token }) =>
-          token === null ? fail([{ message: 'unauthorized' }]) : { actor: token },
+          token === null
+            ? fail([{ message: 'unauthorized' }])
+            : { actor: token },
         (issues) => ({ error: issues[0]?.message }),
       )
       .step(async (_app: {}, { actor }) => {
@@ -39,7 +41,7 @@ describe('`guard`: adds an entry, or stops with what `onError` built', () => {
     expect(reached).toBe(false)
   })
 
-  it('hands `onError` the ctx, which is how it answers in the host\'s own door', async () => {
+  it("hands `onError` the ctx, which is how it answers in the host's own door", async () => {
     const h = scope<{ readonly token: string | null; readonly route: string }>()
       .extend(guards)
       .guard(
@@ -48,7 +50,9 @@ describe('`guard`: adds an entry, or stops with what `onError` built', () => {
       )
       .step(async (_app: {}, { actor }) => actor)
 
-    expect(await h({}, { token: null, route: '/posts' })).toBe('denied at /posts')
+    expect(await h({}, { token: null, route: '/posts' })).toBe(
+      'denied at /posts',
+    )
   })
 
   it('declares what it needs of the app, exactly as a step does', async () => {
@@ -69,7 +73,11 @@ describe('`refine`: replaces an entry the ctx already holds', () => {
   it('replaces it, and the step after reads the new value', async () => {
     const h = scope<{ readonly raw: string }>()
       .extend(guards)
-      .refine('raw', (_app: {}, { raw }) => raw.trim().toUpperCase(), () => null)
+      .refine(
+        'raw',
+        (_app: {}, { raw }) => raw.trim().toUpperCase(),
+        () => null,
+      )
       .step(async (_app: {}, { raw }) => raw)
 
     expect(await h({}, { raw: '  ada  ' })).toBe('ADA')
@@ -78,7 +86,11 @@ describe('`refine`: replaces an entry the ctx already holds', () => {
   it('replaces rather than merges — one key, the new value', async () => {
     const h = scope<{ readonly n: string }>()
       .extend(guards)
-      .refine('n', (_app: {}, { n }) => Number(n), () => null)
+      .refine(
+        'n',
+        (_app: {}, { n }) => Number(n),
+        () => null,
+      )
       .step(async (_app: {}, ctx) => ctx)
 
     expect(await h({}, { n: '42' })).toEqual({ n: 42 })
@@ -89,7 +101,10 @@ describe('`refine`: replaces an entry the ctx already holds', () => {
       .extend(guards)
       .refine(
         'n',
-        (_app: {}, { n }) => (Number.isNaN(Number(n)) ? fail([{ message: 'not a number' }]) : Number(n)),
+        (_app: {}, { n }) =>
+          Number.isNaN(Number(n))
+            ? fail([{ message: 'not a number' }])
+            : Number(n),
         (issues) => ({ error: issues[0]?.message }),
       )
       .step(async (_app: {}, { n }) => n)
@@ -101,7 +116,7 @@ describe('`refine`: replaces an entry the ctx already holds', () => {
 describe('`validate`: `refine` with the check given by a schema', () => {
   const post = z.object({ title: z.string(), tags: z.array(z.string()) })
 
-  it('refines the entry to the schema\'s output', async () => {
+  it("refines the entry to the schema's output", async () => {
     const h = scope<{ readonly body: unknown }>()
       .extend(guards)
       .validate('body', post, (issues) => ({ error: 'invalid', issues }))
@@ -110,18 +125,24 @@ describe('`validate`: `refine` with the check given by a schema', () => {
     expect(await h({}, { body: { title: 'hello', tags: ['a'] } })).toBe('HELLO')
   })
 
-  it('hands the schema\'s own issues to `onError`, and the leaf never runs', async () => {
+  it("hands the schema's own issues to `onError`, and the leaf never runs", async () => {
     let reached = false
 
     const h = scope<{ readonly body: unknown }>()
       .extend(guards)
-      .validate('body', post, (issues) => ({ error: 'invalid', count: issues.length }))
+      .validate('body', post, (issues) => ({
+        error: 'invalid',
+        count: issues.length,
+      }))
       .step(async (_app: {}, { body }) => {
         reached = true
         return body.title
       })
 
-    expect(await h({}, { body: { title: 7 } })).toEqual({ error: 'invalid', count: 2 })
+    expect(await h({}, { body: { title: 7 } })).toEqual({
+      error: 'invalid',
+      count: 2,
+    })
     expect(reached).toBe(false)
   })
 
@@ -178,7 +199,12 @@ describe('the extension adds no step of its own', () => {
     const extended = bare.extend(guards)
 
     expect(extended.steps).toHaveLength(0)
-    expect(extended.guard(() => ({}), () => null).steps).toHaveLength(1)
+    expect(
+      extended.guard(
+        () => ({}),
+        () => null,
+      ).steps,
+    ).toHaveLength(1)
   })
 })
 
@@ -201,7 +227,9 @@ describe('a refusal is recognised across two copies of this module', () => {
         () => other.fail([{ message: 'unauthorized' }]),
         () => ({ status: 401 }) as const,
       )
-      .step(async (_app: {}, _ctx, next: Next<{ actor: string }>) => next({ actor: 'someone' }))
+      .step(async (_app: {}, _ctx, next: Next<{ actor: string }>) =>
+        next({ actor: 'someone' }),
+      )
       .step(async () => ({ status: 200, secret: 'TOP SECRET' }) as const)
 
     expect(await run({}, {})).toEqual({ status: 401 })

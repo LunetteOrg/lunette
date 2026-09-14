@@ -123,7 +123,9 @@ describe('test(chain) — mocking a provide in the middle of the chain', () => {
   it('seed and substitutions travel in the same input', async () => {
     const chain = lunette<{ env: { url: string } }>()
       .provide(({ env }) => ({ db: { query: async () => [env.url] } }))
-      .expose(({ db }) => ({ probe: { first: async () => (await db.query())[0] } }))
+      .expose(({ db }) => ({
+        probe: { first: async () => (await db.query())[0] },
+      }))
 
     await test(chain).run(
       { env: { url: 'pg://never-used' }, db: { query: async () => ['fake'] } },

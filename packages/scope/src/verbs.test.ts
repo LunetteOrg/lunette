@@ -42,7 +42,11 @@ const withHeader =
 // call signature `this` binds to `void`, which is the reason the accumulated
 // state lives in a type parameter at all.
 interface HeaderVerb {
-  header<S extends State>(this: Scope<S>, name: string, value: string): Surface<S>
+  header<S extends State>(
+    this: Scope<S>,
+    name: string,
+    value: string,
+  ): Surface<S>
 }
 
 const headers: Extension<HeaderVerb> = {
@@ -83,8 +87,13 @@ const pins: Extension<PinVerb> = {
 // declaring its own state transformation replaces an entry the primitive may
 // only add to. This is what makes the gate affordable rather than a wall, and it
 // is the shape a validation verb will have.
-const narrowBody = () =>
-  async (_app: {}, ctx: { readonly body: unknown }, next: Next<{ body: { id: string } }>) =>
+const narrowBody =
+  () =>
+  async (
+    _app: {},
+    ctx: { readonly body: unknown },
+    next: Next<{ body: { id: string } }>,
+  ) =>
     next({ body: ctx.body as { id: string } })
 
 interface NarrowVerb {
@@ -108,10 +117,14 @@ const narrows: Extension<NarrowVerb> = {
 describe('an extension replaces a ctx entry where a step may not', () => {
   it('narrows a key an earlier step populated, and the leaf reads the narrow type', async () => {
     const h = scope<{}>()
-      .step(async (_app: {}, _ctx: {}, next: Next<{ body: unknown }>) => next({ body: { id: 'p1' } }))
+      .step(async (_app: {}, _ctx: {}, next: Next<{ body: unknown }>) =>
+        next({ body: { id: 'p1' } }),
+      )
       .extend(narrows)
       .narrow()
-      .step(async (_app: {}, ctx: { readonly body: { id: string } }) => ctx.body.id)
+      .step(
+        async (_app: {}, ctx: { readonly body: { id: string } }) => ctx.body.id,
+      )
 
     expect(await h({}, {})).toBe('p1')
   })
@@ -119,7 +132,9 @@ describe('an extension replaces a ctx entry where a step may not', () => {
   it('and the same thing written as a STEP is refused, which is the whole point', () => {
     const refused = () => {
       scope<{}>()
-        .step(async (_a: {}, _c: {}, next: Next<{ body: unknown }>) => next({ body: {} }))
+        .step(async (_a: {}, _c: {}, next: Next<{ body: unknown }>) =>
+          next({ body: {} }),
+        )
         // @ts-expect-error ⛔ this ctx key is already populated: body
         .step(async (_a: {}, _c: {}, next: Next<{ body: { id: string } }>) =>
           next({ body: { id: 'p1' } }),
@@ -212,7 +227,9 @@ describe('a verb keeps its generics, which is why its signature is written out',
       return ctx.pinned
     })
 
-    const out = await h.step(async (_app: {}, ctx: { readonly pinned: 201 }) => ctx.pinned)({}, {})
+    const out = await h.step(
+      async (_app: {}, ctx: { readonly pinned: 201 }) => ctx.pinned,
+    )({}, {})
     expect(out).toBe(201)
   })
 
@@ -249,7 +266,8 @@ describe('a verb cannot take a name the surface already owns', () => {
   // extension loaded by name, or assembled from data, or written in plain JS
   // looks like from in here, and it is the whole reason the runtime half
   // exists.
-  const unchecked = (ext: object) => scope<{}>().extend(ext as unknown as Extension<{}>)
+  const unchecked = (ext: object) =>
+    scope<{}>().extend(ext as unknown as Extension<{}>)
 
   it('refuses one shadowing `.step`, which would otherwise DISCARD the step it is given', () => {
     expect(() => unchecked(shadowsStep)).toThrow(/cannot be named 'step'/)
@@ -281,8 +299,11 @@ describe('a verb cannot take a name the surface already owns', () => {
       },
     }
     const withHeaderTaken = scope<{}>().extend(headers)
-    expect(() => (withHeaderTaken as unknown as { extend: (e: object) => unknown }).extend(both))
-      .toThrow(/cannot be named 'bind'/)
+    expect(() =>
+      (withHeaderTaken as unknown as { extend: (e: object) => unknown }).extend(
+        both,
+      ),
+    ).toThrow(/cannot be named 'bind'/)
   })
 
   it('refuses one named `toString`, which would otherwise break every interpolation', () => {
@@ -291,7 +312,9 @@ describe('a verb cannot take a name the surface already owns', () => {
     const shadowsToString = {
       methods: { toString: () => (async () => 'x') as unknown as AnyStep },
     }
-    expect(() => unchecked(shadowsToString)).toThrow(/cannot be named 'toString'/)
+    expect(() => unchecked(shadowsToString)).toThrow(
+      /cannot be named 'toString'/,
+    )
   })
 
   it('refuses one named `then`, which would otherwise make every scope a THENABLE', () => {
@@ -300,6 +323,7 @@ describe('a verb cannot take a name the surface already owns', () => {
     // `(resolve, reject)`; the verb wrapper reads those as the verb's own
     // arguments, pushes a step and hands back a builder, resolving nothing.
     const shadowsThen = {
+      // biome-ignore lint/suspicious/noThenProperty: the thenable is the subject of the test — the runtime has to refuse it
       methods: { then: () => (async () => 'x') as unknown as AnyStep },
     }
     expect(() => unchecked(shadowsThen)).toThrow(/cannot be named 'then'/)
@@ -367,7 +391,9 @@ describe('awaiting a scope', () => {
   it('settles — a scope carries no `then`, so it is not a thenable', async () => {
     expect(await settles(scope<{}>())).toBe('settled')
     expect(await settles(scope<{}>().extend(headers))).toBe('settled')
-    expect(await settles(scope<{}>().step(async (_a: {}, _c: {}) => 'v'))).toBe('settled')
+    expect(await settles(scope<{}>().step(async (_a: {}, _c: {}) => 'v'))).toBe(
+      'settled',
+    )
   })
 
   it('and an `async` function may return one, which is how the hang would reach a caller', async () => {
@@ -396,8 +422,12 @@ const tagFactory = (which: string) => (v: unknown) =>
     return next({})
   }) as unknown as AnyStep
 
-const tagsA: Extension<TagString> = { methods: { tag: tagFactory('A') as (...a: never[]) => AnyStep } }
-const tagsB: Extension<TagNumber> = { methods: { tag: tagFactory('B') as (...a: never[]) => AnyStep } }
+const tagsA: Extension<TagString> = {
+  methods: { tag: tagFactory('A') as (...a: never[]) => AnyStep },
+}
+const tagsB: Extension<TagNumber> = {
+  methods: { tag: tagFactory('B') as (...a: never[]) => AnyStep },
+}
 
 describe('a verb name already contributed by another extension', () => {
   it('is REFUSED at the second `.extend`, naming it', () => {
@@ -410,7 +440,9 @@ describe('a verb name already contributed by another extension', () => {
 
   it('and refused at RUNTIME too, the way an extension loaded by name reaches it', () => {
     const unchecked = (ext: object) =>
-      scope<{}>().extend(tagsA).extend(ext as unknown as Extension<{}>)
+      scope<{}>()
+        .extend(tagsA)
+        .extend(ext as unknown as Extension<{}>)
     expect(() => unchecked(tagsB)).toThrow(/already contributed: tag/)
   })
 
@@ -428,7 +460,9 @@ describe('a verb name already contributed by another extension', () => {
       .extend(pins)
       .header('x', '1')
       .pin(201)
-      .step(async (_app: {}, ctx: { readonly pinned: 201 }) => String(ctx.pinned))
+      .step(async (_app: {}, ctx: { readonly pinned: 201 }) =>
+        String(ctx.pinned),
+      )
 
     expect(await h({}, {})).toBe('201 [x=1]')
   })
@@ -485,7 +519,9 @@ describe('every name reachable on a scope is refused as a verb', () => {
 
   it('and the two names that cannot be probed are on the list anyway', () => {
     for (const name of ['caller', 'arguments']) {
-      expect(() => unchecked(name)).toThrow(new RegExp(`cannot be named '${name}'`))
+      expect(() => unchecked(name)).toThrow(
+        new RegExp(`cannot be named '${name}'`),
+      )
     }
   })
 
@@ -506,8 +542,12 @@ describe('branching a base that carries verbs', () => {
     const base = scope<{}>().extend(pins)
     expect(base.steps).toHaveLength(0)
 
-    const one = base.pin(201).step(async (_app: {}, ctx: { readonly pinned: 201 }) => ctx.pinned)
-    const two = base.pin(404).step(async (_app: {}, ctx: { readonly pinned: 404 }) => ctx.pinned)
+    const one = base
+      .pin(201)
+      .step(async (_app: {}, ctx: { readonly pinned: 201 }) => ctx.pinned)
+    const two = base
+      .pin(404)
+      .step(async (_app: {}, ctx: { readonly pinned: 404 }) => ctx.pinned)
 
     expect(base.steps).toHaveLength(0)
     expect(one.steps).toHaveLength(2)

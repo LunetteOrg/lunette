@@ -52,9 +52,12 @@ type Auth = { whereAmI: () => 'db' | 'tx'; register: (email: string) => void }
 
 describe('blocks with a different db: the STATIC case (seed mapper at the mount)', () => {
   // any block that requires A db
-  const block = lunette<{ db: { name: string } }>().expose('info', ({ db }) => ({
-    where: () => db.name,
-  }))
+  const block = lunette<{ db: { name: string } }>().expose(
+    'info',
+    ({ db }) => ({
+      where: () => db.name,
+    }),
+  )
 
   it('the same block mounted twice with ad hoc seeds, zero overwrites', async () => {
     await lunette()

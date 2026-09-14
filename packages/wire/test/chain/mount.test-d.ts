@@ -130,12 +130,16 @@ describe('mount (types)', () => {
 declare const optSym: unique symbol
 
 describe('optional seed keys: absence is not an unmet requirement', () => {
-  const wantsOpt = lunette<{ env: Env; opt?: string }>().expose(({ env, opt }) => ({
-    auth: { url: env.DATABASE_URL, tag: opt },
-  }))
+  const wantsOpt = lunette<{ env: Env; opt?: string }>().expose(
+    ({ env, opt }) => ({
+      auth: { url: env.DATABASE_URL, tag: opt },
+    }),
+  )
 
   it('the message names ONLY the required key, no phantom entries', () => {
-    expectTypeOf<UnmetSeed<{}, { env: Env; opt?: string }>>().toEqualTypeOf<'env'>()
+    expectTypeOf<
+      UnmetSeed<{}, { env: Env; opt?: string }>
+    >().toEqualTypeOf<'env'>()
   })
 
   it('a host satisfying the required key mounts without providing the optional one', async () => {
@@ -148,8 +152,9 @@ describe('optional seed keys: absence is not an unmet requirement', () => {
   })
 
   it('an optional key PRESENT with the wrong type is unmet, and named', () => {
-    expectTypeOf<UnmetSeed<{ env: Env; opt: number }, { env: Env; opt?: string }>>()
-      .toEqualTypeOf<'opt'>()
+    expectTypeOf<
+      UnmetSeed<{ env: Env; opt: number }, { env: Env; opt?: string }>
+    >().toEqualTypeOf<'opt'>()
 
     lunette()
       .provide(() => ({ env: { DATABASE_URL: 'x' } as Env, opt: 42 }))
@@ -160,8 +165,9 @@ describe('optional seed keys: absence is not an unmet requirement', () => {
   it('an optional SYMBOL seed key follows the same rule', () => {
     // absent: not unmet; present with the wrong type: unmet, labelled
     expectTypeOf<UnmetSeed<{}, { [optSym]?: string }>>().toBeNever()
-    expectTypeOf<UnmetSeed<{ [optSym]: number }, { [optSym]?: string }>>()
-      .toEqualTypeOf<typeof optSym>()
+    expectTypeOf<
+      UnmetSeed<{ [optSym]: number }, { [optSym]?: string }>
+    >().toEqualTypeOf<typeof optSym>()
   })
 })
 
@@ -209,8 +215,12 @@ describe('degenerate fragment seeds are refused, not silently accepted', () => {
   })
 
   it('the degenerate seed cells carry EXACTLY their message (wiring pin)', () => {
-    expectTypeOf<BrandMsg<RequirementBrand<{}, any>>>().toEqualTypeOf<AnySeedMsg>()
-    expectTypeOf<BrandMsg<RequirementBrand<{}, never>>>().toEqualTypeOf<NeverSeedMsg>()
+    expectTypeOf<
+      BrandMsg<RequirementBrand<{}, any>>
+    >().toEqualTypeOf<AnySeedMsg>()
+    expectTypeOf<
+      BrandMsg<RequirementBrand<{}, never>>
+    >().toEqualTypeOf<NeverSeedMsg>()
 
     expectTypeOf<NeverSeedMsg>().toEqualTypeOf<'⛔ fragment seed collapsed to never — give it a real type'>()
   })
@@ -232,8 +242,9 @@ describe('degenerate fragment seeds are refused, not silently accepted', () => {
 // collapses to never and the message falls back to the nameless
 // '⛔ fragment requirements not satisfied', naming nothing.
 describe('union seeds: alternatives named, either alternative accepted', () => {
-  const wantsEither = lunette<{ redis: string } | { memcache: number }>()
-    .expose(() => ({ cachePub: 1 }))
+  const wantsEither = lunette<
+    { redis: string } | { memcache: number }
+  >().expose(() => ({ cachePub: 1 }))
 
   it('the unmet message names the keys of EVERY alternative', () => {
     expectTypeOf<

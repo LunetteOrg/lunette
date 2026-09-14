@@ -19,7 +19,9 @@ import { fixture, refused, type Refusal } from './fixture/carrier.ts'
 // looks.
 
 interface Repos {
-  readonly users: { readonly byId: (id: string) => { readonly name: string } | undefined }
+  readonly users: {
+    readonly byId: (id: string) => { readonly name: string } | undefined
+  }
 }
 
 describe('what a scope yields', () => {
@@ -36,7 +38,10 @@ describe('what a scope yields', () => {
       })
       .step(async (_app: {}, ctx: { readonly name: string }) => ctx.name.length)
 
-    const out = await h({ users: { byId: () => undefined } }, { token: null, params: {} })
+    const out = await h(
+      { users: { byId: () => undefined } },
+      { token: null, params: {} },
+    )
     expect(out).toBe('anonymous')
     // The guard's own value is here. Reading only the closing step missed it —
     // which is what the intersection form could not express at all, since `A &
@@ -65,7 +70,8 @@ describe('what a scope yields', () => {
   // caller as a value.
   it('a scope whose steps all pass through yields `never`', async () => {
     const base = scope<{ readonly id: string }>().step(
-      async (_app: {}, ctx, next: Next<{ upper: string }>) => next({ upper: ctx.id }),
+      async (_app: {}, ctx, next: Next<{ upper: string }>) =>
+        next({ upper: ctx.id }),
     )
     // And this is the case that cannot be made in a type-only file: `never`
     // has no inhabitant, so there is no value to name — the run THROWS, and

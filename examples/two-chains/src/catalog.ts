@@ -19,19 +19,21 @@ interface Item {
 export const opened: string[] = []
 export const closed: string[] = []
 
-const withSource = layer<{ env: CatalogEnv }, { items: Item[] }>(async ({ env }, next) => {
-  opened.push(env.SOURCE)
-  try {
-    return await next({
-      items: [
-        { id: 'a1', title: 'A catalogue item' },
-        { id: 'a2', title: 'Another one' },
-      ],
-    })
-  } finally {
-    closed.push(env.SOURCE)
-  }
-})
+const withSource = layer<{ env: CatalogEnv }, { items: Item[] }>(
+  async ({ env }, next) => {
+    opened.push(env.SOURCE)
+    try {
+      return await next({
+        items: [
+          { id: 'a1', title: 'A catalogue item' },
+          { id: 'a2', title: 'Another one' },
+        ],
+      })
+    } finally {
+      closed.push(env.SOURCE)
+    }
+  },
+)
 
 export const catalogChain = lunette<{ env: CatalogEnv }>()
   .use(withSource)
@@ -39,7 +41,10 @@ export const catalogChain = lunette<{ env: CatalogEnv }>()
   // name — only `catalog.byId` below, which wraps it, does. `catalog.list`
   // hands back the live array as it stands, since nothing here writes through
   // it; a chain whose scopes could mutate the list would expose a copy.
-  .provide('lookup', (ctx) => (id: string) => ctx.items.find((i) => i.id === id))
+  .provide(
+    'lookup',
+    (ctx) => (id: string) => ctx.items.find((i) => i.id === id),
+  )
   .expose('catalog', (ctx) => ({
     list: () => ctx.items,
     byId: (id: string) => ctx.lookup(id),
@@ -51,7 +56,8 @@ export type CatalogApp = PubOf<typeof catalogChain>
 // Its scopes declare what THEY need from this chain's public surface, and
 // nothing else — no carrier extension, since this product has no gate.
 export const listScope = scope(expressCarrier()).step(
-  async (deps: { catalog: { list(): Item[] } }, { res }) => res.json({ items: deps.catalog.list() }),
+  async (deps: { catalog: { list(): Item[] } }, { res }) =>
+    res.json({ items: deps.catalog.list() }),
 )
 
 // READ BY HAND, which is the cheap end of a real choice. `req.params` is
@@ -66,9 +72,15 @@ export const listScope = scope(expressCarrier()).step(
 // at runtime and the pattern checked at compile time. This product's point is
 // two chains in one process, so its routes stay at the cheap end deliberately.
 export const itemScope = scope(expressCarrier()).step(
-  async (deps: { catalog: { byId(id: string): Item | undefined } }, { req, res }) => {
+  async (
+    deps: { catalog: { byId(id: string): Item | undefined } },
+    { req, res },
+  ) => {
     const itemId = req.params.itemId
-    const item = typeof itemId === 'string' ? deps.catalog.byId(itemId) : undefined
-    return item ? res.json({ item }) : res.status(404).json({ error: 'not found' })
+    const item =
+      typeof itemId === 'string' ? deps.catalog.byId(itemId) : undefined
+    return item
+      ? res.json({ item })
+      : res.status(404).json({ error: 'not found' })
   },
 )

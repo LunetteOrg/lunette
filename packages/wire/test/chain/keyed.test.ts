@@ -56,7 +56,9 @@ describe('keyed form — normal behaviour', () => {
     // invisible to the literal-based guard — this net is what stands
     // under it.
     const widened: string = 'db'
-    const chain = lunette().provide('db', () => 1).provide(widened, () => 2)
+    const chain = lunette()
+      .provide('db', () => 1)
+      .provide(widened, () => 2)
 
     await expect(chain.run(() => {})).rejects.toThrow(
       /Keys already present in the context: db/,

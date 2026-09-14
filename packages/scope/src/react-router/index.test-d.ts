@@ -27,9 +27,12 @@ const byId = scope(carrier)
   })
 
 describe('what a route module sees', () => {
-  it('carries the leaf\'s value through the loader', () => {
+  it("carries the leaf's value through the loader", () => {
     const loader = mountLoader(
-      byId.step(async (_app: {}, { params }) => ({ id: params.id, title: 'x' })),
+      byId.step(async (_app: {}, { params }) => ({
+        id: params.id,
+        title: 'x',
+      })),
     )
 
     expectTypeOf<Awaited<ReturnType<typeof loader>>>().toEqualTypeOf<{
@@ -40,14 +43,17 @@ describe('what a route module sees', () => {
 
   it('carries a UNION when the steps answer in more than one way', () => {
     const action = mountAction(
-      byId
-        .step(async (_app: {}, { params }) =>
-          params.id === '' ? data({ error: 'bad' }, { status: 422 }) : redirect('/posts'),
-        ),
+      byId.step(async (_app: {}, { params }) =>
+        params.id === ''
+          ? data({ error: 'bad' }, { status: 422 })
+          : redirect('/posts'),
+      ),
     )
 
     type Answered = Awaited<ReturnType<typeof action>>
-    expectTypeOf<Answered>().toEqualTypeOf<ReturnType<typeof data<{ error: string }>> | Response>()
+    expectTypeOf<Answered>().toEqualTypeOf<
+      ReturnType<typeof data<{ error: string }>> | Response
+    >()
   })
 
   it('types `params` off the SCHEMA, so a step needs no `!` and no annotation', () => {
@@ -70,27 +76,43 @@ describe('what a route module sees', () => {
     // written: one base, two schemas, two routes.
     const base = scope(carrier).extend(guards)
 
-    const one = base.validate('params', z.object({ id: z.string() }), () => data(null))
-    const two = base.validate('params', z.object({ slug: z.string() }), () => data(null))
+    const one = base.validate('params', z.object({ id: z.string() }), () =>
+      data(null),
+    )
+    const two = base.validate('params', z.object({ slug: z.string() }), () =>
+      data(null),
+    )
 
     one.step(async (_app: {}, { params }) => params.id)
     two.step(async (_app: {}, { params }) => params.slug)
   })
 })
 
-describe('the params a scope VALIDATED ride the mount, so RR7\'s typegen checks them', () => {
+describe("the params a scope VALIDATED ride the mount, so RR7's typegen checks them", () => {
   // React Router hands us no pattern — `routes.ts` owns that mapping — so the
   // check is the route module's own `satisfies`, and contravariance does it.
-  type LoaderArgs = { request: Request; params: { id: string }; context: unknown }
-  type OtherArgs = { request: Request; params: { slug: string }; context: unknown }
+  type LoaderArgs = {
+    request: Request
+    params: { id: string }
+    context: unknown
+  }
+  type OtherArgs = {
+    request: Request
+    params: { slug: string }
+    context: unknown
+  }
 
   it('accepts a route whose generated params supply what the schema demands', () => {
-    const loader = mountLoader(byId.step(async (_app: {}, { params }) => params.id))
+    const loader = mountLoader(
+      byId.step(async (_app: {}, { params }) => params.id),
+    )
     void (loader satisfies (args: LoaderArgs) => unknown)
   })
 
   it('refuses a route whose generated params supply something else', () => {
-    const loader = mountLoader(byId.step(async (_app: {}, { params }) => params.id))
+    const loader = mountLoader(
+      byId.step(async (_app: {}, { params }) => params.id),
+    )
     // @ts-expect-error — the route supplies `slug`, the scope validated `id`
     void (loader satisfies (args: OtherArgs) => unknown)
   })
@@ -106,7 +128,9 @@ describe('the mounts owe the scope its chain: `DepGuard` rides both mounts', () 
   // The deps are curried at `reactRouter({})`, so a scope demanding a `db` is
   // refused at the mount, exactly as a direct call is — and not on the first
   // request, where the step would destructure it off `{}`.
-  const needsDb = scope(carrier).step(async ({ db }: { readonly db: string }) => ({ db }))
+  const needsDb = scope(carrier).step(
+    async ({ db }: { readonly db: string }) => ({ db }),
+  )
 
   it('refuses a scope the curried chain does not satisfy', () => {
     // @ts-expect-error __ERROR_chain_Pub_missing_deps

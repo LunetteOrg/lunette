@@ -33,7 +33,9 @@ import type { With } from './window.ts'
 type Leaf = (deps: any, ...args: any[]) => unknown
 
 type UnionToIntersection<U> = (
-  U extends unknown ? (u: U) => void : never
+  U extends unknown
+    ? (u: U) => void
+    : never
 ) extends (i: infer I) => void
   ? I
   : never
@@ -57,8 +59,12 @@ type DepsOf<M> = UnionToIntersection<
 
 // The leaf's own args and return, past the deps: the one extraction every
 // bound shape below needs.
-type LeafArgs<L> = L extends (deps: any, ...args: infer A) => unknown ? A : never
-type LeafReturn<L> = L extends (deps: any, ...args: any[]) => infer R ? R : never
+type LeafArgs<L> = L extends (deps: any, ...args: infer A) => unknown
+  ? A
+  : never
+type LeafReturn<L> = L extends (deps: any, ...args: any[]) => infer R
+  ? R
+  : never
 
 type Bound<M> = {
   [K in keyof M]: (...args: LeafArgs<M[K]>) => LeafReturn<M[K]>
@@ -97,7 +103,8 @@ export const bind = <M extends Record<string, Leaf>>(record: M): Binder<M> => {
     Object.fromEntries(entries.map(([name, uc]) => [name, project(uc)]))
   // The bridge every per-call cadence opens a window with: close the
   // leaf's own args over it, so the window only ever sees the deps.
-  const bridge = (uc: Leaf, args: unknown[]) => async (deps: any) => uc(deps, ...args)
+  const bridge = (uc: Leaf, args: unknown[]) => async (deps: any) =>
+    uc(deps, ...args)
   // The two casts are engine-internal: with M generic the
   // checker cannot relate the runtime mapping to the mapped types.
   const binder = ((deps: object) =>
@@ -114,8 +121,9 @@ export const bind = <M extends Record<string, Leaf>>(record: M): Binder<M> => {
     ) as BoundPerCall<M>
   binder.by = ((toWindow: (key: unknown) => With<object>) =>
     mapEntries(
-      (uc) => (key: unknown, ...args: unknown[]) =>
-        toWindow(key)(bridge(uc, args)),
+      (uc) =>
+        (key: unknown, ...args: unknown[]) =>
+          toWindow(key)(bridge(uc, args)),
     )) as unknown as Binder<M>['by']
   return binder
 }

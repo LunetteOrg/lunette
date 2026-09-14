@@ -20,10 +20,10 @@ describe('override', () => {
 
   it('the overridden key keeps its visibility', async () => {
     const app = await lunette()
-      .provide(() => ({ secret: 'v1' }))     // private
-      .expose(() => ({ api: { v: 1 } }))     // public
-      .override(() => ({ secret: 'v2' }))    // stays private
-      .override(() => ({ api: { v: 2 } }))   // stays public
+      .provide(() => ({ secret: 'v1' })) // private
+      .expose(() => ({ api: { v: 1 } })) // public
+      .override(() => ({ secret: 'v2' })) // stays private
+      .override(() => ({ api: { v: 2 } })) // stays public
       .run(async (pub) => pub)
 
     expect(Object.keys(app)).toEqual(['api'])

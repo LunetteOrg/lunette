@@ -39,7 +39,8 @@ export const loader = mount(
     })
     .step(async ({ posts }: Deps, { params }) => {
       const result = posts.getPost(params.id)
-      if ('notFound' in result) throw data({ error: 'not found' }, { status: 404 })
+      if ('notFound' in result)
+        throw data({ error: 'not found' }, { status: 404 })
       return result
     }),
 ) satisfies (args: Route.LoaderArgs) => unknown

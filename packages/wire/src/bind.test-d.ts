@@ -46,7 +46,7 @@ describe('bind (types)', () => {
     bind({ requestOtp })(ctx)
   })
 
-  it('a loosely-typed leaf (any/unknown) contributes NO requirement — it does not erase its siblings\'', () => {
+  it("a loosely-typed leaf (any/unknown) contributes NO requirement — it does not erase its siblings'", () => {
     // `any` and `unknown` are absorptive in unions (any | X = any, unknown
     // | X = unknown): naively folding a leaf's declared deps straight into
     // DepsOf's union would let ONE loosely-typed leaf collapse the WHOLE

@@ -5,20 +5,27 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r --filter \"@lntt/wire\" --filter \"@lntt/scope\" build",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "verify": "pnpm build && pnpm verify:types && pnpm verify:runtime && pnpm verify:tarball",
     "verify:types": "pnpm --filter \"@lntt/example-rr7\" exec react-router typegen && pnpm --filter \"@lntt/wire\" --filter \"@lntt/scope\" --filter \"@lntt/example-*\" exec tsc --noEmit -p tsconfig.verify.json",
     "verify:runtime": "LNTT_SOURCE=off pnpm -r test",
-    "verify:tarball": "node scripts/verify-tarball.mjs"
+    "verify:tarball": "node scripts/verify-tarball.mjs",
+    "prepare": "bash scripts/install-hooks.sh || true"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.13",
+    "lefthook": "^2.1.14",
     "typescript-5": "npm:typescript@5.9.3"
   },
   "packageManager": "pnpm@10.33.4",
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
+      "lefthook",
       "workerd"
     ]
   }

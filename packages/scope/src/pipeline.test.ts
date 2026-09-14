@@ -28,24 +28,39 @@ describe('Express: read, refine, answer', () => {
     ex.express({ store: [] as string[] }).handler(
       scope(ex.expressCarrier())
         .extend(guards)
-        .step(ex.body('json', (issues, { res }) => res.status(400).json({ error: 'not json', issues })))
-        .validate('body', post, (issues, { res }) => res.status(422).json({ error: 'invalid', issues }))
+        .step(
+          ex.body('json', (issues, { res }) =>
+            res.status(400).json({ error: 'not json', issues }),
+          ),
+        )
+        .validate('body', post, (issues, { res }) =>
+          res.status(422).json({ error: 'invalid', issues }),
+        )
         .step(ex.headers)
         .guard(
-          (_a: {}, { headers }) => (headers.authorization ? { actor: headers.authorization } : fail()),
+          (_a: {}, { headers }) =>
+            headers.authorization ? { actor: headers.authorization } : fail(),
           (_i, { res }) => res.status(401).json({ error: 'unauthorized' }),
         )
-        .step(async ({ store }: { readonly store: string[] }, { body, res }) => {
-          store.push(body.title)
-          return res.status(201).json({ title: body.title.toUpperCase(), tags: body.tags })
-        }),
+        .step(
+          async ({ store }: { readonly store: string[] }, { body, res }) => {
+            store.push(body.title)
+            return res
+              .status(201)
+              .json({ title: body.title.toUpperCase(), tags: body.tags })
+          },
+        ),
     ),
   )
 
   const send = (body: string) =>
-    request(app).post('/posts').set('content-type', 'application/json').set('authorization', 'u1').send(body)
+    request(app)
+      .post('/posts')
+      .set('content-type', 'application/json')
+      .set('authorization', 'u1')
+      .send(body)
 
-  it('the leaf reads the SCHEMA\'s type, not `unknown`', async () => {
+  it("the leaf reads the SCHEMA's type, not `unknown`", async () => {
     const res = await send('{"title":"hello","tags":["a"]}')
     expect(res.status).toBe(201)
     expect(res.body).toEqual({ title: 'HELLO', tags: ['a'] })
@@ -72,16 +87,26 @@ describe('Hono: the same scope shape, in its own idiom', () => {
     ho.hono({}).handler(
       scope(ho.honoCarrier())
         .extend(guards)
-        .step(ho.body('json', (_i, { c }) => c.json({ error: 'not json' }, 400)))
-        .validate('body', post, (_i, { c }) => c.json({ error: 'invalid' }, 422))
-        .step(async (_a: {}, { c, body }) => c.json({ title: body.title.toUpperCase() }, 201)),
+        .step(
+          ho.body('json', (_i, { c }) => c.json({ error: 'not json' }, 400)),
+        )
+        .validate('body', post, (_i, { c }) =>
+          c.json({ error: 'invalid' }, 422),
+        )
+        .step(async (_a: {}, { c, body }) =>
+          c.json({ title: body.title.toUpperCase() }, 201),
+        ),
     ),
   )
 
   const send = (body: string) =>
-    app.request('/posts', { method: 'POST', headers: { 'content-type': 'application/json' }, body })
+    app.request('/posts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body,
+    })
 
-  it('answers with the leaf\'s value', async () => {
+  it("answers with the leaf's value", async () => {
     const res = await send('{"title":"hello","tags":[]}')
     expect(res.status).toBe(201)
     expect(await res.json()).toEqual({ title: 'HELLO' })
@@ -101,8 +126,11 @@ describe('what the ORDER says, and where it is caught', () => {
     const refused = () => {
       scope(ex.expressCarrier())
         .extend(guards)
-        // @ts-expect-error — no `headers` entry: `ex.headers` has not run
-        .guard((_a: {}, { headers }) => (headers.x ? {} : fail()), () => null)
+        .guard(
+          // @ts-expect-error — no `headers` entry: `ex.headers` has not run
+          (_a: {}, { headers }) => (headers.x ? {} : fail()),
+          () => null,
+        )
     }
     expect(typeof refused).toBe('function')
   })
@@ -111,8 +139,10 @@ describe('what the ORDER says, and where it is caught', () => {
     // Not a runtime claim — a compile-time one, and the reason the pipeline
     // reads the way it does. `body` has to be an entry before it can be refined.
     const refused = () => {
-      // @ts-expect-error — no `body` entry: `ex.body(...)` has not run
-      scope(ex.expressCarrier()).extend(guards).validate('body', post, () => null)
+      scope(ex.expressCarrier())
+        .extend(guards)
+        // @ts-expect-error — no `body` entry: `ex.body(...)` has not run
+        .validate('body', post, () => null)
     }
     expect(typeof refused).toBe('function')
   })

@@ -25,7 +25,9 @@ const byId = scope(honoCarrier()).step(async (_app: {}, { c }) => {
 const withId = scope(honoCarrier())
   .extend(guards)
   .step(params)
-  .validate('params', z.object({ id: z.string() }), (issues, { c }) => c.json({ issues }, 400))
+  .validate('params', z.object({ id: z.string() }), (issues, { c }) =>
+    c.json({ issues }, 400),
+  )
   .step(async (_app: {}, { params: p, c }) => c.json({ id: p.id }))
 
 describe('what a scope reads of the URL: `params`, then `validate`', () => {
@@ -123,7 +125,9 @@ describe('the typed RPC client reads what the scope hands back', () => {
   const showPost = scope(honoCarrier()).step(async (_app: {}, { c }) =>
     c.json({ id: c.req.param('id'), title: 'x' }),
   )
-  const health = scope(honoCarrier()).step(async (_app: {}, { c }) => c.json({ ok: true }, 201))
+  const health = scope(honoCarrier()).step(async (_app: {}, { c }) =>
+    c.json({ ok: true }, 201),
+  )
 
   // Routes are CHAINED, which is how `typeof app` accumulates the schema.
   const app = new Hono()
@@ -132,9 +136,12 @@ describe('the typed RPC client reads what the scope hands back', () => {
 
   const client = hc<typeof app>('http://localhost')
 
-  it('carries the leaf\'s value through the one-argument form', async () => {
+  it("carries the leaf's value through the one-argument form", async () => {
     const res = await client.posts[':id'].$get({ param: { id: '1' } })
-    expectTypeOf(await res.json()).toEqualTypeOf<{ id: string | undefined; title: string }>()
+    expectTypeOf(await res.json()).toEqualTypeOf<{
+      id: string | undefined
+      title: string
+    }>()
   })
 
   it('carries it through the checked form too, status included', async () => {
@@ -150,8 +157,8 @@ describe('the mounts owe the scope its chain: `DepGuard` rides every mount', () 
   // The deps are curried at `hono({})`, so an empty chain reaches the scope —
   // and a scope demanding a `db` must be refused HERE, at the mount, exactly as
   // a direct call is.
-  const needsDb = scope(honoCarrier()).step(async ({ db }: { readonly db: string }, { c }) =>
-    c.json({ db }),
+  const needsDb = scope(honoCarrier()).step(
+    async ({ db }: { readonly db: string }, { c }) => c.json({ db }),
   )
 
   it('refuses a scope the curried chain does not satisfy', () => {
@@ -187,14 +194,18 @@ describe('a middleware may not derive a ctx key the run itself brought', () => {
     // which is `Ctx`'s own decision, pinned in the core.
     handler(
       scope(honoCarrier())
-        .step(async (_app: {}, _ctx, next: Next<{ next: string }>) => next({ next: 'mine' }))
+        .step(async (_app: {}, _ctx, next: Next<{ next: string }>) =>
+          next({ next: 'mine' }),
+        )
         .step(async (_app: {}, { c }) => c.json({})),
     )
   })
 })
 
 describe('a mount takes a scope written for ITS carrier, and no other', () => {
-  const forExpress = scope(expressCarrier()).step(async (_app: {}, { res }) => res.json({}))
+  const forExpress = scope(expressCarrier()).step(async (_app: {}, { res }) =>
+    res.json({}),
+  )
 
   it('refuses a scope written for another host', () => {
     // @ts-expect-error — this scope reads `req`/`res`; a Hono mount brings `c`
@@ -205,7 +216,7 @@ describe('a mount takes a scope written for ITS carrier, and no other', () => {
     hono({}).mw(forExpress)
   })
 
-  it('still accepts a scope carrying the app\'s own env', () => {
+  it("still accepts a scope carrying the app's own env", () => {
     // The gate states the CONTEXT the mount hands over, so an env written once
     // at `hono<typeof deps, MyEnv>(deps)` has to keep passing.
     type MyEnv = { Bindings: { KV: string }; Variables: { rid: string } }
@@ -225,7 +236,9 @@ describe('a middleware answers with a Response, or with nothing', () => {
     // and Hono's own handler type reads it.
     const returnsAnError = scope(honoCarrier()).step(
       async (_app: {}, _ctx, next: Next<{ actor: string }>) =>
-        Math.random() > 0.5 ? ({ error: 'unauthorized' } as const) : next({ actor: 'u1' }),
+        Math.random() > 0.5
+          ? ({ error: 'unauthorized' } as const)
+          : next({ actor: 'u1' }),
     )
 
     // @ts-expect-error ⛔ a middleware answers with a Response
@@ -234,8 +247,11 @@ describe('a middleware answers with a Response, or with nothing', () => {
 
   it('accepts the same guard answering with `c.json`', () => {
     hono({}).mw(
-      scope(honoCarrier()).step(async (_app: {}, { c }, next: Next<{ actor: string }>) =>
-        Math.random() > 0.5 ? c.json({ error: 'unauthorized' }, 401) : next({ actor: 'u1' }),
+      scope(honoCarrier()).step(
+        async (_app: {}, { c }, next: Next<{ actor: string }>) =>
+          Math.random() > 0.5
+            ? c.json({ error: 'unauthorized' }, 401)
+            : next({ actor: 'u1' }),
       ),
     )
   })

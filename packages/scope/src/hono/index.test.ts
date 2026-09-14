@@ -41,7 +41,14 @@ describe('the Hono carrier: what a run brings', () => {
     const { handler } = hono({})
 
     const app = new Hono()
-    app.get('/', handler(scope(honoCarrier()).step(async (_app: {}, { c }) => c.text('made', 201))))
+    app.get(
+      '/',
+      handler(
+        scope(honoCarrier()).step(async (_app: {}, { c }) =>
+          c.text('made', 201),
+        ),
+      ),
+    )
 
     const res = await app.request('/')
     expect(res.status).toBe(201)
@@ -85,7 +92,7 @@ describe('the Hono carrier: `mw`', () => {
     expect(await res.json()).toEqual({ actor: 'u1' })
   })
 
-  it('a step that stops throws Hono\'s own HTTPException, and the handler never runs', async () => {
+  it("a step that stops throws Hono's own HTTPException, and the handler never runs", async () => {
     let reached = false
     const app = new Hono()
     app.use(mw(scope(honoCarrier()).step(requireActor)))
@@ -98,11 +105,14 @@ describe('the Hono carrier: `mw`', () => {
     expect(reached).toBe(false)
   })
 
-  it('sets only what the steps populated — never the run\'s own args', async () => {
+  it("sets only what the steps populated — never the run's own args", async () => {
     const app = new Hono()
     app.use(mw(scope(honoCarrier()).step(requireActor)))
     app.get('/', (c) =>
-      c.json({ c: c.get('c' as never) ?? null, next: c.get('next' as never) ?? null }),
+      c.json({
+        c: c.get('c' as never) ?? null,
+        next: c.get('next' as never) ?? null,
+      }),
     )
 
     const res = await app.request('/', { headers: { 'x-actor-id': 'u1' } })
@@ -117,7 +127,11 @@ describe('the Hono carrier: `mw`', () => {
     // rather than believed on either.
     const order: string[] = []
 
-    const stamp = async (_app: {}, { c }: { readonly c: Context }, next: Next<{}>) => {
+    const stamp = async (
+      _app: {},
+      { c }: { readonly c: Context },
+      next: Next<{}>,
+    ) => {
       order.push('before')
       const passed = await next({})
       order.push('after-next')
@@ -143,7 +157,7 @@ describe('the Hono carrier: `mw`', () => {
 // ── a guard that stops by RETURNING a response, which is how `route`'s own
 // steps answer. Hono reads a middleware's return: dropped, it sees `undefined`
 // with the chain uncalled and answers 500.
-describe('the Hono carrier: `mw` hands back a step\'s own response', () => {
+describe("the Hono carrier: `mw` hands back a step's own response", () => {
   const { mw } = hono({})
 
   const requireActorReturning = async (
@@ -200,16 +214,20 @@ describe('`params` on Hono: WIDE from `c.req.param()`, refined by `.validate`', 
   // schema and the pattern supplies no `id` (pinned in `index.test-d.ts`).
   // Past the gate, through the escape hatch, the same mistake reaches the
   // request — and `.validate` is what stands between it and the leaf.
-  it('mounted past the gate with `handler`, a missing param is `.validate`\'s 400', async () => {
+  it("mounted past the gate with `handler`, a missing param is `.validate`'s 400", async () => {
     const app = new Hono().get('/posts', hono({}).handler(showPost))
 
     const res = await app.request('/posts')
     expect(res.status).toBe(400)
   })
 
-  it('reads what Hono\'s own router matched, on a nested pattern too', async () => {
-    const app = new Hono().get(...hono({}).route('/tenants/:tenant/posts/:id', showPost))
+  it("reads what Hono's own router matched, on a nested pattern too", async () => {
+    const app = new Hono().get(
+      ...hono({}).route('/tenants/:tenant/posts/:id', showPost),
+    )
 
-    expect(await (await app.request('/tenants/acme/posts/9')).json()).toEqual({ id: '9' })
+    expect(await (await app.request('/tenants/acme/posts/9')).json()).toEqual({
+      id: '9',
+    })
   })
 })

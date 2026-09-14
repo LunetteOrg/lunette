@@ -14,9 +14,13 @@ import { scope, type Next } from '@lntt/scope'
 // Declaring termination, written out: the leaf itself needs no wrapping,
 // because the fold hands back whatever any step returned, untouched.
 interface Repos {
-  readonly users: { readonly byId: (id: string) => { readonly name: string } | undefined }
+  readonly users: {
+    readonly byId: (id: string) => { readonly name: string } | undefined
+  }
 }
-const app: Repos = { users: { byId: (id) => (id === 'u1' ? { name: 'Ada' } : undefined) } }
+const app: Repos = {
+  users: { byId: (id) => (id === 'u1' ? { name: 'Ada' } : undefined) },
+}
 
 describe('the step primitive, folded', () => {
   it('runs steps in the order they were written and threads what each populates', async () => {
@@ -133,7 +137,10 @@ describe('the step primitive, folded', () => {
         ctx.inner.page = 'written'
         return next({})
       })
-      .step(async (_app: {}, ctx: { readonly inner: { page: string } }) => ctx.inner.page)
+      .step(
+        async (_app: {}, ctx: { readonly inner: { page: string } }) =>
+          ctx.inner.page,
+      )
 
     expect(await h(app, params)).toBe('written')
     expect(inner.page).toBe('written')
@@ -158,7 +165,9 @@ describe('the step primitive, folded', () => {
         expect(ctx.session).toBeInstanceOf(Session)
         return next({})
       })
-      .step(async (_app: {}, ctx: { readonly session: Session }) => ctx.session.label())
+      .step(async (_app: {}, ctx: { readonly session: Session }) =>
+        ctx.session.label(),
+      )
 
     expect(await h(app, { session })).toBe('session:s1')
   })
@@ -230,15 +239,20 @@ describe('the step primitive, folded', () => {
 describe('a scope with no leaf', () => {
   it('throws rather than handing back a value it does not have', async () => {
     const base = scope<{ readonly id: string }>().step(
-      async (_app: {}, ctx, next: Next<{ upper: string }>) => next({ upper: ctx.id }),
+      async (_app: {}, ctx, next: Next<{ upper: string }>) =>
+        next({ upper: ctx.id }),
     )
-    await expect(base({}, { id: 'u1' })).rejects.toThrow(/this scope has no leaf/)
+    await expect(base({}, { id: 'u1' })).rejects.toThrow(
+      /this scope has no leaf/,
+    )
   })
 
   it('and one whose only step REFUSES does not reach the throw', async () => {
     // `never` means never: a base that says a word has that word as its `R`,
     // so there is something to hand back and the throw is not the path taken.
-    const refusing = scope().step(async (_app: {}, _ctx: {}) => 'refused-ish' as const)
+    const refusing = scope().step(
+      async (_app: {}, _ctx: {}) => 'refused-ish' as const,
+    )
     expect(await refusing({}, {})).toBe('refused-ish')
   })
 })
@@ -252,12 +266,17 @@ describe('a scope with no leaf', () => {
 describe('branching a base', () => {
   it('leaves the base untouched, and the branches independent', async () => {
     const base = scope<{ readonly id: string }>().step(
-      async (_app: {}, ctx, next: Next<{ upper: string }>) => next({ upper: ctx.id.toUpperCase() }),
+      async (_app: {}, ctx, next: Next<{ upper: string }>) =>
+        next({ upper: ctx.id.toUpperCase() }),
     )
     expect(base.steps).toHaveLength(1)
 
-    const a = base.step(async (_app: {}, ctx: { readonly upper: string }) => `a:${ctx.upper}`)
-    const b = base.step(async (_app: {}, ctx: { readonly upper: string }) => `b:${ctx.upper}`)
+    const a = base.step(
+      async (_app: {}, ctx: { readonly upper: string }) => `a:${ctx.upper}`,
+    )
+    const b = base.step(
+      async (_app: {}, ctx: { readonly upper: string }) => `b:${ctx.upper}`,
+    )
 
     // the base did not grow
     expect(base.steps).toHaveLength(1)
@@ -268,5 +287,4 @@ describe('branching a base', () => {
     expect(await a({}, { id: 'x' })).toBe('a:X')
     expect(await b({}, { id: 'x' })).toBe('b:X')
   })
-
 })
