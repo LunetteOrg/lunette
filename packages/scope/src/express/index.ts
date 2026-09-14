@@ -367,11 +367,12 @@ export const express = <App extends object>(deps: App) => {
       // belongs to the handler and this error has nowhere left to go — it is
       // DROPPED, and dropped SILENTLY, because there is nowhere for it to be
       // dropped loudly: this package has no logger and invents no channel, so
-      // saying otherwise would be a comfort rather than a fact. The two
-      // alternatives are worse and both were measured: `next(err)` is the 500
-      // above, and rethrowing is the unhandled rejection that kills the
-      // process. Work that must survive the response does not belong in a
-      // step here.
+      // saying otherwise would be a comfort rather than a fact. Neither other
+      // ending is available — `next(err)` is the 500 above, on a request that
+      // was about to answer 200, and rethrowing is an unhandled rejection that
+      // ends the process. Work that must survive the response belongs to the
+      // host's own mechanism for it — `waitUntil` where the platform has one, a
+      // queue where it does not — and not to a step.
       //
       // `handOn` MARKS and forwards; it does not deduplicate. Calling
       // Express's `next` twice is Express's own business, and a wrapper that

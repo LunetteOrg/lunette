@@ -66,6 +66,19 @@ the right home for it — whoever coined the words is whoever reads them, and
 aligning a result to a host turns out to need no new mechanism, because such an
 extension IS an ordinary wrapping step.
 
+**No runtime defence on the way OUT**, and the asymmetry with `Ctx` is
+structural rather than an omission. The fold builds the ctx, so it knows its
+type and can hand it out read-only. What comes BACK it cannot know: when a step
+is written the steps it wraps do not exist yet, so the value it receives from
+`next` has no type the core could defend. Freezing or copying it was weighed and
+refused — what comes back is usually the app's own object, alive for the life of
+the process, so a copy is either shallow, and defends nothing, or deep, and
+clones what does not clone (a stream handle, an abort signal, a request). So the
+guarantee moves to the one place where the type IS known, the carrier's single
+assertion, and the hazard is STATED beside `Passed` rather than removed: a step
+that decorates what came back is writing through the app's own object, and
+knowing that is the defence.
+
 `Passed` is the one abstraction that survives, and it is a deliberate
 understatement: the fold really does hand back the inner answer, and the type
 declines to say what it is. It has to. When step 2 is written the builder cannot
