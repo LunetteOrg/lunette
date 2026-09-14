@@ -1,7 +1,14 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { scope } from '@lntt/scope'
-import { body, headers, hono, honoCarrier, params, type HeaderEntries } from '@lntt/scope/hono'
+import {
+  body,
+  headers,
+  hono,
+  honoCarrier,
+  params,
+  type HeaderEntries,
+} from '@lntt/scope/hono'
 import { fail, guards } from '@lntt/scope/guard'
 import type { Deps } from '@lntt/example-app'
 import { deps } from './bootstrap/index.ts'
@@ -22,8 +29,13 @@ const IdParam = z.object({ id: z.string().regex(/^\d+$/, 'must be numeric') })
 // no carrier, only the `headers` entry a read extension populates — so it
 // mounts on either host unchanged. The extraction is per host; everything
 // downstream of it is not.
-const findActor = (_app: {}, { headers: h }: { readonly headers: HeaderEntries }) =>
-  h['x-actor-id'] ? { actor: h['x-actor-id'] } : fail([{ message: 'unauthorized' }])
+const findActor = (
+  _app: {},
+  { headers: h }: { readonly headers: HeaderEntries },
+) =>
+  h['x-actor-id']
+    ? { actor: h['x-actor-id'] }
+    : fail([{ message: 'unauthorized' }])
 
 const CreatePostSchema = z.object({
   title: z.string().min(1),
@@ -38,18 +50,22 @@ const withId = scope(honoCarrier())
   .step(params)
   .validate('params', IdParam, (issues, { c }) => c.json({ issues }, 400))
 
-export const getPost = withId.step(async ({ posts }: Deps, { params: { id }, c }) => {
-  const result = posts.getPost(id)
-  if ('notFound' in result) return c.json({ error: 'not found' } as const, 404)
-  return c.json(result)
-})
+export const getPost = withId.step(
+  async ({ posts }: Deps, { params: { id }, c }) => {
+    const result = posts.getPost(id)
+    if ('notFound' in result)
+      return c.json({ error: 'not found' } as const, 404)
+    return c.json(result)
+  },
+)
 
 export const publishPost = withId
   .step(headers)
   .guard(findActor, (issues, { c }) => c.json({ issues }, 401))
   .step(async ({ posts }: Deps, { params: { id }, c }) => {
     const result = posts.publishPost(id)
-    if ('notFound' in result) return c.json({ error: 'not found' } as const, 404)
+    if ('notFound' in result)
+      return c.json({ error: 'not found' } as const, 404)
     return c.redirect(`/posts/${result.id}`, 303)
   })
 
@@ -59,8 +75,12 @@ export const publishPost = withId
 export const createPost = scope(honoCarrier())
   .extend(guards)
   .step(body('json', (issues, { c }) => c.json({ issues }, 422)))
-  .validate('body', CreatePostSchema, (issues, { c }) => c.json({ issues }, 422))
-  .step(async ({ posts }: Deps, { body: input, c }) => c.json(posts.createPost(input), 201))
+  .validate('body', CreatePostSchema, (issues, { c }) =>
+    c.json({ issues }, 422),
+  )
+  .step(async ({ posts }: Deps, { body: input, c }) =>
+    c.json(posts.createPost(input), 201),
+  )
 
 // CHAINED ON PURPOSE, and it is the one thing this file does that its Express
 // twin cannot. Hono builds its route SCHEMA into the app's own type as the

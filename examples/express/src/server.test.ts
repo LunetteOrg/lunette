@@ -45,17 +45,24 @@ describe('express + scope: the SHARED guard, `.step(headers).guard(...)` on this
   })
 
   it('a malformed id: 400 from `withId`, before the actor guard even runs', async () => {
-    const res = await request(app).post('/posts/missing/publish').set('x-actor-id', 'u1')
+    const res = await request(app)
+      .post('/posts/missing/publish')
+      .set('x-actor-id', 'u1')
     expect(res.status).toBe(400)
   })
 
   it('unknown post, well-formed id, authed: 404', async () => {
-    const res = await request(app).post('/posts/999/publish').set('x-actor-id', 'u1')
+    const res = await request(app)
+      .post('/posts/999/publish')
+      .set('x-actor-id', 'u1')
     expect(res.status).toBe(404)
   })
 
   it('known post, authed: redirects to the post', async () => {
-    const res = await request(app).post('/posts/1/publish').set('x-actor-id', 'u1').redirects(0)
+    const res = await request(app)
+      .post('/posts/1/publish')
+      .set('x-actor-id', 'u1')
+      .redirects(0)
     expect(res.status).toBe(303)
     expect(res.headers.location).toBe('/posts/1')
   })
@@ -63,7 +70,9 @@ describe('express + scope: the SHARED guard, `.step(headers).guard(...)` on this
 
 describe('express + scope: the SHARED body reader and validator', () => {
   it('a valid body: 201', async () => {
-    const res = await request(app).post('/posts').send({ title: 'New', content: 'Body' })
+    const res = await request(app)
+      .post('/posts')
+      .send({ title: 'New', content: 'Body' })
     expect(res.status).toBe(201)
   })
 

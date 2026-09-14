@@ -172,8 +172,10 @@ declare const reusedSymKey: unique symbol
 
 describe('non-string PropertyKeys: symbols labelled, numbers rejected', () => {
   it('a reused symbol key is caught and the message says a symbol collided', () => {
-    // @ts-expect-error — symbol key collision caught, at the reuse
-    void lunette().provide(reusedSymKey, () => 1).provide(reusedSymKey, () => 2)
+    void lunette()
+      .provide(reusedSymKey, () => 1)
+      // @ts-expect-error — symbol key collision caught, at the reuse
+      .provide(reusedSymKey, () => 2)
 
     // the message cannot name a symbol (no type-level name exists), but
     // it stays a readable sentence — and the diagnostic itself prints
@@ -199,7 +201,9 @@ describe('non-string PropertyKeys: symbols labelled, numbers rejected', () => {
     void lunette().provide(() => ({ 42: 'x' }))
 
     // numbers DO interpolate — the ban message names the key exactly
-    expectTypeOf<NumKeyMsg<42>>().toEqualTypeOf<'⛔ numeric key not supported (it becomes a string at runtime): 42'>()
+    expectTypeOf<
+      NumKeyMsg<42>
+    >().toEqualTypeOf<'⛔ numeric key not supported (it becomes a string at runtime): 42'>()
   })
 
   it("the hazard that motivated the ban: 42 and '42' are one runtime key", () => {
@@ -247,8 +251,9 @@ describe('a numeric key and a string collision report together', () => {
   })
 
   it('with no numeric key the union degrades to the plain collision message', () => {
-    expectTypeOf<MirrorCollisionMsg<{ db: number }, { db: string }>>()
-      .toEqualTypeOf<'⛔ key already present in the context: db'>()
+    expectTypeOf<
+      MirrorCollisionMsg<{ db: number }, { db: string }>
+    >().toEqualTypeOf<'⛔ key already present in the context: db'>()
   })
 })
 
@@ -270,8 +275,9 @@ describe('union keys: one colliding member is a collision', () => {
       .provide(dbOrMailer, () => 'two')
 
     // the message names exactly the colliding member, not the whole union
-    expectTypeOf<DupKeyMsg<Extract<'db' | 'mailer', 'db'>>>()
-      .toEqualTypeOf<'⛔ key already present in the context: db'>()
+    expectTypeOf<
+      DupKeyMsg<Extract<'db' | 'mailer', 'db'>>
+    >().toEqualTypeOf<'⛔ key already present in the context: db'>()
   })
 
   it('every keyed verb checks the union, not just provide', () => {
@@ -297,7 +303,9 @@ describe('union keys: one colliding member is a collision', () => {
     // of residual the numeric-key rule leaves, and worth settling only if
     // a real case ever hits it. The collision guard's job here is only
     // the clash, and there is none.
-    const chain = lunette().provide('db', () => 1).provide(cacheOrQueue, () => 'v')
+    const chain = lunette()
+      .provide('db', () => 1)
+      .provide(cacheOrQueue, () => 'v')
     expectTypeOf(chain.run).toBeFunction()
   })
 
@@ -322,13 +330,17 @@ describe('union keys: one colliding member is a collision', () => {
 
     void lunette()
       .provide(() => ({ mailer: 'taken' }))
-      // @ts-expect-error — the MailerPatch member collides
-      .provide<DbPatch | MailerPatch>(() => (coin ? { db: 1 } : { mailer: 'x' }))
+      .provide<DbPatch | MailerPatch>(() =>
+        // @ts-expect-error — the MailerPatch member collides
+        coin ? { db: 1 } : { mailer: 'x' },
+      )
 
     // the numeric ban distributes the same way
     type WithNum = { 42: string }
-    // @ts-expect-error — the WithNum member carries a numeric key
-    void lunette().provide<DbPatch | WithNum>(() => (coin ? { db: 1 } : { 42: 'x' }))
+    void lunette().provide<DbPatch | WithNum>(() =>
+      // @ts-expect-error — the WithNum member carries a numeric key
+      coin ? { db: 1 } : { 42: 'x' },
+    )
   })
 })
 
@@ -449,7 +461,7 @@ describe('an any context is refused by name, not with a false collision', () => 
       .provide('later', () => 'still fine') // no poisoned-chain effect
       .run(async (pub) => pub)
 
-    expectTypeOf(app.payments['stripe']).toEqualTypeOf<number | undefined>()
+    expectTypeOf(app.payments.stripe).toEqualTypeOf<number | undefined>()
   })
 
   it('an EMPTY patch is not a widened patch: it flows', () => {
@@ -464,7 +476,9 @@ describe('an any context is refused by name, not with a false collision', () => 
     // net throws at boot instead (asserted in keyed.test.ts). One of the
     // widened-type residuals the literal-based guard cannot see.
     const widened: string = 'db'
-    const chain = lunette().provide('db', () => 1).provide(widened, () => 2)
+    const chain = lunette()
+      .provide('db', () => 1)
+      .provide(widened, () => 2)
 
     expectTypeOf(chain.run).toBeFunction()
   })
@@ -502,8 +516,10 @@ describe('an any context is refused by name, not with a false collision', () => 
   })
 
   it('mounting a fragment whose Pub degraded to any is refused by name too', () => {
-    // @ts-expect-error — any Pub: the collision guard cannot check it
-    void lunette().provide(() => ({ db: 1 })).use(anyPubFrag)
+    void lunette()
+      .provide(() => ({ db: 1 }))
+      // @ts-expect-error — any Pub: the collision guard cannot check it
+      .use(anyPubFrag)
   })
 
   it('a fully-indexed CONCRETE context is not blamed as any', () => {
@@ -533,14 +549,26 @@ describe('an any context is refused by name, not with a false collision', () => 
     // the sticky brand actually wires.
     type Ctx = { db: number }
 
-    expectTypeOf<BrandMsg<CollisionBrand<never, { p: 1 }>>>().toEqualTypeOf<NeverCtxMsg>()
-    expectTypeOf<BrandMsg<CollisionBrand<any, { p: 1 }>>>().toEqualTypeOf<AnyCtxMsg>()
-    expectTypeOf<BrandMsg<CollisionBrand<Ctx, never>>>().toEqualTypeOf<NeverPatchMsg>()
-    expectTypeOf<BrandMsg<CollisionBrand<Ctx, any>>>().toEqualTypeOf<AnyPatchMsg>()
+    expectTypeOf<
+      BrandMsg<CollisionBrand<never, { p: 1 }>>
+    >().toEqualTypeOf<NeverCtxMsg>()
+    expectTypeOf<
+      BrandMsg<CollisionBrand<any, { p: 1 }>>
+    >().toEqualTypeOf<AnyCtxMsg>()
+    expectTypeOf<
+      BrandMsg<CollisionBrand<Ctx, never>>
+    >().toEqualTypeOf<NeverPatchMsg>()
+    expectTypeOf<
+      BrandMsg<CollisionBrand<Ctx, any>>
+    >().toEqualTypeOf<AnyPatchMsg>()
 
     // and the context always wins the blame
-    expectTypeOf<BrandMsg<CollisionBrand<never, any>>>().toEqualTypeOf<NeverCtxMsg>()
-    expectTypeOf<BrandMsg<CollisionBrand<any, never>>>().toEqualTypeOf<AnyCtxMsg>()
+    expectTypeOf<
+      BrandMsg<CollisionBrand<never, any>>
+    >().toEqualTypeOf<NeverCtxMsg>()
+    expectTypeOf<
+      BrandMsg<CollisionBrand<any, never>>
+    >().toEqualTypeOf<AnyCtxMsg>()
   })
 
   it('residual, pinned: an any KEY mints an index-signature context', () => {

@@ -14,7 +14,11 @@ describe('the posts domain, with no host and no chain in the picture', () => {
   it('createPost: assigns an id and starts unpublished', () => {
     const repo = makeRepo()
     const post = createPost(repo, { title: 'New', content: 'Body' })
-    expect(post).toMatchObject({ title: 'New', content: 'Body', published: false })
+    expect(post).toMatchObject({
+      title: 'New',
+      content: 'Body',
+      published: false,
+    })
     expect(getPost(repo, post.id)).toEqual(post)
   })
 

@@ -6,4 +6,6 @@ import { createPost, getPost, makeRepo, publishPost } from './posts.ts'
 // mount that host ships.
 export const chain = lunette()
   .provide('repo', () => makeRepo())
-  .expose('posts', (ctx) => bind({ getPost, createPost, publishPost })(ctx.repo))
+  .expose('posts', (ctx) =>
+    bind({ getPost, createPost, publishPost })(ctx.repo),
+  )

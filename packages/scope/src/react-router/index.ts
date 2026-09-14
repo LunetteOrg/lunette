@@ -81,7 +81,10 @@ export const reactRouter = <App extends object>(deps: App) => {
       readonly request: Request
       readonly params: Validated<S, 'params'>
     }): Promise<ResultOf<Scope<S>>> =>
-      (sc as unknown as (app: App, a: object) => Promise<ResultOf<Scope<S>>>)(deps, args)
+      (sc as unknown as (app: App, a: object) => Promise<ResultOf<Scope<S>>>)(
+        deps,
+        args,
+      )
 
   return { loader: mount, action: mount }
 }
@@ -91,7 +94,13 @@ export const reactRouter = <App extends object>(deps: App) => {
 // one (`@lntt/scope/guard`). The reasoning is written out in the Hono carrier;
 // these two are the SAME FAMILY — both read a Fetch `Request` — so what differs
 // is only where the request is found, and the readers themselves are shared.
-export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from '../reads.ts'
+export type {
+  Query,
+  Cookies,
+  Headers_ as HeaderEntries,
+  Encoding,
+  BodyOf,
+} from '../reads.ts'
 
 // ONE implementation for the whole Fetch family, in `reads.ts` — Hono reads the
 // same source through `c.req.raw`. This subpath passes the one line that

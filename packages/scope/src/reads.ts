@@ -41,7 +41,9 @@ export type Encoding = 'json' | 'form'
 // deliberate: it is what the entry HOLDS before anyone validates it, and a type that
 // forces a validation is the point. Changing that is a design decision, not a
 // repair to this line.
-export type BodyOf<E extends Encoding> = E extends 'json' ? unknown : Record<string, string | File>
+export type BodyOf<E extends Encoding> = E extends 'json'
+  ? unknown
+  : Record<string, string | File>
 
 // ── the readers, over the two shapes every Fetch-based host really has ───────
 // `URLSearchParams` and `Headers` are what Hono and React Router both hold, and
@@ -66,7 +68,9 @@ export const queryFrom = (params: URLSearchParams): Query => {
   return out
 }
 
-export const headersFrom = (headers: Iterable<readonly [string, string]>): Headers_ => {
+export const headersFrom = (
+  headers: Iterable<readonly [string, string]>,
+): Headers_ => {
   const out = bag<string>()
   for (const [name, value] of headers) out[name.toLowerCase()] = value
   return out
@@ -118,7 +122,9 @@ export const cookiesFrom = (header: string | null | undefined): Cookies => {
 // dead connection. The bytes are taken first, then a throwaway request is built
 // around them so the host's own multipart reader does the parsing over data that
 // is already here.
-export type Read = { readonly value: unknown } | { readonly issues: readonly StandardIssue[] }
+export type Read =
+  | { readonly value: unknown }
+  | { readonly issues: readonly StandardIssue[] }
 
 // ── the size cap ──────────────────────────────────────────────────────────────
 // NO READER SHIPS WITHOUT A CEILING. Node has no default of its own — unlike
@@ -145,7 +151,10 @@ export const tooLarge = (limit: number): StandardIssue => ({
 // Skipped rather than failed on anything that does not parse as a number: an
 // absent or malformed header is common (chunked transfer-encoding has none at
 // all) and is not itself grounds to refuse the request.
-export const contentLengthExceeds = (contentLength: string | undefined, limit: number): boolean => {
+export const contentLengthExceeds = (
+  contentLength: string | undefined,
+  limit: number,
+): boolean => {
   if (contentLength === undefined) return false
   const n = Number(contentLength)
   return Number.isFinite(n) && n > limit
@@ -160,7 +169,12 @@ export const readLimitedBody = async (
   request: Request,
   limit: number,
 ): Promise<{ readonly bytes: Uint8Array } | { readonly tooLarge: true }> => {
-  if (contentLengthExceeds(request.headers.get('content-length') ?? undefined, limit)) {
+  if (
+    contentLengthExceeds(
+      request.headers.get('content-length') ?? undefined,
+      limit,
+    )
+  ) {
     return { tooLarge: true }
   }
 
@@ -199,11 +213,15 @@ export const readLimitedBody = async (
 export const mediaTypeOf = (contentType: string | undefined): string =>
   (contentType ?? '').split(';')[0]?.trim().toLowerCase() ?? ''
 
-export const encodingMatches = (contentType: string | undefined, encoding: Encoding): boolean => {
+export const encodingMatches = (
+  contentType: string | undefined,
+  encoding: Encoding,
+): boolean => {
   const type = mediaTypeOf(contentType)
   return encoding === 'json'
     ? type === 'application/json' || type.endsWith('+json')
-    : type === 'application/x-www-form-urlencoded' || type === 'multipart/form-data'
+    : type === 'application/x-www-form-urlencoded' ||
+        type === 'multipart/form-data'
 }
 
 // MULTIPART IS THE ONE ENCODING A PRE-PARSED BODY CANNOT CARRY WHOLE. The
@@ -221,7 +239,10 @@ export const isMultipart = (contentType: string | undefined): boolean =>
 //
 // `||` and not `??`: a header that is PRESENT AND EMPTY is `''`, which `??`
 // passes straight through into the message.
-export const wrongEncoding = (contentType: string | undefined, encoding: Encoding): StandardIssue => ({
+export const wrongEncoding = (
+  contentType: string | undefined,
+  encoding: Encoding,
+): StandardIssue => ({
   message: `the body was sent as ${contentType || 'nothing'}, not ${encoding}`,
 })
 
@@ -243,7 +264,8 @@ export const parseBody = (
   contentType: string | undefined,
   encoding: Encoding,
 ): Read | Promise<Read> => {
-  if (!encodingMatches(contentType, encoding)) return { issues: [wrongEncoding(contentType, encoding)] }
+  if (!encodingMatches(contentType, encoding))
+    return { issues: [wrongEncoding(contentType, encoding)] }
 
   if (encoding === 'json') {
     // `fatal: true`, and the default is why: a non-fatal decoder REPLACES every
@@ -284,7 +306,10 @@ export const parseBody = (
         for (const [name, value] of form) out[name] = value
         return { value: out } as Read
       },
-      () => ({ issues: [{ message: 'the body is not a valid form payload' }] }) as Read,
+      () =>
+        ({
+          issues: [{ message: 'the body is not a valid form payload' }],
+        }) as Read,
     )
 }
 
@@ -293,11 +318,19 @@ export const parseBody = (
 // byte was checked. `readLimitedBody` stops as soon as `limit` is crossed, so a
 // too-large body never accumulates past it — and its own verdict, not
 // `content-length`, is what decides.
-export const readBody = async (request: Request, encoding: Encoding, limit: number): Promise<Read> => {
+export const readBody = async (
+  request: Request,
+  encoding: Encoding,
+  limit: number,
+): Promise<Read> => {
   const read = await readLimitedBody(request, limit)
   return 'tooLarge' in read
     ? { issues: [tooLarge(limit)] }
-    : parseBody(read.bytes, request.headers.get('content-type') ?? undefined, encoding)
+    : parseBody(
+        read.bytes,
+        request.headers.get('content-type') ?? undefined,
+        encoding,
+      )
 }
 
 // The tail every `body` step ends on, shared so the two families cannot answer
@@ -320,7 +353,9 @@ export const finishRead = async <E extends Encoding, Ctx, R>(
 //
 // Express is NOT of this family: `req` is a Node message, so its four are
 // written against that and adapt to these readers at the edge.
-export const fetchReads = <Args extends object>(requestOf: (ctx: Args) => Request) => ({
+export const fetchReads = <Args extends object>(
+  requestOf: (ctx: Args) => Request,
+) => ({
   query: async (_app: {}, ctx: Args, next: Next<{ query: Query }>) =>
     next({ query: queryFrom(new URL(requestOf(ctx).url).searchParams) }),
 
@@ -343,9 +378,17 @@ export const fetchReads = <Args extends object>(requestOf: (ctx: Args) => Reques
       onError: (issues: readonly StandardIssue[], ctx: Args) => R,
       options?: { readonly limit?: number },
     ) =>
-    async (_app: {}, ctx: Args, next: Next<{ body: BodyOf<E> }>): Promise<Passed | Awaited<R>> =>
+    async (
+      _app: {},
+      ctx: Args,
+      next: Next<{ body: BodyOf<E> }>,
+    ): Promise<Passed | Awaited<R>> =>
       finishRead<E, Args, R>(
-        await readBody(requestOf(ctx), encoding, options?.limit ?? DEFAULT_BODY_LIMIT),
+        await readBody(
+          requestOf(ctx),
+          encoding,
+          options?.limit ?? DEFAULT_BODY_LIMIT,
+        ),
         ctx,
         onError,
         next,

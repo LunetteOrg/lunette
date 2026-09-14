@@ -46,10 +46,12 @@ describe('the Express carrier: what a run brings', () => {
     app.get(
       '/',
       handler(
-        scope(expressCarrier()).step(async (seen: { count: number }, { res }) => {
-          seen.count += 1
-          return res.json({ count: seen.count })
-        }),
+        scope(expressCarrier()).step(
+          async (seen: { count: number }, { res }) => {
+            seen.count += 1
+            return res.json({ count: seen.count })
+          },
+        ),
       ),
     )
 
@@ -61,8 +63,8 @@ describe('the Express carrier: what a run brings', () => {
 describe('the Express carrier: `route(path, scope)`', () => {
   const { route } = express({})
 
-  const showPost = scope(expressCarrier()).step(async (_app: {}, { req, res }) =>
-    res.json({ id: req.params.id }),
+  const showPost = scope(expressCarrier()).step(
+    async (_app: {}, { req, res }) => res.json({ id: req.params.id }),
   )
 
   it('hands back the pair Express mounts, so the pattern is written once', async () => {
@@ -107,7 +109,7 @@ describe('the Express carrier: `mw`', () => {
     expect(reached).toBe(false)
   })
 
-  it('puts only what the steps populated on res.locals — never the run\'s own args', async () => {
+  it("puts only what the steps populated on res.locals — never the run's own args", async () => {
     const app = expressLib()
     app.use(mw(scope(expressCarrier()).step(requireActor)))
     app.get('/', (_req, res) => res.json({ keys: Object.keys(res.locals) }))
@@ -192,7 +194,7 @@ describe('the Express carrier: a step does NOT wrap the handler', () => {
 })
 
 // ── the other side of `.catch(next)` ────────────────────────────────────────
-describe('the Express carrier: a throw AFTER `next` does not steal the handler\'s answer', () => {
+describe("the Express carrier: a throw AFTER `next` does not steal the handler's answer", () => {
   it('leaves the response to the handler that was already running', async () => {
     // `toNext` hands control on and returns at once, so the fold's promise is
     // still pending while the handler runs. A step throwing there rejects it —
@@ -211,10 +213,12 @@ describe('the Express carrier: a throw AFTER `next` does not steal the handler\'
       await new Promise((r) => setTimeout(r, 10))
       res.json({ ok: true })
     })
-    app.use((_err: unknown, _req: Request, res: Response, _next: () => void) => {
-      errorHandlerRan = true
-      res.status(500).json({ error: 'infrastructure' })
-    })
+    app.use(
+      (_err: unknown, _req: Request, res: Response, _next: () => void) => {
+        errorHandlerRan = true
+        res.status(500).json({ error: 'infrastructure' })
+      },
+    )
 
     const res = await request(app).get('/')
     expect(res.status).toBe(200)
@@ -248,7 +252,9 @@ describe('`params`: a fifth read extension, WIDE, refined by `.validate`', () =>
   const showPost = scope(expressCarrier())
     .extend(guards)
     .step(params)
-    .validate('params', IdParam, (issues, { res }) => res.status(400).json({ issues }))
+    .validate('params', IdParam, (issues, { res }) =>
+      res.status(400).json({ issues }),
+    )
     .step(async (_a: {}, { params: p, res }) => res.json({ id: p.id }))
 
   it('a well-formed id passes through, VALIDATED — not merely cast', async () => {
@@ -272,7 +278,7 @@ describe('`params`: a fifth read extension, WIDE, refined by `.validate`', () =>
   // The runtime answer below is what the ESCAPE HATCH gets — `handler` never
   // sees the pattern, so the same mistake reaches the request there, and
   // `.validate` is what stands between it and the leaf.
-  it('mounted past the gate with `handler`, a missing param is `.validate`\'s 400', async () => {
+  it("mounted past the gate with `handler`, a missing param is `.validate`'s 400", async () => {
     const app = expressLib()
     app.get('/posts', express({}).handler(showPost))
 

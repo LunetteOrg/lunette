@@ -1,7 +1,14 @@
 import expressLib from 'express'
 import { z } from 'zod'
 import { scope } from '@lntt/scope'
-import { body, express, expressCarrier, headers, params, type HeaderEntries } from '@lntt/scope/express'
+import {
+  body,
+  express,
+  expressCarrier,
+  headers,
+  params,
+  type HeaderEntries,
+} from '@lntt/scope/express'
 import { fail, guards } from '@lntt/scope/guard'
 import type { Deps } from '@lntt/example-app'
 import { deps } from './bootstrap/index.ts'
@@ -14,8 +21,13 @@ const { route, mw } = express(deps)
 // against: `route('/posts', getPost)` does not compile.
 const IdParam = z.object({ id: z.string().regex(/^\d+$/, 'must be numeric') })
 
-const findActor = (_app: {}, { headers: h }: { readonly headers: HeaderEntries }) =>
-  h['x-actor-id'] ? { actor: h['x-actor-id'] } : fail([{ message: 'unauthorized' }])
+const findActor = (
+  _app: {},
+  { headers: h }: { readonly headers: HeaderEntries },
+) =>
+  h['x-actor-id']
+    ? { actor: h['x-actor-id'] }
+    : fail([{ message: 'unauthorized' }])
 
 const CreatePostSchema = z.object({
   title: z.string().min(1),
@@ -27,13 +39,16 @@ const CreatePostSchema = z.object({
 const withId = scope(expressCarrier())
   .extend(guards)
   .step(params)
-  .validate('params', IdParam, (issues, { res }) => res.status(400).json({ issues }))
+  .validate('params', IdParam, (issues, { res }) =>
+    res.status(400).json({ issues }),
+  )
 
 export const getPost = route(
   '/posts/:id',
   withId.step(async ({ posts }: Deps, { params: { id }, res }) => {
     const result = posts.getPost(id)
-    if ('notFound' in result) return res.status(404).json({ error: 'not found' })
+    if ('notFound' in result)
+      return res.status(404).json({ error: 'not found' })
     return res.json(result)
   }),
 )
@@ -45,7 +60,8 @@ export const publishPost = route(
     .guard(findActor, (issues, { res }) => res.status(401).json({ issues }))
     .step(async ({ posts }: Deps, { params: { id }, res }) => {
       const result = posts.publishPost(id)
-      if ('notFound' in result) return res.status(404).json({ error: 'not found' })
+      if ('notFound' in result)
+        return res.status(404).json({ error: 'not found' })
       // `res.redirect` returns `void`, not `Response` — returning it
       // directly fails `AnswerGate`. `return undefined` says
       // explicitly that this leaf answered by writing to `res`.
@@ -62,8 +78,12 @@ export const createPost = route(
   scope(expressCarrier())
     .extend(guards)
     .step(body('json', (issues, { res }) => res.status(422).json({ issues })))
-    .validate('body', CreatePostSchema, (issues, { res }) => res.status(422).json({ issues }))
-    .step(async ({ posts }: Deps, { res, body: input }) => res.status(201).json(posts.createPost(input))),
+    .validate('body', CreatePostSchema, (issues, { res }) =>
+      res.status(422).json({ issues }),
+    )
+    .step(async ({ posts }: Deps, { res, body: input }) =>
+      res.status(201).json(posts.createPost(input)),
+    ),
 )
 
 export const app = expressLib()

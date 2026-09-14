@@ -151,7 +151,9 @@ describe('buildOnce when the build fails', () => {
     const { chain, torn } = flaky(1)
     const once = buildOnce(chain)
 
-    await expect(once.ensure(seedOf('pg://unwound'))).rejects.toThrow('transient')
+    await expect(once.ensure(seedOf('pg://unwound'))).rejects.toThrow(
+      'transient',
+    )
     // The layer's `finally` ran on the way out: the retry starts from nothing.
     expect(torn).toEqual(['pg://unwound'])
     await once.ensure(seedOf('pg://unwound'))
@@ -172,7 +174,11 @@ describe('buildOnce when the build fails', () => {
     // One attempt, three rejections: the memo still does its job while the build
     // is in flight. Only a caller arriving AFTER it settles starts a new one.
     expect(attempts).toEqual(['pg://raced'])
-    expect(raced.map((r) => r.status)).toEqual(['rejected', 'rejected', 'rejected'])
+    expect(raced.map((r) => r.status)).toEqual([
+      'rejected',
+      'rejected',
+      'rejected',
+    ])
     await once.dispose()
   })
 
@@ -180,7 +186,9 @@ describe('buildOnce when the build fails', () => {
     const { chain } = flaky(1)
     const once = buildOnce(chain)
 
-    await expect(once.ensure(seedOf('pg://doomed'))).rejects.toThrow('transient')
+    await expect(once.ensure(seedOf('pg://doomed'))).rejects.toThrow(
+      'transient',
+    )
     // Teardown has to work in the state that calls for it. Awaiting the rejected
     // handle would rethrow, leaving a caller no way to close what did succeed.
     await expect(once.dispose()).resolves.toBeUndefined()
@@ -331,6 +339,7 @@ describe('buildOnce teardown, as something callers observe', () => {
           return await next({ db: { url: ctx.env.DATABASE_URL } })
         } finally {
           closes += 1
+          // biome-ignore lint/correctness/noUnsafeFinally: a teardown that throws over the result is the failure this test reproduces
           throw new Error('close failed: socket busy')
         }
       })

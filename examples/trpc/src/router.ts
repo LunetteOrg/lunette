@@ -60,10 +60,12 @@ const badInput = (): never => {
 export const authed = t.procedure.use(
   t.middleware(
     middleware(
-      scope(carrier()).step(async (_app: {}, { ctx }, next: Next<{ actor: string }>) => {
-        if (!ctx.actorId) throw new TRPCError({ code: 'UNAUTHORIZED' })
-        return next({ actor: ctx.actorId })
-      }),
+      scope(carrier()).step(
+        async (_app: {}, { ctx }, next: Next<{ actor: string }>) => {
+          if (!ctx.actorId) throw new TRPCError({ code: 'UNAUTHORIZED' })
+          return next({ actor: ctx.actorId })
+        },
+      ),
     ),
   ),
 )

@@ -12,7 +12,9 @@ describe('mount — boundary and visibility', () => {
   // a fragment with its own privates and external requirements
   const makeAuthChain = () =>
     lunette<{ env: Env }>()
-      .provide(({ env }) => ({ authDb: { url: env.DATABASE_URL, secret: true } }))
+      .provide(({ env }) => ({
+        authDb: { url: env.DATABASE_URL, secret: true },
+      }))
       .expose(({ authDb }) => ({
         auth: { whoami: () => `user@${authDb.url}` },
       }))
@@ -41,12 +43,14 @@ describe('mount — boundary and visibility', () => {
     expect('db' in app).toBe(false)
   })
 
-  it("the mount net: a fragment Pub colliding with a host key throws at boot", async () => {
+  it('the mount net: a fragment Pub colliding with a host key throws at boot', async () => {
     // The third runtime net (after the keyed and override ones): the
     // compile-time guard is bypassable via a cast, so the boot must
     // still refuse a fragment whose public surface lands on an existing
     // host key — naming it.
-    const openFrag = lunette().expose(() => ({ auth: { whoami: () => 'frag' } }))
+    const openFrag = lunette().expose(() => ({
+      auth: { whoami: () => 'frag' },
+    }))
 
     const chain = lunette()
       .provide('auth', () => 'host-own')

@@ -14,13 +14,21 @@ const appChain = lunette<{ env: Env }>()
   .expose((c) => ({ pool: { q: c.config.db } }))
   .expose(() => ({ logger: { info: (m: string) => m } }))
   .expose((c) => ({ clock: { now: () => c.pool.q.length } }))
-  .expose((c) => ({ userRepo: { find: (id: string) => `${c.config.db}:${id}` } }))
-  .expose((c) => ({ sessionRepo: { get: (id: string) => c.userRepo.find(id) } }))
-  .expose((c) => ({ adminRepo: { byId: (id: string) => c.sessionRepo.get(id) } }))
+  .expose((c) => ({
+    userRepo: { find: (id: string) => `${c.config.db}:${id}` },
+  }))
+  .expose((c) => ({
+    sessionRepo: { get: (id: string) => c.userRepo.find(id) },
+  }))
+  .expose((c) => ({
+    adminRepo: { byId: (id: string) => c.sessionRepo.get(id) },
+  }))
   .expose((c) => ({ courseRepo: { list: () => [c.adminRepo.byId('a')] } }))
   .expose((c) => ({ orderRepo: { count: () => c.courseRepo.list().length } }))
   .expose((c) => ({ mailer: { send: (to: string) => c.logger.info(to) } }))
-  .expose((c) => ({ billing: { charge: (n: number) => n + c.orderRepo.count() } }))
+  .expose((c) => ({
+    billing: { charge: (n: number) => n + c.orderRepo.count() },
+  }))
   .expose((c) => ({ cache: { key: (k: string) => `${k}:${c.clock.now()}` } }))
   .expose((c) => ({ search: { q: (t: string) => c.cache.key(t) } }))
   .expose((c) => ({ metrics: { inc: (m: string) => c.search.q(m) } }))
@@ -34,15 +42,19 @@ describe('scope-reseed runtime spike', () => {
     const handle = (inv: { scope: { params: { id: string } } }) =>
       lunette<typeof app & typeof inv>()
         .expose((c) => ({ session: c.sessionRepo.get(inv.scope.params.id) }))
-        .expose((c) => ({ admin: c.adminRepo.byId(c.session) + c.orderRepo.count() }))
+        .expose((c) => ({
+          admin: c.adminRepo.byId(c.session) + c.orderRepo.count(),
+        }))
         .run({ ...app, ...inv }, async (deps) => deps.admin)
 
     const N = 20_000
     // warmup
-    for (let i = 0; i < 1_000; i++) await handle({ scope: { params: { id: `w${i}` } } })
+    for (let i = 0; i < 1_000; i++)
+      await handle({ scope: { params: { id: `w${i}` } } })
 
     const t0 = performance.now()
-    for (let i = 0; i < N; i++) await handle({ scope: { params: { id: `u${i}` } } })
+    for (let i = 0; i < N; i++)
+      await handle({ scope: { params: { id: `u${i}` } } })
     const t1 = performance.now()
 
     await dispose()

@@ -48,7 +48,11 @@ import { trpc } from './trpc/index.ts'
 // nothing of the run, or it reads one host's — or it reads an ENTRY, which is
 // the third answer, and the reason the paragraph above exists.
 const stamp = scope().step(
-  async ({ rid }: { readonly rid: string }, _ctx, next: Next<{ rid: string }>) => next({ rid }),
+  async (
+    { rid }: { readonly rid: string },
+    _ctx,
+    next: Next<{ rid: string }>,
+  ) => next({ rid }),
 )
 
 const deps = { rid: 'r-1' }
@@ -75,7 +79,9 @@ describe('one scope with no carrier, mounted on all four hosts', () => {
     const stamped = t.middleware(trpc(t, deps).middleware(stamp))
 
     const router = t.router({
-      who: t.procedure.use(stamped).query(({ ctx }) => (ctx as { readonly rid: string }).rid),
+      who: t.procedure
+        .use(stamped)
+        .query(({ ctx }) => (ctx as { readonly rid: string }).rid),
     })
 
     expect(await router.createCaller({ tenant: 't1' }).who()).toBe('r-1')

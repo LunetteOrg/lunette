@@ -12,7 +12,9 @@ describe('hono + scope: the request-id middleware', () => {
   it('different requests get different ids', async () => {
     const a = await app.request('/posts/1')
     const b = await app.request('/posts/1')
-    expect(a.headers.get('x-request-id')).not.toBe(b.headers.get('x-request-id'))
+    expect(a.headers.get('x-request-id')).not.toBe(
+      b.headers.get('x-request-id'),
+    )
   })
 })
 
@@ -44,7 +46,9 @@ describe('hono + scope: `withId` — one base scope, two routes', () => {
 
 describe('hono + scope: the SHARED guard, `.step(headers).guard(...)` on this host', () => {
   it('no actor header: 401, from the guard', async () => {
-    expect((await app.request('/posts/1/publish', { method: 'POST' })).status).toBe(401)
+    expect(
+      (await app.request('/posts/1/publish', { method: 'POST' })).status,
+    ).toBe(401)
   })
 
   it('a malformed id: 400 from `withId`, before the actor guard even runs', async () => {
@@ -94,7 +98,9 @@ describe('hono + scope: the SHARED body reader and validator', () => {
   })
 
   it('an oversized body: 422 from the same reader, not a hang', async () => {
-    expect((await post({ title: 'x'.repeat(200_000), content: 'Body' })).status).toBe(422)
+    expect(
+      (await post({ title: 'x'.repeat(200_000), content: 'Body' })).status,
+    ).toBe(422)
   })
 })
 
@@ -119,7 +125,12 @@ describe('hono + scope: the typed RPC client, end to end', () => {
           issues: readonly {
             readonly message: string
             readonly path?:
-              | readonly (string | number | { readonly key: string | number | undefined } | null)[]
+              | readonly (
+                  | string
+                  | number
+                  | { readonly key: string | number | undefined }
+                  | null
+                )[]
               | undefined
           }[]
         }
@@ -134,7 +145,9 @@ describe('hono + scope: the typed RPC client, end to end', () => {
 
     // no cast anywhere: the shapes differ, so `in` narrows them
     if ('issues' in answered) {
-      expectTypeOf(answered.issues).toExtend<readonly { readonly message: string }[]>()
+      expectTypeOf(answered.issues).toExtend<
+        readonly { readonly message: string }[]
+      >()
       expect(res.status).toBe(400)
     } else if ('error' in answered) {
       expect.unreachable('a malformed id never reaches the domain lookup')
