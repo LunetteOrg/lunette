@@ -182,11 +182,8 @@ export type NeverSeedMsg =
 // first (the keyof-based any-detection would swallow it), then any,
 // then the guard's own verdict. Shared so the branch ORDER cannot drift
 // between guards.
-type DegeneracyOr<T, OnNever, OnAny, Then> = IsNever<T> extends true
-  ? OnNever
-  : IsAny<T> extends true
-    ? OnAny
-    : Then
+type DegeneracyOr<T, OnNever, OnAny, Then> =
+  IsNever<T> extends true ? OnNever : IsAny<T> extends true ? OnAny : Then
 
 // The tuple-wrap that judges a key set as a SET: one bad member is a
 // verdict. A naked conditional would distribute over a union input and
@@ -251,9 +248,10 @@ type HasNoNames<P> = P extends unknown
 type ClashOf<Ctx, P> = P extends unknown ? Clash<Ctx, P> : never
 type NumKeysOf<P> = P extends unknown ? NumKeys<P> : never
 
-type PatchVerdict<Ctx, P> = true extends HasNoNames<P>
-  ? { [collision]: WidenedPatchMsg }
-  : CollisionVerdict<NumKeysOf<P>, ClashOf<Ctx, P>>
+type PatchVerdict<Ctx, P> =
+  true extends HasNoNames<P>
+    ? { [collision]: WidenedPatchMsg }
+    : CollisionVerdict<NumKeysOf<P>, ClashOf<Ctx, P>>
 
 type AbsorbableCollisionBrand<Ctx, P> = DegeneracyOr<
   Ctx,
@@ -486,9 +484,17 @@ const pick = (source: Bag, keys: Iterable<PropertyKey>): Bag => {
 // build-once handle needs when it takes `C extends Lunette<any, any, any>` and
 // has to name that chain's public surface or its seed. `PubOf` goes through
 // `build`'s return type so it carries the same `Expand` the caller sees.
-export type PubOf<C> = C extends { build: (...a: never[]) => Promise<{ app: infer A }> } ? A : never
+export type PubOf<C> = C extends {
+  build: (...a: never[]) => Promise<{ app: infer A }>
+}
+  ? A
+  : never
 export type SeedOf<C> = C extends Lunette<any, any, infer S> ? S : never
-export type BuiltOf<C> = C extends { build: (...a: never[]) => Promise<infer B> } ? B : never
+export type BuiltOf<C> = C extends {
+  build: (...a: never[]) => Promise<infer B>
+}
+  ? B
+  : never
 
 export class Lunette<
   Ctx extends object = {},
@@ -529,10 +535,20 @@ export class Lunette<
     extra?: ((ctx: any) => object) | ValueLayer<any, any>,
   ): any {
     if (arg instanceof Lunette) {
-      return this.mount(arg.entries, extra as ((ctx: object) => object) | undefined, false)
+      return this.mount(
+        arg.entries,
+        extra as ((ctx: object) => object) | undefined,
+        false,
+      )
     }
     if (typeof arg === 'function') {
-      return this.push({ kind: 'layer', layer: arg, mode: 'extend', public: false, key: undefined })
+      return this.push({
+        kind: 'layer',
+        layer: arg,
+        mode: 'extend',
+        public: false,
+        key: undefined,
+      })
     }
     return this.push({
       kind: 'layer',
@@ -549,7 +565,9 @@ export class Lunette<
   provide<P extends Patch>(
     fn: (
       ctx: Expand<Ctx>,
-    ) => (P & AbsorbableCollisionBrand<Ctx, P>) | Promise<P & AbsorbableCollisionBrand<Ctx, P>>,
+    ) =>
+      | (P & AbsorbableCollisionBrand<Ctx, P>)
+      | Promise<P & AbsorbableCollisionBrand<Ctx, P>>,
     destroy?: (value: P) => void | Promise<void>,
   ): Lunette<Ctx & P, Pub, Seed>
   provide<K extends PropertyKey, V>(
@@ -571,7 +589,9 @@ export class Lunette<
   expose<P extends Patch>(
     fn: (
       ctx: Expand<Ctx>,
-    ) => (P & AbsorbableCollisionBrand<Ctx, P>) | Promise<P & AbsorbableCollisionBrand<Ctx, P>>,
+    ) =>
+      | (P & AbsorbableCollisionBrand<Ctx, P>)
+      | Promise<P & AbsorbableCollisionBrand<Ctx, P>>,
     destroy?: (value: P) => void | Promise<void>,
   ): Lunette<Ctx & P, Pub & P, Seed>
   expose<K extends PropertyKey, V>(
@@ -601,7 +621,11 @@ export class Lunette<
     destroy?: (value: any) => unknown,
   ): any {
     if (arg instanceof Lunette) {
-      return this.mount(arg.entries, extra as ((ctx: object) => object) | undefined, true)
+      return this.mount(
+        arg.entries,
+        extra as ((ctx: object) => object) | undefined,
+        true,
+      )
     }
     return this.sugar(true, arg, extra, destroy)
   }
@@ -620,7 +644,13 @@ export class Lunette<
     seedFn: ((ctx: object) => object) | undefined,
     isPublic: boolean,
   ): Lunette<any, any, any> {
-    return this.push({ kind: 'mount', entries, seedFn, public: isPublic, at: undefined })
+    return this.push({
+      kind: 'mount',
+      entries,
+      seedFn,
+      public: isPublic,
+      at: undefined,
+    })
   }
 
   // Shared body of `provide`/`expose`'s non-mount overloads: same wiring,
@@ -650,7 +680,13 @@ export class Lunette<
         if (teardown) await teardown(value)
       }
     }
-    return this.push({ kind: 'layer', layer: wrapped, mode: 'extend', public: isPublic, key })
+    return this.push({
+      kind: 'layer',
+      layer: wrapped,
+      mode: 'extend',
+      public: isPublic,
+      key,
+    })
   }
 
   // Namespacing sugar for mounting: `host.use(frag.as('hb'))` mounts the
@@ -660,7 +696,13 @@ export class Lunette<
     name: N,
   ): Lunette<Record<N, Expand<Pub>>, Record<N, Expand<Pub>>, Seed> {
     return new Lunette([
-      { kind: 'mount', entries: this.entries, seedFn: undefined, public: true, at: name },
+      {
+        kind: 'mount',
+        entries: this.entries,
+        seedFn: undefined,
+        public: true,
+        at: name,
+      },
     ]) as Lunette<Record<N, Expand<Pub>>, Record<N, Expand<Pub>>, Seed>
   }
 
@@ -732,7 +774,10 @@ export class Lunette<
       publicKeys: Set<PropertyKey>,
       // substitutions active at THIS level (empty inside fragments)
       level: ReadonlySet<PropertyKey>,
-      done: (finalBag: Bag, publicKeys: Set<PropertyKey>) => Promise<Provided<any>>,
+      done: (
+        finalBag: Bag,
+        publicKeys: Set<PropertyKey>,
+      ) => Promise<Provided<any>>,
     ): Promise<Provided<any>> => {
       const dropSubstituted = (patch: Bag): Bag => {
         if (level.size === 0) return patch
@@ -753,20 +798,27 @@ export class Lunette<
           const base: Bag = entry.seedFn
             ? { ...entry.seedFn(ctx) }
             : (Object.create(ctx) as Bag)
-          return walk(entry.entries, base, new Set(), new Set(), async (childBag, childPub) => {
-            const pub = pick(childBag, childPub)
-            const full: Bag = entry.at !== undefined ? { [entry.at]: pub } : pub
-            const patch = dropSubstituted(full)
-            assertNoClash(
-              ctx,
-              patch,
-              (clashes) =>
-                `The fragment's public surface collides with host context keys: ${clashes.map(String).join(', ')}.`,
-            )
-            if (entry.public)
-              for (const key of Reflect.ownKeys(full)) publicKeys.add(key)
-            return step(i + 1, merge(ctx, patch))
-          })
+          return walk(
+            entry.entries,
+            base,
+            new Set(),
+            new Set(),
+            async (childBag, childPub) => {
+              const pub = pick(childBag, childPub)
+              const full: Bag =
+                entry.at !== undefined ? { [entry.at]: pub } : pub
+              const patch = dropSubstituted(full)
+              assertNoClash(
+                ctx,
+                patch,
+                (clashes) =>
+                  `The fragment's public surface collides with host context keys: ${clashes.map(String).join(', ')}.`,
+              )
+              if (entry.public)
+                for (const key of Reflect.ownKeys(full)) publicKeys.add(key)
+              return step(i + 1, merge(ctx, patch))
+            },
+          )
         }
 
         // Keyed form with a substituted key: the layer is SKIPPED entirely
@@ -777,9 +829,7 @@ export class Lunette<
         }
 
         const next = (async (priv: Patch, pub?: Patch) => {
-          const full = (
-            pub === undefined ? priv : { ...priv, ...pub }
-          ) as Bag
+          const full = (pub === undefined ? priv : { ...priv, ...pub }) as Bag
           const patch = dropSubstituted(full)
           if (entry.mode === 'extend') {
             // hasOwn, not `in`: host keys (on the prototype) may be
@@ -817,11 +867,17 @@ export class Lunette<
     }
 
     let result!: T
-    await walk(this.entries, rootBag, new Set(), subst, async (ctx, publicKeys) => {
-      const app = pick(ctx, publicKeys)
-      result = await scope(app as Expand<Pub>)
-      return doneToken
-    })
+    await walk(
+      this.entries,
+      rootBag,
+      new Set(),
+      subst,
+      async (ctx, publicKeys) => {
+        const app = pick(ctx, publicKeys)
+        result = await scope(app as Expand<Pub>)
+        return doneToken
+      },
+    )
     return result
   }
 

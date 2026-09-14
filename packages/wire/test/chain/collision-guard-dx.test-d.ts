@@ -30,9 +30,10 @@ type DupKeyMsg<K extends PropertyKey> =
 
 type PatchClash<Ctx, P> = Extract<keyof P, keyof Ctx>
 
-type CollisionBrand<Ctx, P> = PatchClash<Ctx, P> extends never
-  ? unknown
-  : { collision: DupKeyMsg<PatchClash<Ctx, P>> }
+type CollisionBrand<Ctx, P> =
+  PatchClash<Ctx, P> extends never
+    ? unknown
+    : { collision: DupKeyMsg<PatchClash<Ctx, P>> }
 
 // ── guard on the RETURN type ──────────────────────────────────────────────
 
@@ -107,7 +108,9 @@ declare class ChainB2<Ctx extends object> {
     fn: (ctx: Ctx) => V,
   ): ChainB2<Ctx & Record<K, V>>
   provide<P extends object>(
-    fn: (ctx: Ctx) => P &
+    fn: (
+      ctx: Ctx,
+    ) => P &
       (PatchClash<Ctx, P> extends never
         ? unknown
         : { collision: DupKeyMsg<PatchClash<Ctx, P>> }),
@@ -354,8 +357,10 @@ describe('the real overload set: TS2769 wraps, the message survives', () => {
     //       db"; }'.
     // Noisier than the single-overload prototype, but the patch candidate
     // is obviously irrelevant and the keyed elaboration carries the brand.
-    // @ts-expect-error — keyed collision caught, wrapped in TS2769
-    void lunette().provide('db', () => 1).provide('db', () => 'two')
+    void lunette()
+      .provide('db', () => 1)
+      // @ts-expect-error — keyed collision caught, wrapped in TS2769
+      .provide('db', () => 'two')
   })
 
   it('patch collision: shape-picked overload, clean TS2322 — no wrapping', () => {
@@ -366,8 +371,10 @@ describe('the real overload set: TS2769 wraps, the message survives', () => {
     //     Property '[collision]' is missing in type '{ db: string; }' but
     //       required in type '{ [collision]: "⛔ key already present in the
     //       context: db"; }'.
-    // @ts-expect-error — patch collision caught, no overload noise
-    void lunette().provide('db', () => 1).provide(() => ({ db: 'two' }))
+    void lunette()
+      .provide('db', () => 1)
+      // @ts-expect-error — patch collision caught, no overload noise
+      .provide(() => ({ db: 'two' }))
   })
 
   it('async patch collision: the brand rides through the Promise', () => {
@@ -379,8 +386,10 @@ describe('the real overload set: TS2769 wraps, the message survives', () => {
     //     Property '[collision]' is missing in type '{ db: string; }' but
     //       required in type '{ [collision]: "⛔ key already present in the
     //       context: db"; }'.
-    // @ts-expect-error — async patch collision caught
-    void lunette().provide('db', () => 1).provide(async () => ({ db: 'two' }))
+    void lunette()
+      .provide('db', () => 1)
+      // @ts-expect-error — async patch collision caught
+      .provide(async () => ({ db: 'two' }))
   })
 
   it('mount with unmet seed: the requirement brand in the elaboration', () => {
@@ -407,8 +416,11 @@ describe('the real overload set: TS2769 wraps, the message survives', () => {
     //       Promise<Provided<{ db: string; }, {}>>' is not assignable to ...
     // ctx is printed fully typed ({ db: number }) — contextual typing
     // survived the failed overload: NO TS7006 anywhere.
-    // @ts-expect-error — layer collision caught, parameters still typed
-    void lunette().provide('db', () => 1).use(async (ctx, next) => next({ db: 'x' }))
+    void lunette()
+      .provide('db', () => 1)
+      // @ts-expect-error — layer collision caught, parameters still typed
+      // biome-ignore lint/correctness/noUnusedFunctionParameters: the parameter has to be WRITTEN for the diagnostic quoted above to print it contextually typed — renaming or dropping it is a different diagnostic
+      .use(async (ctx, next) => next({ db: 'x' }))
   })
 
   it('happy paths across the overloads: inference untouched', () => {
@@ -453,11 +465,13 @@ describe('the brand property is a private symbol', () => {
     //     context: db"; }'.
     // (with a string brand this line COMPILES — the paradox a private
     // symbol removes)
-    // @ts-expect-error — the hand-written property is not the brand
-    void lunette().provide(() => ({ db: 1 })).provide(() => ({
-      db: 'two',
-      collision: '⛔ key already present in the context: db' as const,
-    }))
+    void lunette()
+      .provide(() => ({ db: 1 }))
+      // @ts-expect-error — the hand-written property is not the brand
+      .provide(() => ({
+        db: 'two',
+        collision: '⛔ key already present in the context: db' as const,
+      }))
   })
 
   it('a user-side unique symbol with the same name is a different identity', () => {
@@ -465,11 +479,13 @@ describe('the brand property is a private symbol', () => {
     //     [collision]: "⛔ key already present in the context: db"; }' but
     //     required ... — the two '[collision]' are DIFFERENT symbols: the
     //     printed name collides, the identity does not.
-    // @ts-expect-error — not the brand either
-    void lunette().provide(() => ({ db: 1 })).provide(() => ({
-      db: 'two',
-      [fakeCollision]: '⛔ key already present in the context: db' as const,
-    }))
+    void lunette()
+      .provide(() => ({ db: 1 }))
+      // @ts-expect-error — not the brand either
+      .provide(() => ({
+        db: 'two',
+        [fakeCollision]: '⛔ key already present in the context: db' as const,
+      }))
   })
 
   it("a domain key named 'collision' neither lifts nor muddies the guard", () => {
@@ -481,11 +497,13 @@ describe('the brand property is a private symbol', () => {
     // (with a string brand the demand lands on the USER's property:
     //   Type '{ bodies: number; }' is not assignable to type
     //   '"⛔ key already present in the context: db"')
-    // @ts-expect-error — the clash on db is reported, the domain key is left alone
-    void lunette().provide(() => ({ db: 1 })).provide(() => ({
-      db: 'two',
-      collision: { bodies: 2 },
-    }))
+    void lunette()
+      .provide(() => ({ db: 1 }))
+      // @ts-expect-error — the clash on db is reported, the domain key is left alone
+      .provide(() => ({
+        db: 'two',
+        collision: { bodies: 2 },
+      }))
   })
 })
 
@@ -519,8 +537,10 @@ describe('non-string keys on the real chain', () => {
     //     Argument of type 'unique symbol' is not assignable to parameter
     //       of type 'unique symbol & { [collision]: "⛔ key already present
     //       in the context: (symbol key)"; }'.
-    // @ts-expect-error — reused symbol caught; 'typeof dxTenant' names it
-    void lunette().provide(dxTenant, () => 1).provide(dxTenant, () => 2)
+    void lunette()
+      .provide(dxTenant, () => 1)
+      // @ts-expect-error — reused symbol caught; 'typeof dxTenant' names it
+      .provide(dxTenant, () => 2)
   })
 
   it('numeric key, keyed form: banned at first use, named', () => {
@@ -538,8 +558,10 @@ describe('non-string keys on the real chain', () => {
     //   error TS2322: Type '{ 42: string; }' is not assignable to type
     //     '({ 42: string; } & { [collision]: "⛔ numeric key not supported
     //     (it becomes a string at runtime): 42"; }) | Promise<...>'.
-    // @ts-expect-error — red at compile time, not at boot
-    void lunette().provide('42', () => 'a').provide(() => ({ 42: 'b' }))
+    void lunette()
+      .provide('42', () => 'a')
+      // @ts-expect-error — red at compile time, not at boot
+      .provide(() => ({ 42: 'b' }))
   })
 
   it('an array as a patch falls under the same ban (unresolved template)', () => {

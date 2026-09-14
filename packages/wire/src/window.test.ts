@@ -133,7 +133,10 @@ describe('a further step — window(opener, bridge)', () => {
     }
 
     const commands = bind({ welcome }).with(
-      window(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle>, email })),
+      window(db.transaction, (tx: DbHandle) => ({
+        db: tx as Tx<DbHandle>,
+        email,
+      })),
       //                          from the window ↑    from the boot ↑ (closure)
     )
 
@@ -185,7 +188,10 @@ describe('one record, HETEROGENEOUS deps — each leaf asks for its subset', () 
     }
 
     const ops = bind({ onlyDb, both }).with(
-      window(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle>, email })),
+      window(db.transaction, (tx: DbHandle) => ({
+        db: tx as Tx<DbHandle>,
+        email,
+      })),
     )
 
     expect(await ops.onlyDb()).toBe('tx')
@@ -327,7 +333,9 @@ describe('in the chain — separate provide/expose, no umbrella', () => {
       .expose('queries', ({ db }) => bind({ whereAmI })({ db }))
       .expose('commands', ({ db }) =>
         bind({ verifyOtp }).with(
-          window(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle> })),
+          window(db.transaction, (tx: DbHandle) => ({
+            db: tx as Tx<DbHandle>,
+          })),
         ),
       )
       .run(async (pub) => {

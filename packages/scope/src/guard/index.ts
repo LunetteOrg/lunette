@@ -30,7 +30,15 @@
 // one part that knows about a host — how to fail — lives in the caller's
 // `onError`.
 
-import type { AnyStep, Collides, Ctx, Extension, Scope, State, Surface } from '../index.ts'
+import type {
+  AnyStep,
+  Collides,
+  Ctx,
+  Extension,
+  Scope,
+  State,
+  Surface,
+} from '../index.ts'
 
 // ── Standard Schema, INLINED rather than depended on ─────────────────────────
 // This package ships `.ts` sources with no build step, so an import a consumer
@@ -70,8 +78,12 @@ export interface StandardSchemaV1<Input = unknown, Output = Input> {
   readonly '~standard': {
     readonly version: 1
     readonly vendor: string
-    readonly validate: (value: unknown) => StandardResult<Output> | Promise<StandardResult<Output>>
-    readonly types?: { readonly input: Input; readonly output: Output } | undefined
+    readonly validate: (
+      value: unknown,
+    ) => StandardResult<Output> | Promise<StandardResult<Output>>
+    readonly types?:
+      | { readonly input: Input; readonly output: Output }
+      | undefined
   }
 }
 
@@ -125,12 +137,17 @@ const isFailure = (value: unknown): value is Failure =>
 // `wrap` is what makes one function serve both shapes: `guard`'s check returns
 // the addition itself, `refine`'s returns the VALUE for the entry it named — so
 // the caller never writes a name twice.
-const stepFor = (
-  check: (app: object, ctx: object) => unknown,
-  onError: (issues: readonly StandardIssue[], ctx: object) => unknown,
-  wrap: (out: unknown) => object,
-): AnyStep =>
-  async (app: object, ctx: object, next: (delta: object) => Promise<unknown>) => {
+const stepFor =
+  (
+    check: (app: object, ctx: object) => unknown,
+    onError: (issues: readonly StandardIssue[], ctx: object) => unknown,
+    wrap: (out: unknown) => object,
+  ): AnyStep =>
+  async (
+    app: object,
+    ctx: object,
+    next: (delta: object) => Promise<unknown>,
+  ) => {
     const out = await check(app, ctx)
     if (isFailure(out)) return onError(out.issues, ctx)
     return next(wrap(out))
@@ -154,7 +171,10 @@ const under = (name: string) => (out: unknown) => ({ [name]: out })
 export interface GuardVerbs {
   guard<S extends State, Need2 extends object, Add extends object, R>(
     this: Scope<S>,
-    check: ((app: Need2, ctx: Ctx<S>) => Add | Failure | Promise<Add | Failure>) &
+    check: ((
+      app: Need2,
+      ctx: Ctx<S>,
+    ) => Add | Failure | Promise<Add | Failure>) &
       AddGate<S, Add>,
     onError: (issues: readonly StandardIssue[], ctx: Ctx<S>) => R | Promise<R>,
   ): Surface<{
@@ -185,7 +205,13 @@ export interface GuardVerbs {
   // repaired: the ctx really does hold that name at that type, so replacing it
   // is what happens, and a stricter rule would have to know which keys were
   // MEANT, which is the thing no type can read.
-  refine<S extends State, N extends keyof Ctx<S> & string, Need2 extends object, T, R>(
+  refine<
+    S extends State,
+    N extends keyof Ctx<S> & string,
+    Need2 extends object,
+    T,
+    R,
+  >(
     this: Scope<S>,
     name: N,
     check: (app: Need2, ctx: Ctx<S>) => T | Failure | Promise<T | Failure>,

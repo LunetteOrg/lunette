@@ -32,7 +32,10 @@ export interface Elsewhere {
   readonly location: string
 }
 
-export const elsewhere = (location: string): Elsewhere => ({ kind: 'elsewhere', location })
+export const elsewhere = (location: string): Elsewhere => ({
+  kind: 'elsewhere',
+  location,
+})
 
 export interface Served<V> {
   readonly kind: 'served'
@@ -40,7 +43,11 @@ export interface Served<V> {
   readonly value: V
 }
 
-export const served = <V>(value: V, at: string): Served<V> => ({ kind: 'served', at, value })
+export const served = <V>(value: V, at: string): Served<V> => ({
+  kind: 'served',
+  at,
+  value,
+})
 
 // ── reaching what came back ──────────────────────────────────────────────────
 // `next` hands back a `Passed`, which says nothing on purpose: when a step is
@@ -62,7 +69,8 @@ export const served = <V>(value: V, at: string): Served<V> => ({ kind: 'served',
 // stops that, here or anywhere, which is why it is said in a type.
 export type Answered<V> = Readonly<V>
 
-export const answered = <V>(passed: Passed): Answered<V> => passed as unknown as Answered<V>
+export const answered = <V>(passed: Passed): Answered<V> =>
+  passed as unknown as Answered<V>
 
 // ── a carrier written WRONG, on purpose ──────────────────────────────────────
 // `ArgsOf` has a fallback for a carrier that declares something unusable, and

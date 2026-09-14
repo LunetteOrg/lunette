@@ -42,9 +42,13 @@ export interface BuildOnce<C> {
 // second app is a second `buildOnce`, which is what the free-function shape is
 // for — the chain stays a value.
 const disposedHandle = () =>
-  new Error('buildOnce: this handle was disposed — build a new one for a new app')
+  new Error(
+    'buildOnce: this handle was disposed — build a new one for a new app',
+  )
 
-export function buildOnce<C extends Lunette<any, any, any>>(chain: C): BuildOnce<C> {
+export function buildOnce<C extends Lunette<any, any, any>>(
+  chain: C,
+): BuildOnce<C> {
   // TWO references to the same build, and they are not interchangeable. `built`
   // is the RAW build, which is what teardown must await: it has to reach the
   // handle even when the app is on its way out. `delivered` is that build plus
@@ -60,7 +64,9 @@ export function buildOnce<C extends Lunette<any, any, any>>(chain: C): BuildOnce
   // that resolves — two shutdown paths, and the later one believes the app
   // closed cleanly.
   let teardown: Promise<void> | undefined
-  const build = chain.build.bind(chain) as unknown as (seed: SeedOf<C>) => Promise<BuiltOf<C>>
+  const build = chain.build.bind(chain) as unknown as (
+    seed: SeedOf<C>,
+  ) => Promise<BuiltOf<C>>
   return {
     // The PROMISE is memoized, not the resolved app: callers racing the first
     // ensure share the one build instead of each starting a chain of their own.

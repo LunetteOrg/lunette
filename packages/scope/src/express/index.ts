@@ -11,11 +11,21 @@
 // contravariance.
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
-import type { ParamsDictionary, RouteParameters } from 'express-serve-static-core'
-import type { DepGuard, Next, Passed, ResultOf, Scope, State } from '../index.ts'
+import type {
+  ParamsDictionary,
+  RouteParameters,
+} from 'express-serve-static-core'
+import type {
+  DepGuard,
+  Next,
+  Passed,
+  ResultOf,
+  Scope,
+  State,
+} from '../index.ts'
 import type { StandardIssue } from '../guard/index.ts'
 import type { Opaque, Supply } from '../route-gate.ts'
-import { type PathGate, type ValidatedParams } from '../route-gate.ts'
+import type { PathGate, ValidatedParams } from '../route-gate.ts'
 import {
   contentLengthExceeds,
   cookiesFrom,
@@ -119,8 +129,14 @@ type Supplied<Path extends string> = string extends keyof RouteParameters<Path>
   ? Opaque
   : Supply<ReqKeys<RouteParameters<Path>>, OptKeys<RouteParameters<Path>>>
 
-type ReqKeys<P> = { [K in keyof P]-?: {} extends Pick<P, K> ? never : K }[keyof P] & string
-type OptKeys<P> = { [K in keyof P]-?: {} extends Pick<P, K> ? K : never }[keyof P] & string
+type ReqKeys<P> = {
+  [K in keyof P]-?: {} extends Pick<P, K> ? never : K
+}[keyof P] &
+  string
+type OptKeys<P> = {
+  [K in keyof P]-?: {} extends Pick<P, K> ? K : never
+}[keyof P] &
+  string
 
 // ── gate: what a MIDDLEWARE derives, against what the run itself brought ─────
 // `toNext` — and Hono's and tRPC's twins — strips the run's own args back off
@@ -152,7 +168,10 @@ type StripGate<S extends State> = [Strips<S>] extends [never]
 // to return what the scope returned; here nothing downstream reads it, so the
 // check has to be asked for. `undefined` passes: a leaf that wrote the response
 // itself and has nothing to hand back says exactly that.
-type Unsendable<S extends State> = Exclude<ResultOf<Scope<S>>, Response | undefined>
+type Unsendable<S extends State> = Exclude<
+  ResultOf<Scope<S>>,
+  Response | undefined
+>
 
 // The OUTER link of the chain: a leaf Express cannot send is wrong under every
 // pattern and on either mount, so it is answered before asking which pattern
@@ -163,7 +182,9 @@ type Unsendable<S extends State> = Exclude<ResultOf<Scope<S>>, Response | undefi
 // so `return { error: 'unauthorized' }` is the natural thing to write — and
 // there the fold never reaches `toNext`, so Express's `next` is never called
 // and the request hangs with no response at all.
-type AnswerGate<S extends State, Then = unknown> = [Unsendable<S>] extends [never]
+type AnswerGate<S extends State, Then = unknown> = [Unsendable<S>] extends [
+  never,
+]
   ? Then
   : `⛔ answer on \`res\`: this scope's leaf hands back a value Express will never send`
 
@@ -196,9 +217,8 @@ type ArgsGate<Brings> = (app: never, args: Brings) => unknown
 
 // What a middleware's steps populated — exactly what `toNext` copies onto
 // `res.locals`, so the type and the runtime say the same thing.
-type LocalsDerivedBy<S extends State> = S['acc'] extends Record<string, any>
-  ? S['acc']
-  : Record<string, any>
+type LocalsDerivedBy<S extends State> =
+  S['acc'] extends Record<string, any> ? S['acc'] : Record<string, any>
 
 // THE MOUNTS ARE TRANSPARENT: each hands back the host's own type with what the
 // scope knows filled in, rather than the widest thing that would compile.
@@ -217,7 +237,8 @@ type LocalsDerivedBy<S extends State> = S['acc'] extends Record<string, any>
 // collapses here SILENTLY — assignable to everything, complained about nowhere.
 // It holds because a mount always hands back a concrete `RequestHandler`; read
 // off anything else, `never` is the answer and not an error.
-export type LocalsOf<Mw> = Mw extends RequestHandler<any, any, any, any, infer L> ? L : never
+export type LocalsOf<Mw> =
+  Mw extends RequestHandler<any, any, any, any, infer L> ? L : never
 
 export const express = <App extends object>(deps: App) => {
   // THE REJECTION IS HANDED TO EXPRESS, never dropped. A THROWN error is the
@@ -233,7 +254,10 @@ export const express = <App extends object>(deps: App) => {
   const handlerFor =
     (sc: unknown): RequestHandler =>
     (req, res, next) => {
-      void (sc as (app: App, args: object) => Promise<unknown>)(deps, { req, res }).catch(next)
+      void (sc as (app: App, args: object) => Promise<unknown>)(deps, {
+        req,
+        res,
+      }).catch(next)
     }
 
   return {
@@ -288,7 +312,10 @@ export const express = <App extends object>(deps: App) => {
     ): readonly [Path, RequestHandler] => [path, handlerFor(sc)],
 
     handler: <S extends State>(
-      sc: Scope<S> & ArgsGate<RouteBrings> & DepGuard<App, S['need']> & AnswerGate<S>,
+      sc: Scope<S> &
+        ArgsGate<RouteBrings> &
+        DepGuard<App, S['need']> &
+        AnswerGate<S>,
     ): RequestHandler => handlerFor(sc),
 
     // Express has no middleware the scope could return a value TO: a middleware
@@ -296,65 +323,74 @@ export const express = <App extends object>(deps: App) => {
     // leaf, and a step that stops simply never reaches it.
     //
     // No pattern here, and none to take: `app.use(…)` mounts across routes.
-    mw:
-      <S extends State>(
-        // CHAINED, not intersected: `AnswerGate` and `StripGate` are both
-        // message literals and both can fail here, and side by side they would
-        // collapse to `never` with nothing left to read.
-        sc: Scope<S> & ArgsGate<MwBrings> & DepGuard<App, S['need']> & AnswerGate<S, StripGate<S>>,
-        // `Request['query']` rather than naming `ParsedQs`: that type lives in
-        // `qs`, which is not a dependency here, and the query slot has to be
-        // filled to reach the locals one.
-      ): RequestHandler<ParamsDictionary, any, any, Request['query'], LocalsDerivedBy<S>> => {
-        // The leaf is appended ONCE, where `mw` is called. Built inside the
-        // handler instead, every request would rebuild the step list and rewire
-        // the verb map to reach the same value — `toNext` closes over nothing.
-        const finished = (sc as { step: (s: unknown) => unknown }).step(toNext) as unknown as (
-          app: App,
-          args: unknown,
-        ) => Promise<unknown>
+    mw: <S extends State>(
+      // CHAINED, not intersected: `AnswerGate` and `StripGate` are both
+      // message literals and both can fail here, and side by side they would
+      // collapse to `never` with nothing left to read.
+      sc: Scope<S> &
+        ArgsGate<MwBrings> &
+        DepGuard<App, S['need']> &
+        AnswerGate<S, StripGate<S>>,
+      // `Request['query']` rather than naming `ParsedQs`: that type lives in
+      // `qs`, which is not a dependency here, and the query slot has to be
+      // filled to reach the locals one.
+    ): RequestHandler<
+      ParamsDictionary,
+      any,
+      any,
+      Request['query'],
+      LocalsDerivedBy<S>
+    > => {
+      // The leaf is appended ONCE, where `mw` is called. Built inside the
+      // handler instead, every request would rebuild the step list and rewire
+      // the verb map to reach the same value — `toNext` closes over nothing.
+      const finished = (sc as { step: (s: unknown) => unknown }).step(
+        toNext,
+      ) as unknown as (app: App, args: unknown) => Promise<unknown>
 
-        // `.catch(next)`, and here it is not only the error path: `toNext` — the
-        // leaf that calls Express's own `next()` — lives inside the fold, so a
-        // dropped rejection would leave the chain stalled with no response AND
-        // no error handler reached.
-        //
-        // THE LATCH IS WHAT MAKES THAT SAFE. `toNext` calls `next()` and returns
-        // at once (the limit stated where it is written), so the fold's promise
-        // is still pending while the downstream handler runs — and a step that
-        // throws AFTER `await next({})` rejects it then. Handed to `next` at
-        // that point it becomes a 500 for a request that was about to answer
-        // 200, with the handler's own write discarded and, on Express 5, the
-        // resulting `ERR_HTTP_HEADERS_SENT` swallowed so nothing is logged
-        // either. Measured.
-        //
-        // So the rejection goes to Express only in the window where Express can
-        // still act on it: before control was handed on. After, the response
-        // belongs to the handler and this error has nowhere left to go — it is
-        // DROPPED, and dropped SILENTLY, because there is nowhere for it to be
-        // dropped loudly: this package has no logger and invents no channel, so
-        // saying otherwise would be a comfort rather than a fact. The two
-        // alternatives are worse and both were measured: `next(err)` is the 500
-        // above, and rethrowing is the unhandled rejection that kills the
-        // process. Work that must survive the response does not belong in a
-        // step here.
-        //
-        // `handOn` MARKS and forwards; it does not deduplicate. Calling
-        // Express's `next` twice is Express's own business, and a wrapper that
-        // quietly swallowed the second call would be a second behaviour hiding
-        // inside a latch that exists for one thing.
-        return (req, res, next): void => {
-          let handedOn = false
-          const handOn: NextFunction = (...args) => {
-            handedOn = true
-            next(...args)
-          }
-
-          void finished(deps, { req, res, next: handOn }).catch((err: unknown) => {
-            if (!handedOn) next(err)
-          })
+      // `.catch(next)`, and here it is not only the error path: `toNext` — the
+      // leaf that calls Express's own `next()` — lives inside the fold, so a
+      // dropped rejection would leave the chain stalled with no response AND
+      // no error handler reached.
+      //
+      // THE LATCH IS WHAT MAKES THAT SAFE. `toNext` calls `next()` and returns
+      // at once (the limit stated where it is written), so the fold's promise
+      // is still pending while the downstream handler runs — and a step that
+      // throws AFTER `await next({})` rejects it then. Handed to `next` at
+      // that point it becomes a 500 for a request that was about to answer
+      // 200, with the handler's own write discarded and, on Express 5, the
+      // resulting `ERR_HTTP_HEADERS_SENT` swallowed so nothing is logged
+      // either. Measured.
+      //
+      // So the rejection goes to Express only in the window where Express can
+      // still act on it: before control was handed on. After, the response
+      // belongs to the handler and this error has nowhere left to go — it is
+      // DROPPED, and dropped SILENTLY, because there is nowhere for it to be
+      // dropped loudly: this package has no logger and invents no channel, so
+      // saying otherwise would be a comfort rather than a fact. The two
+      // alternatives are worse and both were measured: `next(err)` is the 500
+      // above, and rethrowing is the unhandled rejection that kills the
+      // process. Work that must survive the response does not belong in a
+      // step here.
+      //
+      // `handOn` MARKS and forwards; it does not deduplicate. Calling
+      // Express's `next` twice is Express's own business, and a wrapper that
+      // quietly swallowed the second call would be a second behaviour hiding
+      // inside a latch that exists for one thing.
+      return (req, res, next): void => {
+        let handedOn = false
+        const handOn: NextFunction = (...args) => {
+          handedOn = true
+          next(...args)
         }
-      },
+
+        void finished(deps, { req, res, next: handOn }).catch(
+          (err: unknown) => {
+            if (!handedOn) next(err)
+          },
+        )
+      }
+    },
   }
 }
 
@@ -366,7 +402,13 @@ export const express = <App extends object>(deps: App) => {
 // the readers are handed the two shapes they really need — a `URLSearchParams`
 // and header pairs — and the adaptation happens here, in two lines, rather than
 // a Fetch shim being built around a Node stream.
-export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from '../reads.ts'
+export type {
+  Query,
+  Cookies,
+  Headers_ as HeaderEntries,
+  Encoding,
+  BodyOf,
+} from '../reads.ts'
 
 // THE FIFTH READ EXTENSION, and Express-only: the Fetch family needs no
 // equivalent, since `req.params` needs no adaptation the way headers or cookies
@@ -401,7 +443,12 @@ export const query = async (
   _app: {},
   { req }: { readonly req: Request },
   next: Next<{ query: Query }>,
-) => next({ query: queryFrom(new URL(req.originalUrl ?? req.url, 'http://host.invalid').searchParams) })
+) =>
+  next({
+    query: queryFrom(
+      new URL(req.originalUrl ?? req.url, 'http://host.invalid').searchParams,
+    ),
+  })
 
 export const headers = async (
   _app: {},
@@ -411,7 +458,11 @@ export const headers = async (
   next({
     headers: headersFrom(
       Object.entries(req.headers).map(
-        ([name, value]) => [name, Array.isArray(value) ? value.join(', ') : (value ?? '')] as const,
+        ([name, value]) =>
+          [
+            name,
+            Array.isArray(value) ? value.join(', ') : (value ?? ''),
+          ] as const,
       ),
     ),
   })
@@ -477,10 +528,15 @@ export const body =
       // through the same parse as a stream we read ourselves — reading them as a
       // value would have handed a `Buffer` on as if it were JSON, with every
       // field access downstream failing for no stated reason.
-      if (typeof ctx.req.body === 'string' || ctx.req.body instanceof Uint8Array) {
+      if (
+        typeof ctx.req.body === 'string' ||
+        ctx.req.body instanceof Uint8Array
+      ) {
         return finishRead<E, typeof ctx, R>(
           await parseBody(
-            typeof ctx.req.body === 'string' ? new TextEncoder().encode(ctx.req.body) : ctx.req.body,
+            typeof ctx.req.body === 'string'
+              ? new TextEncoder().encode(ctx.req.body)
+              : ctx.req.body,
             sent,
             encoding,
           ),

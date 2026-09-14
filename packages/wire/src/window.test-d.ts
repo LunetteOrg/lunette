@@ -4,7 +4,10 @@ import { bind, window, type With } from './index.ts'
 declare const atomic: unique symbol
 type Tx<D> = D & { readonly [atomic]: true }
 
-type DbHandle = { mode: 'live' | 'tx'; query: (sql: string) => Promise<string[]> }
+type DbHandle = {
+  mode: 'live' | 'tx'
+  query: (sql: string) => Promise<string[]>
+}
 
 declare const db: DbHandle & {
   transaction: <T>(fn: (tx: DbHandle) => Promise<T>) => Promise<T>
@@ -14,7 +17,9 @@ declare const inTxWithEmail: With<{
   db: Tx<DbHandle>
   email: { send: (to: string) => Promise<void> }
 }>
-declare const emailOnly: With<{ email: { send: (to: string) => Promise<void> } }>
+declare const emailOnly: With<{
+  email: { send: (to: string) => Promise<void> }
+}>
 
 const whereAmI = async ({ db: h }: { db: DbHandle }) => h.mode
 const verifyOtp = async ({ db: h }: { db: Tx<DbHandle> }, email: string) => ({
@@ -56,7 +61,10 @@ describe('With/bind (types)', () => {
   it('a heterogeneous record demands the INTERSECTION from the window', () => {
     const onlyDb = async ({ db: h }: { db: Tx<DbHandle> }) => h.mode
     const both = async (
-      _deps: { db: Tx<DbHandle>; email: { send: (to: string) => Promise<void> } },
+      _deps: {
+        db: Tx<DbHandle>
+        email: { send: (to: string) => Promise<void> }
+      },
       _to: string,
     ) => 'ok' as const
 

@@ -1,6 +1,12 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { scope, type Next, type ResultOf } from './index.ts'
-import { answered, badArgs, fixture, refused, type Refusal } from './fixture/carrier.ts'
+import {
+  answered,
+  badArgs,
+  fixture,
+  refused,
+  type Refusal,
+} from './fixture/carrier.ts'
 
 // THE TYPE CONTRACT, which is what a `*.test-d.ts` file is for in this repo:
 // the engine is guaranteed by the runtime tests, and the types guarantee the
@@ -27,7 +33,9 @@ import { answered, badArgs, fixture, refused, type Refusal } from './fixture/car
 // really throw.
 
 interface Repos {
-  readonly users: { readonly byId: (id: string) => { readonly name: string } | undefined }
+  readonly users: {
+    readonly byId: (id: string) => { readonly name: string } | undefined
+  }
 }
 
 describe('what a step reads', () => {
@@ -46,11 +54,13 @@ describe('what a step reads', () => {
   })
 
   it('refuses a step that reads a key no earlier step populated', () => {
-    scope<{ readonly id: string }>().step(async (_app: {}, ctx, next: Next<{}>) => {
-      // @ts-expect-error — nothing populated `name`
-      ctx.name
-      return next({})
-    })
+    scope<{ readonly id: string }>().step(
+      async (_app: {}, ctx, next: Next<{}>) => {
+        // @ts-expect-error — nothing populated `name`
+        ctx.name
+        return next({})
+      },
+    )
   })
 
   // THE LOCK, and it is not a rule the core enforces — it is a shape that
@@ -63,7 +73,12 @@ describe('what a step reads', () => {
       // @ts-expect-error — the scope's request has no `arrayBuffer` to read
       async (
         _app: {},
-        _ctx: { readonly request: { readonly url: string; arrayBuffer(): Promise<ArrayBuffer> } },
+        _ctx: {
+          readonly request: {
+            readonly url: string
+            arrayBuffer(): Promise<ArrayBuffer>
+          }
+        },
         next: Next<{}>,
       ) => next({}),
     )
@@ -123,7 +138,9 @@ describe('what a scope accumulated, read from outside', () => {
   })
 
   it('a base with no leaf produces nothing, and says so', () => {
-    const base = scope(fixture).step(async (_app: {}, _ctx, next: Next<{ x: 1 }>) => next({ x: 1 }))
+    const base = scope(fixture).step(
+      async (_app: {}, _ctx, next: Next<{ x: 1 }>) => next({ x: 1 }),
+    )
     expectTypeOf<ResultOf<typeof base>>().toEqualTypeOf<never>()
   })
 })
@@ -145,15 +162,21 @@ describe('what the marker excludes', () => {
     const tally = scope(fixture).step(
       async (_app: {}, _ctx: {}) => ({ hits: 1 }) as Record<string, number>,
     )
-    expectTypeOf<ResultOf<typeof tally>>().toEqualTypeOf<Record<string, number>>()
+    expectTypeOf<ResultOf<typeof tally>>().toEqualTypeOf<
+      Record<string, number>
+    >()
 
-    const bag = scope(fixture).step(async (_app: {}, _ctx: {}) => ({}) as object)
+    const bag = scope(fixture).step(
+      async (_app: {}, _ctx: {}) => ({}) as object,
+    )
     expectTypeOf<ResultOf<typeof bag>>().toEqualTypeOf<object>()
   })
 
   it('still excludes what it is FOR — a step that only passes through', () => {
     // the whole point of the marker: this scope produces nothing of its own
-    const base = scope(fixture).step(async (_app: {}, _ctx, next: Next<{ x: 1 }>) => next({ x: 1 }))
+    const base = scope(fixture).step(
+      async (_app: {}, _ctx, next: Next<{ x: 1 }>) => next({ x: 1 }),
+    )
     expectTypeOf<ResultOf<typeof base>>().toEqualTypeOf<never>()
   })
 })
@@ -191,11 +214,13 @@ describe('a carrier declared wrong', () => {
 describe('the ctx a step reads, and what may be written to it', () => {
   it('refuses a write, on a carrier that declared no modifiers of its own', () => {
     const refused = () =>
-      scope<{ token: string }>().step(async (_app: {}, ctx, next: Next<{ n: number }>) => {
-        // @ts-expect-error ⛔ Cannot assign to 'token' because it is a read-only property
-        ctx.token = 'x'
-        return next({ n: 1 })
-      })
+      scope<{ token: string }>().step(
+        async (_app: {}, ctx, next: Next<{ n: number }>) => {
+          // @ts-expect-error ⛔ Cannot assign to 'token' because it is a read-only property
+          ctx.token = 'x'
+          return next({ n: 1 })
+        },
+      )
     void refused
   })
 

@@ -13,7 +13,6 @@
 // itself, then the builder over it, then the fold. The core owns the MECHANISM
 // and never the alphabet — no HTTP name appears anywhere below.
 
-
 // THE PRIMITIVE. A step wraps the rest of the fold: it reads `app` and the ctx
 // as it stands, and either continues inward with what it populates or returns
 // something of its own and stops.
@@ -99,11 +98,12 @@ export type Next<Add extends object> = (delta: Add) => Promise<Passed>
 // Nothing in the core is annotated with this — `.step` infers all four from the
 // function it is given, which is the point. It is here to be READ, and to be
 // the shape a carrier or an extension is written against.
-export type Step<Need extends object, Req extends object, Add extends object, R> = (
-  app: Need,
-  ctx: Req,
-  next: Next<Add>,
-) => R | Promise<R>
+export type Step<
+  Need extends object,
+  Req extends object,
+  Add extends object,
+  R,
+> = (app: Need, ctx: Req, next: Next<Add>) => R | Promise<R>
 
 // The ERASED runtime face. The fold composes steps it knows nothing about, so
 // it holds them at their widest — every type claim was checked where the step
@@ -239,7 +239,9 @@ type ReturnGate<Ret, A = Awaited<Ret>> = [A] extends [void]
 // written the ordinary way, with the ctx inferred, and never a wall against one
 // written around it — which is what the gates above are too. Pinned both ways
 // in `contract.test-d.ts`.
-export type Ctx<S extends State> = Readonly<Omit<S['args'], keyof S['acc']> & S['acc']>
+export type Ctx<S extends State> = Readonly<
+  Omit<S['args'], keyof S['acc']> & S['acc']
+>
 
 // What a scope IS to whoever holds one: the callable builder, plus the verbs its
 // extensions declared. The verbs are a plain record with no call signature of
@@ -431,7 +433,12 @@ type CtxGate<S extends State, Add, U = Collides<S, Add>> = [U] extends [never]
 // (`Omit<S, keyof P> & P`, naming only what changes) costs more, not less —
 // it rebuilds the state through an intersection, which is the shape carrying
 // it in a type parameter exists to avoid.
-type Grown<S extends State, Need2 extends object, Add extends object, Ret> = Surface<{
+type Grown<
+  S extends State,
+  Need2 extends object,
+  Add extends object,
+  Ret,
+> = Surface<{
   need: S['need'] & Need2
   args: S['args']
   acc: S['acc'] & Add
@@ -546,7 +553,11 @@ export interface Carrier {
   readonly __args?: object
 }
 
-type ArgsOf<C> = C extends { readonly __args?: infer T } ? (T extends object ? T : {}) : {}
+type ArgsOf<C> = C extends { readonly __args?: infer T }
+  ? T extends object
+    ? T
+    : {}
+  : {}
 
 // ── runtime ──────────────────────────────────────────────────────────────────
 // The runtime knows nothing of any of this: it holds an ordered list of steps
@@ -590,7 +601,11 @@ const refuseReserved = (names: readonly string[]): void => {
 
 // `async` is a contract and not a style: a step may throw SYNCHRONOUSLY, and a
 // plain function would let that escape past the promise the callable returns.
-async function runSteps(steps: readonly AnyStep[], app: object, args: object): Promise<unknown> {
+async function runSteps(
+  steps: readonly AnyStep[],
+  app: object,
+  args: object,
+): Promise<unknown> {
   const at = async (i: number, seen: object): Promise<unknown> => {
     const step = steps[i]
     if (step === undefined) {
@@ -607,7 +622,8 @@ async function runSteps(steps: readonly AnyStep[], app: object, args: object): P
     // Nothing happens on the way out. What the step returned is what the caller
     // gets, and the assertion is the one place the fold admits that `Passed` is
     // a type-level understatement (see `Passed`, above).
-    const next = ((delta: object) => at(i + 1, { ...seen, ...delta })) as unknown as Next<object>
+    const next = ((delta: object) =>
+      at(i + 1, { ...seen, ...delta })) as unknown as Next<object>
     return step(app, seen, next)
   }
   // A COPY, and only here: every level below builds `{ ...seen, ...delta }` and
@@ -663,7 +679,9 @@ function make(steps: readonly AnyStep[], verbs: Verbs): Built {
       // different door. `make`'s sweep is the backstop for verbs that arrive by
       // some other route than this one.
       refuseReserved(Object.keys(ext.methods))
-      const taken = Object.keys(ext.methods).filter((k) => Object.hasOwn(verbs, k))
+      const taken = Object.keys(ext.methods).filter((k) =>
+        Object.hasOwn(verbs, k),
+      )
       if (taken.length > 0) {
         throw new TypeError(
           `a verb under this name is already contributed: ${taken.join(', ')}. ` +

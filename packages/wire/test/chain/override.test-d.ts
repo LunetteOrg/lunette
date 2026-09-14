@@ -47,7 +47,9 @@ describe('override (types)', () => {
 
     // the one literal-text pin for the message family (the other
     // assertions ride the imported type, which cannot drift)
-    expectTypeOf<MissingKeyMsg<'bd'>>().toEqualTypeOf<'⛔ overriding key missing from the context: bd'>()
+    expectTypeOf<
+      MissingKeyMsg<'bd'>
+    >().toEqualTypeOf<'⛔ overriding key missing from the context: bd'>()
 
     // @ts-expect-error — no continuing on the error type
     chain.run(async () => {})

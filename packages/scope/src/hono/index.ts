@@ -6,7 +6,13 @@
 
 import type { Context, Next } from 'hono'
 import type { BlankEnv, Env, ParamKeys } from 'hono/types'
-import type { DepGuard, Next as StepNext, ResultOf, Scope, State } from '../index.ts'
+import type {
+  DepGuard,
+  Next as StepNext,
+  ResultOf,
+  Scope,
+  State,
+} from '../index.ts'
 import type { Opaque, Supply } from '../route-gate.ts'
 import type { PathGate, ValidatedParams } from '../route-gate.ts'
 import { fetchReads } from '../reads.ts'
@@ -55,7 +61,10 @@ export const honoCarrier = <E extends Env = BlankEnv>(): HonoCarrier<E> => ({})
 // names that env wrote down, and these are the run's own.
 const toNext = async (
   _app: {},
-  ctx: { readonly c: Context<any>; readonly next: Next } & Record<string, unknown>,
+  ctx: { readonly c: Context<any>; readonly next: Next } & Record<
+    string,
+    unknown
+  >,
 ) => {
   const { c, next, ...derived } = ctx
   for (const [key, value] of Object.entries(derived)) c.set(key, value)
@@ -96,7 +105,10 @@ type Optional<K> = K extends `${infer N}?` ? N : never
 // `any`: `Context` is MUTUALLY ASSIGNABLE across paths (the note on `route`
 // below), so the pattern is `PathGate`'s to judge and this member says nothing
 // about it.
-type ArgsGate<E extends Env> = (app: never, args: { readonly c: Context<E, any> }) => unknown
+type ArgsGate<E extends Env> = (
+  app: never,
+  args: { readonly c: Context<E, any> },
+) => unknown
 
 // ── gate: a middleware ANSWERS with a Response, or with nothing ──────────────
 // A `route` needs no such check: its mount is declared to hand back what the
@@ -107,9 +119,14 @@ type ArgsGate<E extends Env> = (app: never, args: { readonly c: Context<E, any> 
 // that stops; Hono then sees `undefined` with the chain uncalled and answers
 // 500. Measured. The twin of Express's `AnswerGate`, and the reasoning is
 // written out there.
-type Unsendable<S extends State> = Exclude<ResultOf<Scope<S>>, Response | undefined>
+type Unsendable<S extends State> = Exclude<
+  ResultOf<Scope<S>>,
+  Response | undefined
+>
 
-type AnswerGate<S extends State, Then = unknown> = [Unsendable<S>] extends [never]
+type AnswerGate<S extends State, Then = unknown> = [Unsendable<S>] extends [
+  never,
+]
   ? Then
   : `⛔ a middleware answers with a Response: this scope's leaf hands back a value Hono will not send`
 
@@ -139,7 +156,9 @@ type Answered<S extends State> = Promise<ResultOf<Scope<S>>>
 // arguments are written there: `hono<typeof deps, MyEnv>(deps)`. `App` comes
 // first because it is what the deps gate reads, and TypeScript has no partial
 // explicit list, so naming the env means naming the deps type beside it.
-export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) => {
+export const hono = <App extends object, E extends Env = BlankEnv>(
+  deps: App,
+) => {
   const handlerFor =
     <S extends State>(sc: unknown) =>
     (c: Context<E, any>): Answered<S> =>
@@ -180,7 +199,10 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
         ArgsGate<E> &
         PathGate<Supplied<Path>, ValidatedParams<S>> &
         DepGuard<App, S['need']>,
-    ): readonly [Path, (c: Context<E, any>) => Answered<S>] => [path, handlerFor<S>(sc)],
+    ): readonly [Path, (c: Context<E, any>) => Answered<S>] => [
+      path,
+      handlerFor<S>(sc),
+    ],
 
     handler: <S extends State>(
       sc: Scope<S> & ArgsGate<E> & DepGuard<App, S['need']>,
@@ -194,15 +216,17 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
       // CHAINED, not intersected: `AnswerGate` and `StripGate` are both message
       // literals and both can fail here, and side by side they would collapse
       // to `never` with nothing left to read.
-      sc: Scope<S> & ArgsGate<E> & DepGuard<App, S['need']> & AnswerGate<S, StripGate<S>>,
+      sc: Scope<S> &
+        ArgsGate<E> &
+        DepGuard<App, S['need']> &
+        AnswerGate<S, StripGate<S>>,
     ) => {
       // The leaf is appended ONCE, where `mw` is called. Built inside the
       // handler instead, every request would rebuild the step list and rewire
       // the verb map to reach the same value — `toNext` closes over nothing.
-      const finished = (sc as { step: (s: unknown) => unknown }).step(toNext) as unknown as (
-        app: App,
-        args: unknown,
-      ) => Promise<unknown>
+      const finished = (sc as { step: (s: unknown) => unknown }).step(
+        toNext,
+      ) as unknown as (app: App, args: unknown) => Promise<unknown>
 
       // A STEP THAT ANSWERS IS THE MIDDLEWARE'S ANSWER. A guard stops by
       // returning a response — `return c.json({ error: 'unauthorized' }, 401)`,
@@ -231,13 +255,21 @@ export const hono = <App extends object, E extends Env = BlankEnv>(deps: App) =>
 // `{ query: Query }` names no carrier and mounts wherever a `query` was
 // populated, which is what these exist to make possible.
 
-export type { Query, Cookies, Headers_ as HeaderEntries, Encoding, BodyOf } from '../reads.ts'
+export type {
+  Query,
+  Cookies,
+  Headers_ as HeaderEntries,
+  Encoding,
+  BodyOf,
+} from '../reads.ts'
 
 // `c.req.raw` is the Fetch `Request` Hono is built on, so these read the same
 // source React Router's do — ONE implementation for the whole Fetch family, in
 // `reads.ts`, and this subpath passes the one line that differs: where the
 // request is found.
-const reads = fetchReads((ctx: { readonly c: Context<any, any> }) => ctx.c.req.raw)
+const reads = fetchReads(
+  (ctx: { readonly c: Context<any, any> }) => ctx.c.req.raw,
+)
 
 // `c.req.param()` with no argument is Hono's own way to hand back the whole
 // bag, already a plain string-keyed record — so there is nothing to adapt and

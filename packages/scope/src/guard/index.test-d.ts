@@ -13,7 +13,10 @@ describe('what each verb does to the ctx', () => {
   it('`guard` ADDS what the check returned, typed, with the name deduced', () => {
     scope<{ readonly token: string | null }>()
       .extend(guards)
-      .guard((_a: {}, { token }) => (token === null ? fail() : { actor: token }), () => null)
+      .guard(
+        (_a: {}, { token }) => (token === null ? fail() : { actor: token }),
+        () => null,
+      )
       .step(async (_a: {}, ctx) => {
         expectTypeOf(ctx.actor).toEqualTypeOf<string>()
         return ctx.actor
@@ -23,7 +26,11 @@ describe('what each verb does to the ctx', () => {
   it('`refine` REPLACES, so the entry changes type rather than intersecting', () => {
     scope<{ readonly n: string }>()
       .extend(guards)
-      .refine('n', (_a: {}, { n }) => Number(n), () => null)
+      .refine(
+        'n',
+        (_a: {}, { n }) => Number(n),
+        () => null,
+      )
       .step(async (_a: {}, ctx) => {
         // `string & number` would be `never` — assignable to everything and
         // complained about nowhere. This is the whole reason a verb exists.
@@ -32,12 +39,15 @@ describe('what each verb does to the ctx', () => {
       })
   })
 
-  it('`validate` refines to the SCHEMA\'s output, which is its whole job', () => {
+  it("`validate` refines to the SCHEMA's output, which is its whole job", () => {
     scope<{ readonly body: unknown }>()
       .extend(guards)
       .validate('body', post, () => null)
       .step(async (_a: {}, ctx) => {
-        expectTypeOf(ctx.body).toEqualTypeOf<{ title: string; tags: string[] }>()
+        expectTypeOf(ctx.body).toEqualTypeOf<{
+          title: string
+          tags: string[]
+        }>()
         return ctx.body.title
       })
   })
@@ -46,25 +56,41 @@ describe('what each verb does to the ctx', () => {
 describe('`guard` may only ADD, and says so', () => {
   const h = scope<{}>()
     .extend(guards)
-    .guard(() => ({ actor: 'a' }), () => null)
+    .guard(
+      () => ({ actor: 'a' }),
+      () => null,
+    )
 
   it('refuses a second guard landing on the same key', () => {
     // Without this the two would INTERSECT: `string & string` survives here,
     // but `string & number` is `never` — assignable to everything, caught
     // nowhere, while the runtime hands back the second value.
-    // @ts-expect-error ⛔ this ctx key is already populated: actor
-    h.guard(() => ({ actor: 'b' }), () => null)
+    h.guard(
+      // @ts-expect-error ⛔ this ctx key is already populated: actor
+      () => ({ actor: 'b' }),
+      () => null,
+    )
   })
 
   it('and points at the verb that DOES replace, which then compiles', () => {
-    h.refine('actor', () => 'b', () => null)
+    h.refine(
+      'actor',
+      () => 'b',
+      () => null,
+    )
   })
 })
 
 describe('`refine` and `validate` name an entry the ctx already holds', () => {
-  it('refuses a name nothing populated — that is an addition, and `guard`\'s job', () => {
-    // @ts-expect-error — 'nope' is not a key of this ctx
-    scope<{ readonly body: unknown }>().extend(guards).refine('nope', () => 1, () => null)
+  it("refuses a name nothing populated — that is an addition, and `guard`'s job", () => {
+    scope<{ readonly body: unknown }>()
+      .extend(guards)
+      .refine(
+        // @ts-expect-error — 'nope' is not a key of this ctx
+        'nope',
+        () => 1,
+        () => null,
+      )
   })
 
   it('accepts a key the RUN brought, not only one a step derived', () => {
@@ -72,7 +98,11 @@ describe('`refine` and `validate` name an entry the ctx already holds', () => {
     // both are refinable: `Ctx` resolves the args axis with an `Omit` already.
     scope<{ readonly params: Record<string, string> }>()
       .extend(guards)
-      .refine('params', (_a: {}, { params }) => ({ id: params.id ?? '' }), () => null)
+      .refine(
+        'params',
+        (_a: {}, { params }) => ({ id: params.id ?? '' }),
+        () => null,
+      )
       .step(async (_a: {}, ctx) => {
         expectTypeOf(ctx.params).toEqualTypeOf<{ id: string }>()
         return ctx.params.id
@@ -87,19 +117,24 @@ describe('what `onError` costs and buys', () => {
     const h = scope<{ readonly body: unknown }>()
       .extend(guards)
       .validate('body', post, () => 'invalid' as const)
-      .guard(() => ({ ok: true }), () => 401 as const)
+      .guard(
+        () => ({ ok: true }),
+        () => 401 as const,
+      )
       .step(async (_a: {}, ctx) => ctx.body.title)
 
     expectTypeOf(h).returns.resolves.toEqualTypeOf<string | 'invalid' | 401>()
   })
 
-  it('reads the ctx, which is how it answers in the host\'s own door', () => {
+  it("reads the ctx, which is how it answers in the host's own door", () => {
     scope<{
       readonly body: unknown
       readonly res: { status(n: number): { json(b: unknown): 'sent' } }
     }>()
       .extend(guards)
-      .validate('body', post, (issues, { res }) => res.status(422).json({ issues }))
+      .validate('body', post, (issues, { res }) =>
+        res.status(422).json({ issues }),
+      )
       .step(async (_a: {}, ctx) => ctx.body.title)
   })
 })
@@ -108,7 +143,10 @@ describe('a guard declares what it needs of the app, as a step does', () => {
   it('accumulates `need`, so an unsatisfied chain is refused at the call', () => {
     const h = scope<{}>()
       .extend(guards)
-      .guard(({ db }: { readonly db: string }) => ({ found: db }), () => null)
+      .guard(
+        ({ db }: { readonly db: string }) => ({ found: db }),
+        () => null,
+      )
       .step(async (_a: {}, ctx) => ctx.found)
 
     // @ts-expect-error __ERROR_chain_Pub_missing_deps
@@ -146,7 +184,10 @@ describe('the inlined spec is satisfied structurally', () => {
       .extend(guards)
       .validate('body', post, () => null)
       .step(async (_a: {}, ctx) => {
-        expectTypeOf(ctx.body).toEqualTypeOf<{ title: string; tags: string[] }>()
+        expectTypeOf(ctx.body).toEqualTypeOf<{
+          title: string
+          tags: string[]
+        }>()
         return ctx.body.title
       })
   })
@@ -200,7 +241,9 @@ describe('the extension is added, never stepped', () => {
 describe('`BodyOf` says what the encoding was, and `unknown` when it was not said', () => {
   it('narrows on a literal', () => {
     expectTypeOf<BodyOf<'json'>>().toEqualTypeOf<unknown>()
-    expectTypeOf<BodyOf<'form'>>().toEqualTypeOf<Record<string, string | File>>()
+    expectTypeOf<BodyOf<'form'>>().toEqualTypeOf<
+      Record<string, string | File>
+    >()
   })
 
   it('is `unknown` for a caller that did not say which — the lattice, not a bug', () => {

@@ -62,6 +62,19 @@ explicitly:
   and `pnpm typecheck` (workspace root: `pnpm -r ...`); scope down with
   `pnpm --filter @lntt/wire exec vitest run src/with.test.ts`. Never
   declare green without having run.
+- **Lint and format: Biome** (`pnpm lint` to check, `pnpm lint:fix` to write),
+  configured in `biome.jsonc` — two spaces, single quotes, no semicolons, 80
+  columns. The rules that fight a type-level library are off with their reason
+  beside them; `research/` is out of scope. A `lefthook` pre-commit hook runs
+  Biome over the staged files and restages what it fixed, and CI runs the same
+  check, so the hook is a convenience and never the gate. `pnpm install` sets
+  the hooks up, from the MAIN worktree only — the shims carry the absolute path
+  of the binary that wrote them, and a linked worktree writes one that
+  disappears with it.
+- **`@ts-expect-error` marks a LINE**, and the formatter decides which line a
+  call ends up on: put the comment immediately above the argument or the call
+  the error lands on, not above the head of the chain. A misplaced one fails
+  twice — the expected error is unsuppressed, and the suppression is unused.
 - **No build step for now:** `exports` point at the `.ts` sources.
 
 ## Accepting an outcome into the record

@@ -18,9 +18,13 @@ describe('the verb model (types)', () => {
 
   it('provide(fn, destroy): value stays private, destroy param is inferred', async () => {
     const app = await lunette()
-      .provide('secret', () => 's', (v) => {
-        expectTypeOf(v).toEqualTypeOf<string>()
-      })
+      .provide(
+        'secret',
+        () => 's',
+        (v) => {
+          expectTypeOf(v).toEqualTypeOf<string>()
+        },
+      )
       .expose('len', (ctx) => ctx.secret.length)
       .run(async (pub) => pub)
 

@@ -40,9 +40,10 @@ export interface Supply<Req extends string, Opt extends string> {
 // meets `Validated<S, 'input'>` at the resolver's parameter and contravariance
 // does the refusing, with no gate of ours. What is shared is where the
 // demand comes from, which is the whole point of the design.
-export type Validated<S extends State, N extends string> = N extends keyof S['acc']
-  ? S['acc'][N]
-  : unknown
+export type Validated<
+  S extends State,
+  N extends string,
+> = N extends keyof S['acc'] ? S['acc'][N] : unknown
 
 // The params half, which is what the two pattern hosts compare.
 export type ValidatedParams<S extends State> = Validated<S, 'params'>
@@ -87,6 +88,8 @@ export type Unsupplied<Sup, Par> = [Sup] extends [Opaque]
 // `never`, and TypeScript then reports "not assignable to parameter of type
 // 'never'" with both messages gone. So this takes what to check NEXT, and
 // only one of them can be the answer.
-export type PathGate<Sup, Par, Then = unknown> = [Unsupplied<Sup, Par>] extends [never]
+export type PathGate<Sup, Par, Then = unknown> = [
+  Unsupplied<Sup, Par>,
+] extends [never]
   ? Then
   : `⛔ this route does not supply a param the scope validates: ${Unsupplied<Sup, Par> & string}`

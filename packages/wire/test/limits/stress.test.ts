@@ -31,7 +31,9 @@ describe('runtime stress', () => {
         throw new Error('construction failed')
       })
 
-    await expect(chain.run(async () => {})).rejects.toThrow('construction failed')
+    await expect(chain.run(async () => {})).rejects.toThrow(
+      'construction failed',
+    )
     expect(teardowns).toEqual(['a'])
   })
 

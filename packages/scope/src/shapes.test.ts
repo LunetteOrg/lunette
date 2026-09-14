@@ -1,6 +1,13 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { scope, type Next } from './index.ts'
-import { fixture, gone, refused, served, type Refusal, type Served } from './fixture/carrier.ts'
+import {
+  fixture,
+  gone,
+  refused,
+  served,
+  type Refusal,
+  type Served,
+} from './fixture/carrier.ts'
 
 // THE SHAPES A STEP TAKES — one per thing a step is for. There is no category
 // here and no phase: every one is the same primitive, and each runs where it
@@ -18,8 +25,12 @@ interface Session {
   readonly userId: string
 }
 interface Repos {
-  readonly sessions: { readonly of: (token: string | null) => Session | undefined }
-  readonly notes: { readonly byId: (id: string) => { readonly text: string } | undefined }
+  readonly sessions: {
+    readonly of: (token: string | null) => Session | undefined
+  }
+  readonly notes: {
+    readonly byId: (id: string) => { readonly text: string } | undefined
+  }
 }
 const app: Repos = {
   sessions: { of: (t) => (t === 'good' ? { userId: 'u1' } : undefined) },
@@ -70,7 +81,8 @@ const refineToken = async (
   _app: {},
   ctx: { readonly token: string | null },
   next: Next<{ token: string }>,
-) => (ctx.token === null ? next({ token: 'anonymous' }) : next({ token: ctx.token }))
+) =>
+  ctx.token === null ? next({ token: 'anonymous' }) : next({ token: ctx.token })
 
 // ── 4. WRAP ──────────────────────────────────────────────────────────────────
 // Let the rest run and act on what came BACK. A step wraps `next`, so it has an
@@ -92,9 +104,14 @@ const timed = (log: string[]) => async (_app: {}, _ctx: {}, next: Next<{}>) => {
 // The leaf itself is ONLY a leaf: a value. That is the entire convention, the
 // same one wire's leaves follow: a RETURNED error is domain, a THROWN one is
 // infrastructure.
-const readNote = async (deps: Pick<Repos, 'notes'>, ctx: { readonly session: Session }) => {
+const readNote = async (
+  deps: Pick<Repos, 'notes'>,
+  ctx: { readonly session: Session },
+) => {
   const note = deps.notes.byId('n1')
-  return note === undefined ? gone('note') : `${ctx.session.userId}:${note.text}`
+  return note === undefined
+    ? gone('note')
+    : `${ctx.session.userId}:${note.text}`
 }
 
 // And that is all a leaf is. It DECLARES nothing: not calling `next` ends the
@@ -168,8 +185,12 @@ describe('a step that can stop two different ways', () => {
       })
       .step(async (_app: {}, _ctx: {}) => 'ok')
 
-    expect(await h({}, { token: null, params: {} })).toMatchObject({ kind: 'refused' })
-    expect(await h({}, { token: 'gone', params: {} })).toMatchObject({ kind: 'gone' })
+    expect(await h({}, { token: null, params: {} })).toMatchObject({
+      kind: 'refused',
+    })
+    expect(await h({}, { token: 'gone', params: {} })).toMatchObject({
+      kind: 'gone',
+    })
     expect(await h({}, { token: 'good', params: {} })).toBe('ok')
   })
 })
@@ -181,7 +202,9 @@ describe('a step that can stop two different ways', () => {
 // a value carrying its own domain value appears in what the scope yields, so a
 // caller reads it directly rather than through a second branch.
 describe('a value on the success side', () => {
-  const served3 = scope(fixture).step(async (_app: {}, _ctx: {}) => served(3, 'cache'))
+  const served3 = scope(fixture).step(async (_app: {}, _ctx: {}) =>
+    served(3, 'cache'),
+  )
 
   it('carries the domain value alongside its own shape', async () => {
     const out = await served3({}, { token: null, params: {} })
@@ -227,11 +250,17 @@ describe('a step that hands back nothing', () => {
     // the same step, forced past the gate the way plain JS would reach it
     const forgot = (async (_app: {}, _ctx: {}, next: Next<{ x: number }>) => {
       next({ x: 1 })
-    }) as unknown as (app: {}, ctx: {}, next: Next<{ x: number }>) => Promise<number>
+    }) as unknown as (
+      app: {},
+      ctx: {},
+      next: Next<{ x: number }>,
+    ) => Promise<number>
 
     const h = scope(fixture)
       .step(forgot)
-      .step(async (_app: {}, ctx: { readonly x: number }) => `leaf saw ${ctx.x}`)
+      .step(
+        async (_app: {}, ctx: { readonly x: number }) => `leaf saw ${ctx.x}`,
+      )
 
     const out = await h({}, { token: null, params: {} })
     // the leaf really ran and really produced a value — and it is gone
@@ -262,9 +291,13 @@ describe('two steps populating the same ctx key', () => {
   it('is REFUSED at the step that wrote the second, with the key named', () => {
     const refused = () => {
       scope(fixture)
-        .step(async (_a: {}, _c: {}, next: Next<{ user: string }>) => next({ user: 'ada' }))
+        .step(async (_a: {}, _c: {}, next: Next<{ user: string }>) =>
+          next({ user: 'ada' }),
+        )
         // @ts-expect-error ⛔ this ctx key is already populated: user
-        .step(async (_a: {}, _c: {}, next: Next<{ user: number }>) => next({ user: 42 }))
+        .step(async (_a: {}, _c: {}, next: Next<{ user: number }>) =>
+          next({ user: 42 }),
+        )
     }
     expect(typeof refused).toBe('function')
   })
@@ -275,7 +308,9 @@ describe('two steps populating the same ctx key', () => {
     // gate refuses to do. The way to say it deliberately is a verb.
     const refused = () => {
       scope(fixture)
-        .step(async (_a: {}, _c: {}, next: Next<{ body: unknown }>) => next({ body: {} }))
+        .step(async (_a: {}, _c: {}, next: Next<{ body: unknown }>) =>
+          next({ body: {} }),
+        )
         // @ts-expect-error ⛔ this ctx key is already populated: body
         .step(async (_a: {}, _c: {}, next: Next<{ body: { id: string } }>) =>
           next({ body: { id: 'p1' } }),
@@ -290,7 +325,8 @@ describe('two steps populating the same ctx key', () => {
     // step twice is a composition mistake either way (it runs for nothing), and
     // admitting it would mean comparing TYPES as well as names, which is the
     // more expensive machine this shape was chosen over.
-    const withPage = async (_a: {}, _c: {}, next: Next<{ page: number }>) => next({ page: 3 })
+    const withPage = async (_a: {}, _c: {}, next: Next<{ page: number }>) =>
+      next({ page: 3 })
     const refused = () => {
       // @ts-expect-error ⛔ this ctx key is already populated: page
       scope(fixture).step(withPage).step(withPage)

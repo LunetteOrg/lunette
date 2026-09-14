@@ -100,10 +100,14 @@ describe('`route(path, scope)`: what the scope VALIDATES against what the route 
     const maybeById = scope(expressCarrier())
       .extend(guards)
       .step(params)
-      .validate('params', z.object({ id: z.string().optional() }), (i, { res }) =>
-        res.status(400).json({ i }),
+      .validate(
+        'params',
+        z.object({ id: z.string().optional() }),
+        (i, { res }) => res.status(400).json({ i }),
       )
-      .step(async (_app: {}, { params: p, res }) => res.json({ id: p.id ?? null }))
+      .step(async (_app: {}, { params: p, res }) =>
+        res.json({ id: p.id ?? null }),
+      )
 
     route('/posts{/:id}', maybeById)
     route('/posts/:id', maybeById)
@@ -128,7 +132,7 @@ describe('`route(path, scope)`: what the scope VALIDATES against what the route 
   })
 })
 
-describe('`handler(scope)`: the escape hatch, and the pattern is Express\'s', () => {
+describe("`handler(scope)`: the escape hatch, and the pattern is Express's", () => {
   it('mounts anywhere, including where `route` refuses — nothing compares the pattern', () => {
     // wrong, and it compiles: the pattern is Express's own argument here, so it
     // never reaches a type of ours. `.validate` still answers 400 on the first
@@ -137,8 +141,8 @@ describe('`handler(scope)`: the escape hatch, and the pattern is Express\'s', ()
   })
 })
 
-describe('the mounts are transparent: each hands back Express\'s own type, filled in', () => {
-  it('a route hands back Express\'s own handler, at the params width the router has', () => {
+describe("the mounts are transparent: each hands back Express's own type, filled in", () => {
+  it("a route hands back Express's own handler, at the params width the router has", () => {
     expectTypeOf(handler(byId)).toEqualTypeOf<RequestHandler>()
   })
 
@@ -155,7 +159,9 @@ describe('the mounts are transparent: each hands back Express\'s own type, fille
 
     const withActor = mw(scope(expressCarrier()).step(requireActor))
 
-    expectTypeOf<LocalsOf<typeof withActor>>().toEqualTypeOf<{ actor: string }>()
+    expectTypeOf<LocalsOf<typeof withActor>>().toEqualTypeOf<{
+      actor: string
+    }>()
 
     // which is how a handler downstream reads them typed
     const handler: RequestHandler<
@@ -178,8 +184,8 @@ describe('the mounts owe the scope its chain: `DepGuard` rides every mount', () 
   // as a direct call is. Left ungated, the mount would be the one door into a
   // scope that asks for more than it is handed, and the step would destructure
   // `db` off `{}` on the first request instead.
-  const needsDb = scope(expressCarrier()).step(async ({ db }: { readonly db: string }, { res }) =>
-    res.json({ db }),
+  const needsDb = scope(expressCarrier()).step(
+    async ({ db }: { readonly db: string }, { res }) => res.json({ db }),
   )
 
   it('refuses a scope the curried chain does not satisfy', () => {
@@ -205,7 +211,9 @@ describe('a route ANSWERS on `res`, and the gate says so before the request does
     // request never gets an answer. Nothing downstream reads the type either,
     // which is why the check is asked for here rather than falling out of the
     // mount's own return the way Hono's does.
-    const returnsAValue = scope(expressCarrier()).step(async () => ({ ok: true }))
+    const returnsAValue = scope(expressCarrier()).step(async () => ({
+      ok: true,
+    }))
 
     // @ts-expect-error ⛔ a route answers on `res`
     handler(returnsAValue)
@@ -236,7 +244,8 @@ describe('a route ANSWERS on `res`, and the gate says so before the request does
 describe('a middleware may not derive a ctx key the run itself brought', () => {
   it('refuses it, because the leaf strips those by name — and `next` would hang the request', () => {
     const hijacks = scope(expressCarrier()).step(
-      async (_app: {}, _ctx, next: Next<{ next: () => void }>) => next({ next: () => {} }),
+      async (_app: {}, _ctx, next: Next<{ next: () => void }>) =>
+        next({ next: () => {} }),
     )
 
     // @ts-expect-error ⛔ this middleware derives a ctx key the run itself brought: next
@@ -245,7 +254,8 @@ describe('a middleware may not derive a ctx key the run itself brought', () => {
 
   it('refuses a derived `res` too, which would simply be dropped from res.locals', () => {
     const shadows = scope(expressCarrier()).step(
-      async (_app: {}, _ctx, next: Next<{ res: string }>) => next({ res: 'mine' }),
+      async (_app: {}, _ctx, next: Next<{ res: string }>) =>
+        next({ res: 'mine' }),
     )
 
     // @ts-expect-error ⛔ this middleware derives a ctx key the run itself brought: res
@@ -255,7 +265,9 @@ describe('a middleware may not derive a ctx key the run itself brought', () => {
   it('a ROUTE takes no such gate: it copies nothing out, so nothing is stripped', () => {
     handler(
       scope(expressCarrier())
-        .step(async (_app: {}, _ctx, next: Next<{ next: () => void }>) => next({ next: () => {} }))
+        .step(async (_app: {}, _ctx, next: Next<{ next: () => void }>) =>
+          next({ next: () => {} }),
+        )
         .step(async (_app: {}, { res }) => res.json({})),
     )
   })
@@ -266,7 +278,9 @@ describe('a mount takes a scope written for ITS carrier, and no other', () => {
   // assignable to, and `strictFunctionTypes` refuses one demanding args that
   // never arrive. Mounted ungated, these compiled and died on the first
   // request, reading `c` off `{ req, res }`.
-  const forHono = scope(honoCarrier()).step(async (_app: {}, { c }) => c.json({}))
+  const forHono = scope(honoCarrier()).step(async (_app: {}, { c }) =>
+    c.json({}),
+  )
 
   it('refuses a scope written for another host', () => {
     // @ts-expect-error — this scope reads `c`; an Express mount brings req/res
@@ -278,7 +292,9 @@ describe('a mount takes a scope written for ITS carrier, and no other', () => {
   })
 
   it('refuses a scope started on no host carrier at all', () => {
-    const bare = scope<{ readonly tenant: string }>().step(async (_app: {}, { tenant }) => tenant)
+    const bare = scope<{ readonly tenant: string }>().step(
+      async (_app: {}, { tenant }) => tenant,
+    )
 
     // @ts-expect-error — this scope reads `tenant`, which no Express run brings
     handler(bare)
@@ -305,12 +321,14 @@ describe('two message-gates never meet on one argument', () => {
     route('/posts', unsendable)
   })
 
-  it('holds on `mw`\'s chain too, where the pair is a different one', () => {
+  it("holds on `mw`'s chain too, where the pair is a different one", () => {
     // `AnswerGate` chained onto `StripGate`: this scope derives `res` AND hands
     // back a value Express will never send. Same invariant, second chain — the
     // one the route pair does not cover.
     const both = scope(expressCarrier())
-      .step(async (_app: {}, _ctx, next: Next<{ res: string }>) => next({ res: 'mine' }))
+      .step(async (_app: {}, _ctx, next: Next<{ res: string }>) =>
+        next({ res: 'mine' }),
+      )
       .step(async () => ({ ok: true }))
 
     // @ts-expect-error ⛔ answer on `res`
@@ -326,7 +344,9 @@ describe('a middleware answers on `res` too, and worse when it does not', () => 
     // request hangs with no response at all.
     const returnsAnError = scope(expressCarrier()).step(
       async (_app: {}, _ctx, next: Next<{ actor: string }>) =>
-        Math.random() > 0.5 ? ({ error: 'unauthorized' } as const) : next({ actor: 'u1' }),
+        Math.random() > 0.5
+          ? ({ error: 'unauthorized' } as const)
+          : next({ actor: 'u1' }),
     )
 
     // @ts-expect-error ⛔ answer on `res`
@@ -335,8 +355,11 @@ describe('a middleware answers on `res` too, and worse when it does not', () => 
 
   it('accepts the same guard answering on `res`', () => {
     mw(
-      scope(expressCarrier()).step(async (_app: {}, { res }, next: Next<{ actor: string }>) =>
-        Math.random() > 0.5 ? res.status(401).json({ error: 'unauthorized' }) : next({ actor: 'u1' }),
+      scope(expressCarrier()).step(
+        async (_app: {}, { res }, next: Next<{ actor: string }>) =>
+          Math.random() > 0.5
+            ? res.status(401).json({ error: 'unauthorized' })
+            : next({ actor: 'u1' }),
       ),
     )
   })

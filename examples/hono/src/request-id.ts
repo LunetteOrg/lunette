@@ -9,7 +9,11 @@ import type { Next } from '@lntt/scope'
 // The Express twin of this file is the same eight lines with `res.setHeader`
 // in place of `c.header`. That is the whole of what a step costs to move
 // between hosts: the line that touches the framework.
-export const withRequestId = async (_app: {}, { c }: { readonly c: Context }, next: Next<{}>) => {
+export const withRequestId = async (
+  _app: {},
+  { c }: { readonly c: Context },
+  next: Next<{}>,
+) => {
   c.header('x-request-id', randomUUID())
   return next({})
 }

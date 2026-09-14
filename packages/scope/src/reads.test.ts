@@ -24,7 +24,11 @@ const summary = async (
     query,
     cookies,
     headers,
-  }: { readonly query: Query; readonly cookies: Cookies; readonly headers: Headers_ },
+  }: {
+    readonly query: Query
+    readonly cookies: Cookies
+    readonly headers: Headers_
+  },
 ) => ({
   page: query.page,
   tags: query.tag,
@@ -109,7 +113,12 @@ describe('what the entries hold before anyone validates them', () => {
         .step(async (_a: {}, { query }) => query),
     )
 
-    expect(await loader({ request: new Request('http://h/?a=1&b=2&b=3'), params: {} })).toEqual({
+    expect(
+      await loader({
+        request: new Request('http://h/?a=1&b=2&b=3'),
+        params: {},
+      }),
+    ).toEqual({
       a: '1',
       b: ['2', '3'],
     })
@@ -226,7 +235,11 @@ describe('Express `body`: the two worlds a Node request can be in', () => {
       '/',
       ex.express({}).handler(
         scope(ex.expressCarrier())
-          .step(ex.body('json', (issues, ctx) => ctx.res.status(422).json({ issues })))
+          .step(
+            ex.body('json', (issues, ctx) =>
+              ctx.res.status(422).json({ issues }),
+            ),
+          )
           .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
       ),
     )
@@ -235,7 +248,10 @@ describe('Express `body`: the two worlds a Node request can be in', () => {
     const app = expressLib()
     route(app)
 
-    const res = await request(app).post('/').set('content-type', 'application/json').send('{"a":1}')
+    const res = await request(app)
+      .post('/')
+      .set('content-type', 'application/json')
+      .send('{"a":1}')
     expect(res.body).toEqual({ got: { a: 1 } })
   })
 
@@ -263,13 +279,19 @@ describe('Express `body`: the two worlds a Node request can be in', () => {
 })
 
 // ── every key below is the CLIENT's ─────────────────────────────────────────
+// biome-ignore-start lint/suspicious/noProto: the deprecated accessor is what a client can send, and reading it back is how the test proves where the value landed
+// biome-ignore-start lint/complexity/useLiteralKeys: the keys below are read as a CLIENT wrote them, so they stay in brackets — `__proto__` with a dot is the prototype accessor and asserts something else
 describe('a client-chosen key cannot reach the prototype', () => {
   const readAll = rr.reactRouter({}).loader(
     scope(rr.reactRouterCarrier())
       .step(rr.query)
       .step(rr.cookies)
       .step(rr.headers)
-      .step(async (_a: {}, { query, cookies, headers }) => ({ query, cookies, headers })),
+      .step(async (_a: {}, { query, cookies, headers }) => ({
+        query,
+        cookies,
+        headers,
+      })),
   )
 
   it('keeps `__proto__` as an OWN property instead of running the setter', async () => {
@@ -300,6 +322,8 @@ describe('a client-chosen key cannot reach the prototype', () => {
     expect(out.query.ok).toBe('1')
   })
 })
+// biome-ignore-end lint/suspicious/noProto: the deprecated accessor is what a client can send
+// biome-ignore-end lint/complexity/useLiteralKeys: `__proto__` in brackets is a plain own key
 
 describe('Express `body`: a parsed body does not say what parsed it', () => {
   it('refuses a JSON payload where the step asked for a form', async () => {
@@ -312,7 +336,11 @@ describe('Express `body`: a parsed body does not say what parsed it', () => {
       '/',
       ex.express({}).handler(
         scope(ex.expressCarrier())
-          .step(ex.body('form', (issues, ctx) => ctx.res.status(415).json({ issues })))
+          .step(
+            ex.body('form', (issues, ctx) =>
+              ctx.res.status(415).json({ issues }),
+            ),
+          )
           .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
       ),
     )
@@ -329,7 +357,11 @@ describe('Express `body`: a parsed body does not say what parsed it', () => {
       '/',
       ex.express({}).handler(
         scope(ex.expressCarrier())
-          .step(ex.body('form', (issues, ctx) => ctx.res.status(415).json({ issues })))
+          .step(
+            ex.body('form', (issues, ctx) =>
+              ctx.res.status(415).json({ issues }),
+            ),
+          )
           .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
       ),
     )
@@ -351,8 +383,14 @@ describe('Express `body`: what a mounted parser changes', () => {
       '/',
       ex.express({}).handler(
         scope(ex.expressCarrier())
-          .step(ex.body('json', (issues, ctx) => ctx.res.status(422).json({ from: 'onError', issues })))
-          .step(async (_a: {}, ctx) => ctx.res.json({ from: 'leaf', body: ctx.body })),
+          .step(
+            ex.body('json', (issues, ctx) =>
+              ctx.res.status(422).json({ from: 'onError', issues }),
+            ),
+          )
+          .step(async (_a: {}, ctx) =>
+            ctx.res.json({ from: 'leaf', body: ctx.body }),
+          ),
       ),
     )
     app.use((_e: unknown, _q: Request, res: Response, _n: () => void) =>
@@ -361,25 +399,37 @@ describe('Express `body`: what a mounted parser changes', () => {
     return app
   }
 
-  it('an INVALID payload is Express\'s to report when its parser ran first', async () => {
-    const res = await request(routed(true)).post('/').set('content-type', 'application/json').send('nope')
+  it("an INVALID payload is Express's to report when its parser ran first", async () => {
+    const res = await request(routed(true))
+      .post('/')
+      .set('content-type', 'application/json')
+      .send('nope')
 
     expect(res.status).toBe(400)
     expect(res.body.from).toBe('express')
   })
 
-  it('and is this `onError`\'s when the stream was ours', async () => {
-    const res = await request(routed(false)).post('/').set('content-type', 'application/json').send('nope')
+  it("and is this `onError`'s when the stream was ours", async () => {
+    const res = await request(routed(false))
+      .post('/')
+      .set('content-type', 'application/json')
+      .send('nope')
 
     expect(res.status).toBe(422)
     expect(res.body.from).toBe('onError')
   })
 
   it('an EMPTY body reaches the leaf as `{}` with a parser, and stops without one', async () => {
-    const withParser = await request(routed(true)).post('/').set('content-type', 'application/json').send('')
+    const withParser = await request(routed(true))
+      .post('/')
+      .set('content-type', 'application/json')
+      .send('')
     expect(withParser.body).toEqual({ from: 'leaf', body: {} })
 
-    const without = await request(routed(false)).post('/').set('content-type', 'application/json').send('')
+    const without = await request(routed(false))
+      .post('/')
+      .set('content-type', 'application/json')
+      .send('')
     expect(without.status).toBe(422)
   })
 })
@@ -395,7 +445,11 @@ describe('Express `body`: what a pre-parsed body cannot carry', () => {
       '/',
       ex.express({}).handler(
         scope(ex.expressCarrier())
-          .step(ex.body('form', (issues, ctx) => ctx.res.status(415).json({ m: issues[0]?.message })))
+          .step(
+            ex.body('form', (issues, ctx) =>
+              ctx.res.status(415).json({ m: issues[0]?.message }),
+            ),
+          )
           .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
       ),
     )
@@ -425,7 +479,10 @@ describe('Express `body`: what a pre-parsed body cannot carry', () => {
       req.headers['content-type'] = ''
     })
 
-    const res = await request(app).post('/').set('content-type', 'text/plain').send('x')
+    const res = await request(app)
+      .post('/')
+      .set('content-type', 'text/plain')
+      .send('x')
     expect(res.body.m).toBe('the body was sent as nothing, not form')
   })
 })
@@ -459,7 +516,9 @@ describe('what a body must be called, and must actually be', () => {
     // a string: the payload arrived damaged and failed later, as a parse error
     // if it was lucky and as silently wrong data if the damage was inside a
     // string.
-    const invalid = new Uint8Array([0x7b, 0x22, 0x61, 0x22, 0x3a, 0x22, 0xff, 0xfe, 0x22, 0x7d])
+    const invalid = new Uint8Array([
+      0x7b, 0x22, 0x61, 0x22, 0x3a, 0x22, 0xff, 0xfe, 0x22, 0x7d,
+    ])
 
     const out = await action({
       request: new Request('http://h/', {
@@ -486,12 +545,19 @@ describe('Express `body`: a pre-parsed body may not be parsed at all', () => {
       '/',
       ex.express({}).handler(
         scope(ex.expressCarrier())
-          .step(ex.body('json', (issues, ctx) => ctx.res.status(422).json({ m: issues[0]?.message })))
+          .step(
+            ex.body('json', (issues, ctx) =>
+              ctx.res.status(422).json({ m: issues[0]?.message }),
+            ),
+          )
           .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
       ),
     )
 
-    const res = await request(app).post('/').set('content-type', 'application/json').send('{"a":1}')
+    const res = await request(app)
+      .post('/')
+      .set('content-type', 'application/json')
+      .send('{"a":1}')
     expect(res.body).toEqual({ got: { a: 1 } })
   })
 
@@ -502,12 +568,19 @@ describe('Express `body`: a pre-parsed body may not be parsed at all', () => {
       '/',
       ex.express({}).handler(
         scope(ex.expressCarrier())
-          .step(ex.body('json', (issues, ctx) => ctx.res.status(422).json({ m: issues[0]?.message })))
+          .step(
+            ex.body('json', (issues, ctx) =>
+              ctx.res.status(422).json({ m: issues[0]?.message }),
+            ),
+          )
           .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
       ),
     )
 
-    const res = await request(app).post('/').set('content-type', 'application/json').send('nope')
+    const res = await request(app)
+      .post('/')
+      .set('content-type', 'application/json')
+      .send('nope')
     expect(res.status).toBe(422)
     expect(res.body.m).toBe('the body is not valid JSON')
   })
@@ -527,7 +600,9 @@ describe('a duplicated cookie name keeps the FIRST', () => {
     )
 
     const out = await loader({
-      request: new Request('http://h/', { headers: { cookie: 'session=first; session=second' } }),
+      request: new Request('http://h/', {
+        headers: { cookie: 'session=first; session=second' },
+      }),
       params: {},
     })
 
@@ -536,7 +611,7 @@ describe('a duplicated cookie name keeps the FIRST', () => {
 })
 
 describe('Express `body`: a stream already read says so', () => {
-  it('throws the author\'s mistake instead of blaming the client\'s payload', async () => {
+  it("throws the author's mistake instead of blaming the client's payload", async () => {
     // A Node stream is read once, and `req.body === undefined` does not say why.
     // A step that consumed `req` itself — a signature check over the raw bytes,
     // say — leaves it exhausted, and iterating it yields zero chunks: the parse
@@ -563,10 +638,15 @@ describe('Express `body`: a stream already read says so', () => {
       ),
     )
     app.use((err: unknown, _q: Request, res: Response, _n: () => void) =>
-      res.status(500).json({ message: String((err as Error).message).slice(0, 40) }),
+      res
+        .status(500)
+        .json({ message: String((err as Error).message).slice(0, 40) }),
     )
 
-    const res = await request(app).post('/').set('content-type', 'application/json').send('{"a":1}')
+    const res = await request(app)
+      .post('/')
+      .set('content-type', 'application/json')
+      .send('{"a":1}')
 
     expect(res.status).toBe(500)
     expect(res.body.message).toContain('already read')
@@ -581,16 +661,25 @@ describe('`body`: a size limit', () => {
       '/',
       ex.express({}).handler(
         scope(ex.expressCarrier())
-          .step(ex.body('json', (issues, ctx) => ctx.res.status(413).json({ issues })))
+          .step(
+            ex.body('json', (issues, ctx) =>
+              ctx.res.status(413).json({ issues }),
+            ),
+          )
           .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
       ),
     )
 
     const oversized = JSON.stringify({ a: 'x'.repeat(200_000) })
-    const res = await request(app).post('/').set('content-type', 'application/json').send(oversized)
+    const res = await request(app)
+      .post('/')
+      .set('content-type', 'application/json')
+      .send(oversized)
 
     expect(res.status).toBe(413)
-    expect(res.body.issues[0].message).toBe('the body exceeds the 102400 byte limit')
+    expect(res.body.issues[0].message).toBe(
+      'the body exceeds the 102400 byte limit',
+    )
   })
 
   it('Express: an explicit `limit` is honoured, in both directions', async () => {
@@ -599,7 +688,13 @@ describe('`body`: a size limit', () => {
       '/',
       ex.express({}).handler(
         scope(ex.expressCarrier())
-          .step(ex.body('json', (issues, ctx) => ctx.res.status(413).json({ issues }), { limit: 10 }))
+          .step(
+            ex.body(
+              'json',
+              (issues, ctx) => ctx.res.status(413).json({ issues }),
+              { limit: 10 },
+            ),
+          )
           .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
       ),
     )
@@ -610,7 +705,10 @@ describe('`body`: a size limit', () => {
       .send({ a: 1, b: 2 })
     expect(tooBig.status).toBe(413)
 
-    const fits = await request(app).post('/').set('content-type', 'application/json').send({ a: 1 })
+    const fits = await request(app)
+      .post('/')
+      .set('content-type', 'application/json')
+      .send({ a: 1 })
     expect(fits.body).toEqual({ got: { a: 1 } })
   })
 
@@ -623,7 +721,13 @@ describe('`body`: a size limit', () => {
       '/',
       ex.express({}).handler(
         scope(ex.expressCarrier())
-          .step(ex.body('json', (issues, ctx) => ctx.res.status(413).json({ issues }), { limit: 10 }))
+          .step(
+            ex.body(
+              'json',
+              (issues, ctx) => ctx.res.status(413).json({ issues }),
+              { limit: 10 },
+            ),
+          )
           .step(async (_a: {}, ctx) => ctx.res.json({ got: ctx.body })),
       ),
     )
@@ -632,9 +736,13 @@ describe('`body`: a size limit', () => {
 
     try {
       const res = await new Promise<{ status: number }>((resolve, reject) => {
-        const req = http.request(
-          { host: '127.0.0.1', port, method: 'POST', path: '/', headers: { 'content-type': 'application/json' } },
-        )
+        const req = http.request({
+          host: '127.0.0.1',
+          port,
+          method: 'POST',
+          path: '/',
+          headers: { 'content-type': 'application/json' },
+        })
         req.on('response', (r) => {
           r.resume()
           resolve({ status: r.statusCode ?? 0 })
@@ -674,7 +782,11 @@ describe('`body`: a size limit', () => {
   it('React Router: an explicit `limit` is honoured', async () => {
     const action = rr.reactRouter({}).action(
       scope(rr.reactRouterCarrier())
-        .step(rr.body('json', (issues) => ({ error: issues[0]?.message }), { limit: 10 }))
+        .step(
+          rr.body('json', (issues) => ({ error: issues[0]?.message }), {
+            limit: 10,
+          }),
+        )
         .step(async (_a: {}, { body }) => ({ got: body })),
     )
 
