@@ -1,3 +1,4 @@
+import { defaultClientConditions, defaultServerConditions } from 'vite'
 import { defineConfig } from 'vitest/config'
 
 // What every suite in this workspace shares: how `@lntt/*` imported BY NAME is
@@ -15,16 +16,22 @@ import { defineConfig } from 'vitest/config'
 // declarations are the job of the `tsconfig.verify.json` files.
 export const onSources = process.env.LNTT_SOURCE !== 'off'
 
-const conditions = onSources ? ['@lntt/source'] : []
+// Added to what Vite already resolves with, never in place of it: the field
+// REPLACES, so an array of ours alone would take `node`, `module` and `browser`
+// away from every other dependency a suite loads — which shows up as a suite
+// exercising a different build of one, silently, rather than as an error. Each
+// side keeps its own list, because they differ where it matters: `browser` on
+// one, `node` on the other.
+const ours = onSources ? ['@lntt/source'] : []
 
 // Declared on BOTH sides: suites run through Vite's SSR pipeline, which
 // resolves with `ssr.resolve.conditions` and would otherwise fall through to
 // `import` — reaching `dist`, or failing when there is none.
 export default defineConfig({
   resolve: {
-    conditions,
+    conditions: [...ours, ...defaultClientConditions],
   },
   ssr: {
-    resolve: { conditions },
+    resolve: { conditions: [...ours, ...defaultServerConditions] },
   },
 })
