@@ -27,12 +27,14 @@
     ".": {
       "@lntt/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
     },
     "./testing": {
       "@lntt/source": "./src/testing.ts",
       "types": "./dist/testing.d.ts",
-      "import": "./dist/testing.js"
+      "import": "./dist/testing.js",
+      "require": "./dist/testing.js"
     },
     "./package.json": "./package.json"
   },
@@ -60,7 +62,7 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "typescript": ">=7"
+    "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
     "typescript": {

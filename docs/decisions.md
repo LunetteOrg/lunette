@@ -3169,9 +3169,17 @@ was the working record, and is written here because that document is retired
 ### 56. The build ships, the sources ship beside it, and one condition reaches them
 
 **Decision.** Each package builds to ESM JavaScript with declarations, and
-`exports` resolves `types` to the built `.d.ts` and `import` to the built `.js`
-— per subpath, so `@lntt/scope` keeps its six and `@lntt/wire` its two. The
-frameworks stay optional peers.
+`exports` resolves `types` to the built `.d.ts` and both `import` and `require`
+to the built `.js` — per subpath, so `@lntt/scope` keeps its six and `@lntt/wire`
+its two. The frameworks stay optional peers.
+
+ONE format, and `require` names the same file the `import` condition names: the
+runtimes this package declares load ESM from `require`, so a CJS consumer is
+refused by nothing but a missing condition, and what a missing one produces is
+`ERR_PACKAGE_PATH_NOT_EXPORTED` — an entry point that exists, reported as
+absent. The constraint that keeps this true is ours: a top-level await anywhere
+in the emitted graph makes `require` throw while `import` still passes, so
+`verify:tarball` loads every subpath BOTH ways.
 
 The sources ship too, through three mechanisms that only work together:
 `files: ["dist", "src", …]` puts the commented `.ts` inside `node_modules`;
@@ -3220,6 +3228,13 @@ every consumer.
 this library they carry the constraints, and a reader who follows a type into a
 `.d.ts` loses every one of them.
 
+*A second build in CJS*, so `require` reaches a format of its own. It buys
+nothing the one file does not already give on these runtimes, and it costs the
+hazard: two builds of one module are two copies in one process, and this library
+decides things by IDENTITY — a marker symbol, an `instanceof` — so the copies
+disagree silently rather than loudly. One file behind both conditions has one
+identity by construction.
+
 **Why.** The shape of `exports` is the package's public surface as much as the
 types are, and it is the one thing that cannot be corrected without a breaking
 change. Building moves the risk to where it is testable: declaration emit must
@@ -3239,24 +3254,44 @@ to built files and carries both `src` in `files` and a `"@zod/source"` condition
 `@trpc/server` ships `files: ["dist", "src", …]`. None of them points a default
 export at a `.ts`.
 
-### 57. One version of TypeScript and one of Node: the latest, and the current LTS
+### 57. One compiler for the gates, one floor for the consumer, and both are run
 
-**Decision.** TypeScript `>= 7` — the latest release — and Node `>= 24`, the
-current LTS. One number per axis, and exactly what CI runs. The floors a
-CONSUMER sees are each package's own `peerDependencies.typescript` and
-`engines.node`; inside the workspace a pnpm `catalog:` pins the compiler, so no
-package pins its own copy and every file is checked by the one the gate runs.
-No matrix, no support window. Raising either floor is a MAJOR, with no
-case-by-case judgement.
+**Decision.** The gates run on TypeScript — the latest release, pinned by a pnpm
+`catalog:`, so no package pins its own copy and every file in the workspace is
+checked by the one the gate runs — and on Node `>= 24`, the current LTS. That is
+what CI runs, on one version per axis: no matrix, no support window.
+
+What a CONSUMER sees is a separate number and a lower one. `engines.node` is
+`>= 24`; `peerDependencies.typescript` is `>= 5.9`, the oldest compiler that
+reads the emitted declarations. Both floors are RUN: the pinned compiler over
+the workspace, the floor compiler over the PUBLISHED declarations — every
+subpath of both packages, `skipLibCheck` off — in `verify:tarball`, where it is
+installed under an alias so the pinned one keeps the bare name. A floor nothing
+compiles is a claim nobody checked, and `peerDependencies` is read as
+"required", not as "verified": a floor above what the declarations need turns
+every consumer on an older compiler away from something that works for them.
+
+Resolving the SOURCES through the `@lntt/source` condition asks more of a
+compiler than reading the declarations does. The sources are checked on the
+pinned one alone, and each README says so where it documents the condition.
+
+Neither range is capped. A floor is a promise and is verified; an open top is an
+invitation, and a break on a compiler or a runtime newer than these is a bug
+report. Raising either floor is a MAJOR, with no case-by-case judgement.
 
 Consequences that follow from decision 56 rather than from taste: the packages
 are ESM-only, and `rewriteRelativeImportExtensions` is what lets the sources
 keep their explicit `.ts` import extensions while the emitted JavaScript carries
 `.js`.
 
-**Alternatives.** *A range wider than CI runs* — `>= 22` on Node, several TS
-majors. Rejected on the rule that makes the rest cheap: we declare only what is
-verified, or a floor is a claim nobody checked. *Staying on TypeScript 5.x* —
+**Alternatives.** *A range wider than anything run* — `>= 22` on Node, several
+TS majors, none of them exercised. Rejected on the rule that makes the rest
+cheap: we declare only what is verified, or a floor is a claim nobody checked.
+*The consumer's floor at the pinned compiler* — `>= 7` in `peerDependencies`
+too, one number for both roles. Simpler to state, and wrong in the field the
+package manager reads: the declarations compile on 5.9, so the only thing that
+floor produces is an unmet-peer warning telling a consumer to upgrade for
+something that already works. *Staying on TypeScript 5.x* —
 measured and unnecessary: 7.0.2 typechecks wire, scope, all six examples and the
 research prototypes with zero errors, `@ts-expect-error` directives included
 (one that stopped applying would itself be an error), `vitest --typecheck` runs
@@ -3268,7 +3303,9 @@ literal is printed with.
 floor costs nobody a major. The compiler tracks the LATEST because it IS the
 contract — the gates are conditional types, only as good as the checker reading
 them — while the runtime tracks LTS, because a floor above it would refuse
-consumers for nothing. Supporting three compilers would mean three CI runs
+consumers for nothing. The compiler a CONSUMER holds follows the runtime's
+reasoning rather than the gate's: it does not read our conditional types, it
+reads what they emitted. Supporting three compilers would mean three CI runs
 and three ways a gate could behave differently, for consumers who do not exist.
 Dedicated builds for older TypeScript or Node can be added if a real case
 appears; until then, one number per axis is the whole policy.

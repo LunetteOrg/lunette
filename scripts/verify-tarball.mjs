@@ -5,9 +5,10 @@
 //   1. every target `exports` names EXISTS in the tarball — a `files` list that
 //      drifted publishes a package whose entry points resolve to nothing, and
 //      `pnpm pack` reports that as a success;
-//   2. every subpath RESOLVES AND IMPORTS by its specifier, from a process whose
-//      cwd is the consumer — which is the only way the `exports` map itself is
-//      exercised: importing the file path behind it passes with a map Node
+//   2. every subpath RESOLVES AND LOADS by its specifier — both `import` and
+//      `require`, since one file answers to both conditions — from a process
+//      whose cwd is the consumer, which is the only way the `exports` map itself
+//      is exercised: importing the file path behind it passes with a map Node
 //      refuses (a target missing its `./` prefix, say);
 //   3. no suite rode along, compiled or otherwise;
 //   4. the LICENSE is in the tarball and is the one this repo grants;
@@ -18,6 +19,10 @@
 //      because two things have to be found somewhere: the web globals the read
 //      steps stand on (the default `lib` carries them, `@types/node` is the
 //      other way), and nothing of Node's beyond them.
+//   6. the declarations typecheck on the OLDEST compiler the packages declare a
+//      consumer may hold — `peerDependencies.typescript`. Everything else here
+//      runs on the compiler this repo pins, which is the newest one: a floor
+//      nothing compiles is a claim nobody checked.
 //
 // What is NOT checked here, and why: the manifest's dependency ranges. `pnpm
 // pack` rewrites `workspace:` and `catalog:` before packing and aborts when it
@@ -44,6 +49,11 @@ const tsc = join(
   ),
   'tsc.js',
 )
+// The compiler at the declared floor, installed under an alias so the pinned one
+// keeps the bare name. Its version is the floor `peerDependencies.typescript`
+// names: the two move together, and a missing alias FAILS rather than skips —
+// a check that quietly does not run is the floor going unverified again.
+const floorTsc = join(root, 'node_modules', 'typescript-5', 'lib', 'tsc.js')
 const license = readFileSync(join(root, 'LICENSE'), 'utf8')
 const work = mkdtempSync(join(tmpdir(), 'lntt-tarball-'))
 
@@ -151,6 +161,22 @@ try {
         const why = String(err.stderr ?? err.message).split('\n').find((l) => l.includes('Error')) ?? 'failed'
         check(false, `${specifier} resolves and imports — ${why.trim()}`)
       }
+
+      // The same file through `require`: the packages ship one format, and a
+      // CJS consumer reaches it because the runtime loads ESM from `require`.
+      // What breaks that is ours to keep out — a top-level await anywhere in
+      // the graph makes this throw while the `import` above still passes.
+      try {
+        const exported = execFileSync(
+          process.execPath,
+          ['-e', `console.log(Object.keys(require(${JSON.stringify(specifier)})).length)`],
+          { cwd: consumer, stdio: ['ignore', 'pipe', 'pipe'] },
+        ).toString().trim()
+        check(Number(exported) > 0, `${specifier} loads through require, and exports something`)
+      } catch (err) {
+        const why = String(err.stderr ?? err.message).split('\n').find((l) => l.includes('Error')) ?? 'failed'
+        check(false, `${specifier} loads through require — ${why.trim()}`)
+      }
     }
   }
 
@@ -206,12 +232,17 @@ try {
     // too, which is where the web globals the read steps stand on — `Request`,
     // `File`, `URLSearchParams` — have to be found in `lib` or not at all.
     ['the platform alone, no @types/node', mountsNothing, { ...base, types: [] }, bare],
+    // Every subpath, on the floor compiler: a consumer there holds the whole
+    // package, host mounts included, and reads the same declarations.
+    ['the floor compiler a consumer may hold', () => true, base, consumer, floorTsc],
   ]
-  for (const [what, keep, compilerOptions, where = consumer] of programs) {
+  check(existsSync(floorTsc), 'the floor compiler is installed to check the declarations against')
+  for (const [what, keep, compilerOptions, where = consumer, compiler = tsc] of programs) {
+    if (!existsSync(compiler)) continue
     writeFileSync(join(where, 'uses.ts'), importsOf(keep))
     writeFileSync(join(where, 'tsconfig.json'), JSON.stringify({ compilerOptions, include: ['uses.ts'] }))
     try {
-      execFileSync(process.execPath, [tsc, '--noEmit', '-p', 'tsconfig.json'], { cwd: where, stdio: ['ignore', 'pipe', 'pipe'] })
+      execFileSync(process.execPath, [compiler, '--noEmit', '-p', 'tsconfig.json'], { cwd: where, stdio: ['ignore', 'pipe', 'pipe'] })
       check(true, `the declarations typecheck on ${what}, with skipLibCheck off`)
     } catch (err) {
       const lines = String(err.stdout ?? '').split('\n').filter(Boolean)

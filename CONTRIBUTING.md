@@ -70,8 +70,10 @@ explicitly:
   built declarations, re-runs every suite through `exports` into `dist`, and
   checks the tarballs a consumer would install.
 - **One version per axis:** TypeScript (pnpm `catalog:`) is pinned to the latest
-  release, Node to the current LTS, and CI runs exactly those. Raising either floor is a
-  major.
+  release, Node to the current LTS, and CI runs exactly those. The floor a
+  CONSUMER sees is lower and separate — `peerDependencies.typescript` is the
+  oldest compiler that reads the emitted declarations, and `verify:tarball` runs
+  it over them. Raising either floor is a major.
 
 ## Accepting an outcome into the record
 

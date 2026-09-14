@@ -27,32 +27,38 @@
     ".": {
       "@lntt/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
     },
     "./express": {
       "@lntt/source": "./src/express/index.ts",
       "types": "./dist/express/index.d.ts",
-      "import": "./dist/express/index.js"
+      "import": "./dist/express/index.js",
+      "require": "./dist/express/index.js"
     },
     "./hono": {
       "@lntt/source": "./src/hono/index.ts",
       "types": "./dist/hono/index.d.ts",
-      "import": "./dist/hono/index.js"
+      "import": "./dist/hono/index.js",
+      "require": "./dist/hono/index.js"
     },
     "./trpc": {
       "@lntt/source": "./src/trpc/index.ts",
       "types": "./dist/trpc/index.d.ts",
-      "import": "./dist/trpc/index.js"
+      "import": "./dist/trpc/index.js",
+      "require": "./dist/trpc/index.js"
     },
     "./react-router": {
       "@lntt/source": "./src/react-router/index.ts",
       "types": "./dist/react-router/index.d.ts",
-      "import": "./dist/react-router/index.js"
+      "import": "./dist/react-router/index.js",
+      "require": "./dist/react-router/index.js"
     },
     "./guard": {
       "@lntt/source": "./src/guard/index.ts",
       "types": "./dist/guard/index.d.ts",
-      "import": "./dist/guard/index.js"
+      "import": "./dist/guard/index.js",
+      "require": "./dist/guard/index.js"
     },
     "./package.json": "./package.json"
   },
@@ -84,7 +90,7 @@
     "express": ">=5",
     "hono": ">=4",
     "react-router": ">=7",
-    "typescript": ">=7"
+    "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
     "@trpc/server": {

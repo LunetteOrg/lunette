@@ -12,8 +12,9 @@ itself — without an onion, an AsyncLocalStorage, or a framework.
 pnpm add @lntt/scope
 ```
 
-Requires TypeScript 7 or newer with `strict: true`, and Node 24 or newer. ESM
-only. Each host lives behind its own subpath — `@lntt/scope/express`,
+Requires TypeScript 5.9 or newer with `strict: true`, and Node 24 or newer. One
+format, ESM — `import` and `require` name the same file, which that Node loads
+either way. Each host lives behind its own subpath — `@lntt/scope/express`,
 `/hono`, `/trpc`, `/react-router` — and carries its framework as an OPTIONAL
 peer, so the agnostic entry pulls in none of them.
 
@@ -26,7 +27,10 @@ a `.d.ts` that carries the shape without the reason. Nothing to configure —
 this is what a normal install already does, while still compiling `dist`.
 
 Resolving the sources is a separate, deliberate act: the package declares an
-`@lntt/source` export condition, met by nobody who has not asked for it.
+`@lntt/source` export condition, met by nobody who has not asked for it. It also
+asks more of the compiler than reading the declarations does — the sources are
+checked on the one this repo pins, the latest release, and that is the version
+to hold when compiling them.
 
 ```jsonc
 // tsconfig.json — "moduleResolution": "bundler" | "node16" | "nodenext"
