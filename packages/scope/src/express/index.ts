@@ -397,7 +397,8 @@ export const express = <App extends object>(deps: App) => {
 
 // ── the read extensions ──────────────────────────────────────────────────────
 // PLAIN STEPS, not verbs: these ADD a ctx entry, and a verb is what may REPLACE
-// one (`@lntt/scope/guard`). The reasoning is written out in the Hono carrier.
+// one (`@lntt/scope/guard`). The line falls where the core's own gate already
+// is, so it is not a matter of taste.
 //
 // Express is its own family: `req` is a Node message, not a Fetch `Request`, so
 // the readers are handed the two shapes they really need — a `URLSearchParams`

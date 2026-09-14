@@ -5,10 +5,10 @@ Example apps built on the shipped packages ([`@lntt/wire`](../packages/wire),
 out of review scope), these are usage references — in scope for review, meant
 to be read and copied.
 
-Tracked by #59, landing one slice at a time — reviewing a 191-file PR in one go
-is the shape to avoid. `examples/bare-express`, from the previous core, does not
-come back; see [`examples/bare-express` is retired](../docs/decisions/examples-bare-express-retired-examples-two.md) for why its whole premise
-stopped applying.
+Landing one slice at a time. `examples/bare-express`, from the previous core,
+does not come back; see
+[`examples/bare-express` is retired](../docs/decisions/examples-bare-express-retired-examples-two.md)
+for why its whole premise stopped applying.
 
 ## [`two-chains/`](./two-chains) — two products in one process
 

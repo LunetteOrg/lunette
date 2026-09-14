@@ -98,8 +98,8 @@ type Optional<K> = K extends `${infer N}?` ? N : never
 // the mount does not bring — the shape `trpc.procedure` and `reactRouter`
 // already had by naming `S['args']` in a real parameter position. Without it an
 // Express scope mounted here compiles and dies reading `c` off `{ req, res }`.
-// The reasoning, and why this is a function rather than a message, is written
-// out in the Express carrier.
+// A function rather than a message: the refusal is the compiler's own, and an
+// error written by us would be a second one to keep true.
 //
 // `Context<E, any>` is what `handlerFor` really hands over, and the path stays
 // `any`: `Context` is MUTUALLY ASSIGNABLE across paths (the note on `route`
@@ -117,8 +117,8 @@ type ArgsGate<E extends Env> = (
 // the library's error convention a RETURNED error is a domain value, so
 // `return { error: 'unauthorized' }` is the natural thing to write for a guard
 // that stops; Hono then sees `undefined` with the chain uncalled and answers
-// 500. Measured. The twin of Express's `AnswerGate`, and the reasoning is
-// written out there.
+// 500. Measured. A `route` needs no twin of this, because its mount is
+// declared to hand back what the scope handed back.
 type Unsendable<S extends State> = Exclude<
   ResultOf<Scope<S>>,
   Response | undefined

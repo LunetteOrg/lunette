@@ -396,15 +396,15 @@ export type ResultOf<Sc> = ValueOf<StateOf<Sc>['returns']>
 // `Extract` over two `keyof`s, the cheap shape `VerbGate` uses. Measured at
 // +9.9% instantiations across this package, which is what closing a silent
 // `never` costs.
-// A LIMIT, measured and left open rather than papered over: `Add = any` defeats
-// this gate, and defeats `ReturnGate` the same way. `Next<any>` — which an
+// A LIMIT, measured and stated: `Add = any` defeats this gate, and defeats
+// `ReturnGate` the same way. `Next<any>` — which an
 // author reaches for to silence an error elsewhere — makes `keyof any` be
 // `string | number | symbol`, none of which extends a literal key, so `Extract`
 // yields `never` and the collision walks through.
 //
 // It cannot be closed HERE. Detecting `any` is easy (`0 extends 1 & Add`) and
-// was tried; it does not fire, and the reason is not the detector. Once `Add` is
-// inferred `any`, the PARAMETER's own type contains `any`, and assignability
+// does not fire, and the reason is not the detector. Once `Add` is inferred
+// `any`, the PARAMETER's own type contains `any`, and assignability
 // short-circuits before the intersected gate is ever read — verified down to a
 // six-line reproduction with no library code in it. Any gate riding an argument
 // whose inference produced `any` is unreadable by construction.
