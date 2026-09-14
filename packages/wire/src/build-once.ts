@@ -5,13 +5,11 @@ import type { BuiltOf, Lunette, SeedOf } from './chain.ts'
 // singletons (a db pool, a client) must exist once; a second build would open a
 // second pool and leave the first with no owner.
 //
-// It is a FREE FUNCTION, not a method on `Lunette`, and deliberately so: the
-// chain stays a value that can be built as many times as you like — that is what
-// makes seeds a mocking device and lets tests build with a different env. This
-// mirrors where the industry puts it (a caller-held wrapper — NestJS's cached
-// server on Lambda, Effect's `ManagedRuntime.make`), while Symfony's memoizing
-// `Kernel::boot()` answers a problem we do not have (a process that dies each
-// request).
+// It is a FREE FUNCTION, not a method on `Lunette`: the chain stays a value that
+// can be built as many times as you like, and that repeatability is what makes
+// the seed a mocking device and lets a test build a second app from a different
+// env. A memoizing `build` would take that away from every caller to serve the
+// one that wanted a singleton — so the singleton is a handle the caller holds.
 //
 // The build is LAZY because of the constraint no classic container has: on
 // Cloudflare Workers the bindings only exist inside the fetch handler, so there

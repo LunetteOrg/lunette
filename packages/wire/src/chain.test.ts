@@ -1,5 +1,4 @@
-// Two-sided composition (alla Hono Bindings / Effect Layer<RIn, ROut>) +
-// visibility lives in the verb:
+// Two-sided composition + visibility lives in the verb:
 // - Seed: requirements declared as a generic of the chain, NOT built by
 //   the layers but delivered to run/build — the classic env case.
 //   The seed is private: it does not end up on the public app.

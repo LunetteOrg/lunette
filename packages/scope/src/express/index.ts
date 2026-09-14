@@ -593,10 +593,10 @@ export const body =
 
     // Summed WHILE ACCUMULATING, and the read is abandoned the moment it is
     // exceeded — a 5 GB body never sits in memory waiting for the last chunk.
-    // Simply RETURNING stops the `for await`, and that is all this does:
-    // `req.destroy()` was tried and rejected — it tears down the SOCKET the
-    // response has to go out on, and the client saw a hung-up connection
-    // instead of the 413. Leaving the socket alone means whatever the client
+    // Simply RETURNING stops the `for await`, and that is all this does.
+    // `req.destroy()` would tear the SOCKET down — the same socket the response
+    // has to go out on — so the client gets a hung-up connection instead of the
+    // 413 `onError` produced. Leaving the socket alone means whatever the client
     // still has in flight sits in the kernel's own receive buffer, bounded by
     // TCP flow control, never by this process's heap.
     const chunks: Buffer[] = []

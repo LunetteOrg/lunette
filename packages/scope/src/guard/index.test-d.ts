@@ -253,10 +253,10 @@ describe('`BodyOf` says what the encoding was, and `unknown` when it was not sai
     // `unknown`, whatever the conditional does. Distributing and tupling give the
     // same answer — measured, both forms.
     //
-    // Written as an equality on purpose. The assertions this replaced were
-    // `not.toEqualTypeOf<never>()` and a `toMatchTypeOf`, and both hold for
-    // `unknown` — they passed for the type they were written to catch, which is
-    // the one thing a type test must not do.
+    // Written as an EQUALITY on purpose. `not.toEqualTypeOf<never>()` and a
+    // `toMatchTypeOf` both HOLD for `unknown`, so either would pass for exactly
+    // the type this case exists to catch — which is the one thing a type test
+    // must not do.
     expectTypeOf<BodyOf<'json' | 'form'>>().toEqualTypeOf<unknown>()
   })
 })

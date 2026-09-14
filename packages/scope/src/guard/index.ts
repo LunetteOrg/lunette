@@ -49,12 +49,12 @@ import type {
 // silent. That buys ONE extension instead of two, and a `guard` usable with no
 // schema library anywhere in the picture.
 //
-// COPIED TO THE LETTER, and that is the discipline the copy lives by. The first
-// version of this block "improved" it — a `value?: undefined` added to the
-// failure branch, which the spec does not have — and no real schema fitted any
-// more. The test against a real implementation is what caught it, and is why
-// one is kept: an inlined spec is only as good as the thing that proves it
-// still matches.
+// COPIED TO THE LETTER, and the copy is only as good as the thing that proves it
+// still matches — which is why a test against a REAL schema implementation is
+// kept beside the hand-written one. A field this spec does not have, added here
+// out of tidiness — a `value?: undefined` on the failure branch, say — narrows
+// the interface, and a real schema then stops fitting it structurally, with
+// nothing in this package to say so.
 export interface StandardPathSegment {
   readonly key: PropertyKey
 }
