@@ -14,6 +14,11 @@ import * as ho from '@lntt/scope/hono'
 import * as rr from '@lntt/scope/react-router'
 import { served } from './fixture/served.ts'
 
+// This suite takes a LISTENING server, where the mount suite injects: what it
+// reads is what arrived over the wire — a `content-length` that disagrees with
+// the bytes, a chunked body that has none, an encoding the client chose — and
+// none of that exists in a request handed straight to the handler.
+
 // WHAT THE READ EXTENSIONS ARE FOR, in the half that has to run: the extraction
 // is per host, and everything DOWNSTREAM of it is not. The step below is written
 // ONCE, names no carrier, and reads the same three entries on all three hosts

@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { scope, type Next } from '@lntt/scope'
 import { guards } from '@lntt/scope/guard'
 import { express, expressCarrier, params } from '@lntt/scope/express'
-import { served } from '../fixture/served.ts'
+import { injected } from '../fixture/injected.ts'
 
 // A guard, written here rather than imported: what a guard IS belongs to no
 // carrier, and the carrier's own claim is only that a step which stops
@@ -33,7 +33,7 @@ describe('the Express carrier: what a run brings', () => {
     const app = expressLib()
     app.get('/greet/:name', handler(greet))
 
-    const res = await served(app).get('/greet/ada')
+    const res = await injected(app).get('/greet/ada')
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ said: 'hello ada' })
   })
@@ -55,8 +55,8 @@ describe('the Express carrier: what a run brings', () => {
       ),
     )
 
-    await served(app).get('/')
-    expect((await served(app).get('/')).body).toEqual({ count: 2 })
+    await injected(app).get('/')
+    expect((await injected(app).get('/')).body).toEqual({ count: 2 })
   })
 })
 
@@ -71,7 +71,7 @@ describe('the Express carrier: `route(path, scope)`', () => {
     const app = expressLib()
     app.get(...route('/posts/:id', showPost))
 
-    expect((await served(app).get('/posts/7')).body).toEqual({ id: '7' })
+    expect((await injected(app).get('/posts/7')).body).toEqual({ id: '7' })
   })
 
   it('the same scope value mounts more than once, on more than one pattern', async () => {
@@ -79,7 +79,7 @@ describe('the Express carrier: `route(path, scope)`', () => {
     app.get(...route('/posts/:id', showPost))
     app.get(...route('/archive/:id', showPost))
 
-    expect((await served(app).get('/archive/9')).body).toEqual({ id: '9' })
+    expect((await injected(app).get('/archive/9')).body).toEqual({ id: '9' })
   })
 })
 
@@ -91,7 +91,9 @@ describe('the Express carrier: `mw`', () => {
     app.use(mw(scope(expressCarrier()).step(requireActor)))
     app.get('/', (_req, res) => res.json({ actor: res.locals.actor }))
 
-    const res = await served(app).get('/').set('x-actor-id', 'u1')
+    const res = await injected(app).get('/', {
+      headers: { 'x-actor-id': 'u1' },
+    })
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ actor: 'u1' })
   })
@@ -105,7 +107,7 @@ describe('the Express carrier: `mw`', () => {
       return res.json({})
     })
 
-    expect((await served(app).get('/')).status).toBe(401)
+    expect((await injected(app).get('/')).status).toBe(401)
     expect(reached).toBe(false)
   })
 
@@ -114,7 +116,9 @@ describe('the Express carrier: `mw`', () => {
     app.use(mw(scope(expressCarrier()).step(requireActor)))
     app.get('/', (_req, res) => res.json({ keys: Object.keys(res.locals) }))
 
-    const res = await served(app).get('/').set('x-actor-id', 'u1')
+    const res = await injected(app).get('/', {
+      headers: { 'x-actor-id': 'u1' },
+    })
     expect(res.body).toEqual({ keys: ['actor'] })
   })
 })
@@ -139,7 +143,7 @@ describe('the Express carrier: a step that THROWS reaches the error middleware',
       res.status(500).json({ error: 'infrastructure' })
     })
 
-    const res = await served(app).get('/')
+    const res = await injected(app).get('/')
     expect(res.status).toBe(500)
     expect(res.body).toEqual({ error: 'infrastructure' })
     expect((caught as Error).message).toBe('boom')
@@ -157,7 +161,7 @@ describe('the Express carrier: a step that THROWS reaches the error middleware',
       res.status(500).json({ error: 'infrastructure' }),
     )
 
-    expect((await served(app).get('/')).status).toBe(500)
+    expect((await injected(app).get('/')).status).toBe(500)
     expect(reached).toBe(false)
   })
 })
@@ -186,7 +190,7 @@ describe('the Express carrier: a step does NOT wrap the handler', () => {
       res.json({ ok: true })
     })
 
-    await served(app).get('/')
+    await injected(app).get('/')
 
     // On Hono and tRPC this is ['before', 'handler', 'after-next'].
     expect(order).toEqual(['before', 'after-next', 'handler'])
@@ -220,7 +224,7 @@ describe("the Express carrier: a throw AFTER `next` does not steal the handler's
       },
     )
 
-    const res = await served(app).get('/')
+    const res = await injected(app).get('/')
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ ok: true })
     expect(errorHandlerRan).toBe(false)
@@ -242,7 +246,7 @@ describe("the Express carrier: a throw AFTER `next` does not steal the handler's
       res.status(500).json({ error: 'infrastructure' }),
     )
 
-    expect((await served(app).get('/')).status).toBe(500)
+    expect((await injected(app).get('/')).status).toBe(500)
   })
 })
 
@@ -261,7 +265,7 @@ describe('`params`: a fifth read extension, WIDE, refined by `.validate`', () =>
     const app = expressLib()
     app.get(...express({}).route('/posts/:id', showPost))
 
-    const res = await served(app).get('/posts/7')
+    const res = await injected(app).get('/posts/7')
     expect(res.body).toEqual({ id: '7' })
   })
 
@@ -269,7 +273,7 @@ describe('`params`: a fifth read extension, WIDE, refined by `.validate`', () =>
     const app = expressLib()
     app.get(...express({}).route('/posts/:id', showPost))
 
-    const res = await served(app).get('/posts/not-a-number')
+    const res = await injected(app).get('/posts/not-a-number')
     expect(res.status).toBe(400)
   })
 
@@ -282,7 +286,7 @@ describe('`params`: a fifth read extension, WIDE, refined by `.validate`', () =>
     const app = expressLib()
     app.get('/posts', express({}).handler(showPost))
 
-    const res = await served(app).get('/posts')
+    const res = await injected(app).get('/posts')
     expect(res.status).toBe(400)
   })
 })
