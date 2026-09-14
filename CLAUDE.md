@@ -178,8 +178,10 @@ the tracker when relevant — never from here.
   edit and its answer. `pnpm verify` is the other gate: it builds, recompiles the
   type contract against the BUILT declarations, re-runs every suite through `exports` into
   `dist` (they import `@lntt/*` by NAME, so the built JavaScript executes), and
-  packs, unpacks and imports each tarball entry point by entry point, and
-  typechecks them on the floor compiler too. TypeScript (pnpm `catalog:`) tracks
+  packs and unpacks each tarball, loads every entry point BOTH ways (`import`
+  and `require` name one file), typechecks the declarations on the pinned
+  compiler and on the floor one, and refuses a bare top-level statement in a
+  shipped module while `sideEffects: false` stands. TypeScript (pnpm `catalog:`) tracks
   the latest release and Node the current LTS — one number each, and CI runs
   exactly those; the floor a CONSUMER sees is lower and lives in
   `peerDependencies.typescript`.

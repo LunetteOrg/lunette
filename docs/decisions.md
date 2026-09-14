@@ -3182,6 +3182,17 @@ show up in a consumer's production build alone. The granularity a consumer
 actually gets is the SUBPATH: importing one host reaches none of the others,
 which `exports` delivers on its own.
 
+`verify:tarball` puts a FLOOR under that promise and not a proof: it reads every
+shipped module — the build and the sources beside it — and refuses a bare
+top-level statement, one standing there for its effect and binding nothing.
+What it does not decide is PURITY: a declaration's initializer may call
+anything, so `const x = install()` passes, and three legitimate call-initialized
+constants in the host mounts are the reason a stricter rule would cost more than
+it returns — every one of them would need annotating, and the check would have
+to learn the emitter's own idioms (an `enum` emits an invoked function
+expression that every bundler treats as pure). The floor catches the shape the
+hazard actually arrives in; the rest is a reading of the diff.
+
 ONE format, and `require` names the same file the `import` condition names: the
 runtimes this package declares load ESM from `require`, so a CJS consumer is
 refused by nothing but a missing condition, and what a missing one produces is

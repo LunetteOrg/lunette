@@ -23,9 +23,11 @@
 //      consumer may hold — `peerDependencies.typescript`. Everything else here
 //      runs on the compiler this repo pins, which is the newest one: a floor
 //      nothing compiles is a claim nobody checked;
-//   7. nothing in the emitted JavaScript runs at import time, wherever the
-//      manifest says `sideEffects: false` — the one claim here a bundler acts
-//      on, and it acts on it in someone else's production build.
+//   7. no BARE top-level statement stands in a shipped module, wherever the
+//      manifest says `sideEffects: false` — a floor under a claim a bundler
+//      acts on, in someone else's production build. It is a floor and not a
+//      proof: a declaration's initializer may call anything, and whether that
+//      call is pure is not decided here.
 //
 // What is NOT checked here, and why: the manifest's dependency ranges. `pnpm
 // pack` rewrites `workspace:` and `catalog:` before packing and aborts when it
@@ -71,12 +73,16 @@ const tsc = join(
 // names: the two move together, and a missing alias FAILS rather than skips —
 // a check that quietly does not run is the floor going unverified again.
 const floorTsc = join(root, 'node_modules', 'typescript-5', 'lib', 'tsc.js')
-// The same install, used as a parser: the emitted JavaScript is read as a syntax
-// tree to hold `sideEffects` to what it claims.
+// The same install, used as a parser: what the package ships is read as a syntax
+// tree, so a line that merely LOOKS like a call cannot fail a check nobody could
+// satisfy.
 const ts = createRequire(import.meta.url)(
   join(root, 'node_modules', 'typescript-5', 'lib', 'typescript.js'),
 )
-// What may stand at the top level of a module that runs nothing when imported.
+// What may stand at the top level of a shipped module. A declaration binds a
+// name, so dropping the module drops what it bound; a statement that is not one
+// stands there for its effect alone. The type-only kinds are here because the
+// sources ship beside the build and are read by the same pass.
 const DECLARATIONS = new Set([
   ts.SyntaxKind.ImportDeclaration,
   ts.SyntaxKind.ExportDeclaration,
@@ -84,14 +90,20 @@ const DECLARATIONS = new Set([
   ts.SyntaxKind.FunctionDeclaration,
   ts.SyntaxKind.ClassDeclaration,
   ts.SyntaxKind.VariableStatement,
+  ts.SyntaxKind.InterfaceDeclaration,
+  ts.SyntaxKind.TypeAliasDeclaration,
+  ts.SyntaxKind.ModuleDeclaration,
   ts.SyntaxKind.EmptyStatement,
 ])
-// Every `.js` the package ships, wherever the build put it.
-const emitted = (dir) =>
+// Everything the package ships that is code: the build, and the commented
+// sources beside it, which a consumer resolving `@lntt/source` compiles instead.
+const shipped = (dir) =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const here = join(dir, entry.name)
-    if (entry.isDirectory()) return emitted(here)
-    return entry.name.endsWith('.js') ? [here] : []
+    if (entry.isDirectory()) return shipped(here)
+    return /\.(js|ts)$/.test(entry.name) && !entry.name.endsWith('.d.ts')
+      ? [here]
+      : []
   })
 const license = readFileSync(join(root, 'LICENSE'), 'utf8')
 const work = mkdtempSync(join(tmpdir(), 'lntt-tarball-'))
@@ -168,7 +180,9 @@ try {
       manifest.exports,
       manifest.name,
     )) {
-      for (const target of Object.values(conditions)) {
+      // One file may answer to more than one condition, and it is the FILE that
+      // either shipped or did not.
+      for (const target of new Set(Object.values(conditions))) {
         check(
           existsSync(join(out, target)),
           `${sub} → ${target} is in the tarball`,
@@ -218,23 +232,24 @@ try {
       `every declaration map reaches its source${dangling.length ? ` (${dangling[0]} is missing)` : ''}`,
     )
 
-    // `sideEffects: false` is a promise about the emitted graph, and a bundler
-    // holds us to it: a module nobody takes a name from may be dropped, so
-    // anything that does work merely by being imported would disappear from a
-    // consumer's production build and nowhere else. What this refuses is a
-    // top-level statement that exists FOR its effect. A declaration whose
-    // initializer builds a value is not one — dropping the module drops the
-    // value with it, which is the whole point — so the shape is read from the
-    // syntax tree rather than matched on text, where an emitted line that
-    // merely LOOKS like a call would fail a check nobody could satisfy.
+    // `sideEffects: false` is a promise about what the package ships, and a
+    // bundler holds us to it: a module nobody takes a name from may be dropped,
+    // so a module that did work merely by being imported would disappear from a
+    // consumer's production build and nowhere else. What this refuses is a bare
+    // top-level statement — one standing there for its effect, binding nothing.
+    // It is a FLOOR, not a proof: a declaration's initializer may call anything,
+    // and no check here decides whether that call is pure, so a `const x =
+    // install()` passes. Deciding purity means annotating every legitimate call
+    // and teaching this the emitter's own idioms, for a hazard the floor already
+    // catches in the shape it actually arrives in.
     if (manifest.sideEffects === false) {
-      const effects = emitted(out).flatMap((file) => {
+      const bare = shipped(out).flatMap((file) => {
         const parsed = ts.createSourceFile(
           file,
           readFileSync(file, 'utf8'),
           ts.ScriptTarget.Latest,
           true,
-          ts.ScriptKind.JS,
+          file.endsWith('.ts') ? ts.ScriptKind.TS : ts.ScriptKind.JS,
         )
         return parsed.statements
           .filter((statement) => !DECLARATIONS.has(statement.kind))
@@ -246,8 +261,8 @@ try {
           })
       })
       check(
-        effects.length === 0,
-        `nothing in the build runs at import time, as sideEffects claims${effects.length ? ` (${effects[0]})` : ''}`,
+        bare.length === 0,
+        `no shipped module opens with a statement standing there for its effect, under sideEffects${bare.length ? ` (${bare[0]})` : ''}`,
       )
     }
 
@@ -410,10 +425,11 @@ try {
       { ...base, types: [] },
       bare,
     ],
-    // Every subpath, on the floor compiler: a consumer there holds the whole
-    // package, host mounts included, and reads the same declarations.
+    // The first program again, on the floor compiler: same entry points, same
+    // options, so the only thing that can make the two disagree is the compiler
+    // — which is the question this one asks.
     [
-      'the floor compiler a consumer may hold',
+      'the floor compiler a consumer may hold, on the same program',
       () => true,
       base,
       consumer,
