@@ -1,0 +1,60 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+
+  // `.jsonc`, not `.json`: Biome parses `biome.json` as strict JSON and, on a
+  // comment, falls back to its DEFAULTS without a word — tabs, double quotes,
+  // semicolons, every file in the tree. The failure is silent, so the extension
+  // is the guard.
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+
+  // `useIgnoreFile` reads `.gitignore` and `.ignore` — never `.git/info/exclude`,
+  // which is where a worktree directory tends to be ignored. Both exclusions are
+  // named here for that reason.
+  //
+  // `research/` is a proving ground, not shipped product: its files are the
+  // artefacts the measurements cited in the decision record were taken on, and
+  // reformatting them edits an artefact nobody would re-measure.
+  "files": {
+    "includes": ["**", "!**/.claude", "!**/research"]
+  },
+
+  // The style the code already holds: two spaces, single quotes, no semicolons,
+  // and 80 columns — the width the comments wrap at, and the 90th percentile of
+  // the code's own lines.
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 80
+  },
+
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "asNeeded"
+    }
+  },
+
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+
+      // `{}` is the empty ctx and the empty publication — the type-level
+      // vocabulary of both packages, not a mistake to be flagged 1300 times.
+      "complexity": { "noBannedTypes": "off" },
+
+      // The erased runtime face of a generic surface is `any` by construction:
+      // every claim it carries was checked at the call site that produced it.
+      // `void` is a return the gates read as "this step adds nothing".
+      "suspicious": { "noExplicitAny": "off", "noConfusingVoidType": "off" },
+
+      // A `!` here follows a check the types cannot see (a key just written, a
+      // map just populated); widening to a runtime guard would say less.
+      "style": { "noNonNullAssertion": "off" }
+    }
+  },
+
+  // Import order is not sorted: the imports are grouped by what they are for,
+  // and a sorter would scatter that grouping on every save.
+  "assist": { "actions": { "source": { "organizeImports": "off" } } }
+}

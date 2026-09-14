@@ -1,0 +1,17 @@
+pre-commit:
+  commands:
+    biome:
+      glob: '*.{ts,tsx,js,mjs,cjs,json,jsonc}'
+      run: pnpm biome check --write --no-errors-on-unmatched {staged_files}
+      stage_fixed: true
+
+commit-msg:
+  commands:
+    # Keep the message to what a reader of `git log` needs. The braces guard the
+    # case where every line matched: `grep -v` exits 1 when it prints nothing,
+    # which would abort the commit instead of emptying the message. Git drops
+    # the blank line a removed trailer leaves behind.
+    strip-attribution:
+      run: |
+        { grep -ivE '^(Co-authored-by:|Claude-Session:|🤖 Generated with|https://claude\.ai/code/session_)' {1} || true; } > {1}.tmp
+        mv {1}.tmp {1}

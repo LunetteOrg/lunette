@@ -162,6 +162,14 @@ the tracker when relevant — never from here.
   mount, run at least: a step that THROWS, a step that stops by RETURNING,
   and a step that acts AFTER `next`. Write those before the mount, not
   after the review.
+- **Lint**: Biome, one config at the root (`biome.jsonc` — `.jsonc` because
+  `biome.json` is parsed as strict JSON and a comment makes Biome fall back to
+  its DEFAULTS in silence). `pnpm lint` checks, `pnpm lint:fix` writes; a
+  `lefthook` pre-commit hook runs it over the staged files, and the same check
+  is a CI step, so the hook never has to be trusted. `research/` is excluded.
+  Note that `@ts-expect-error` suppresses the NEXT LINE and the formatter moves
+  lines: the comment belongs immediately above the call or the argument the
+  error lands on.
 - **No build step** for now: `exports` point at the `.ts` sources (the
   build/dist decision is deferred to npm publication).
 - **Workflow with the owner**: discuss the design FIRST (he enjoys
