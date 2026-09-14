@@ -22,7 +22,10 @@
 //   6. the declarations typecheck on the OLDEST compiler the packages declare a
 //      consumer may hold — `peerDependencies.typescript`. Everything else here
 //      runs on the compiler this repo pins, which is the newest one: a floor
-//      nothing compiles is a claim nobody checked.
+//      nothing compiles is a claim nobody checked;
+//   7. nothing in the emitted JavaScript runs at import time, wherever the
+//      manifest says `sideEffects: false` — the one claim here a bundler acts
+//      on, and it acts on it in someone else's production build.
 //
 // What is NOT checked here, and why: the manifest's dependency ranges. `pnpm
 // pack` rewrites `workspace:` and `catalog:` before packing and aborts when it
@@ -42,6 +45,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -67,6 +71,28 @@ const tsc = join(
 // names: the two move together, and a missing alias FAILS rather than skips —
 // a check that quietly does not run is the floor going unverified again.
 const floorTsc = join(root, 'node_modules', 'typescript-5', 'lib', 'tsc.js')
+// The same install, used as a parser: the emitted JavaScript is read as a syntax
+// tree to hold `sideEffects` to what it claims.
+const ts = createRequire(import.meta.url)(
+  join(root, 'node_modules', 'typescript-5', 'lib', 'typescript.js'),
+)
+// What may stand at the top level of a module that runs nothing when imported.
+const DECLARATIONS = new Set([
+  ts.SyntaxKind.ImportDeclaration,
+  ts.SyntaxKind.ExportDeclaration,
+  ts.SyntaxKind.ExportAssignment,
+  ts.SyntaxKind.FunctionDeclaration,
+  ts.SyntaxKind.ClassDeclaration,
+  ts.SyntaxKind.VariableStatement,
+  ts.SyntaxKind.EmptyStatement,
+])
+// Every `.js` the package ships, wherever the build put it.
+const emitted = (dir) =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const here = join(dir, entry.name)
+    if (entry.isDirectory()) return emitted(here)
+    return entry.name.endsWith('.js') ? [here] : []
+  })
 const license = readFileSync(join(root, 'LICENSE'), 'utf8')
 const work = mkdtempSync(join(tmpdir(), 'lntt-tarball-'))
 
@@ -191,6 +217,39 @@ try {
       dangling.length === 0,
       `every declaration map reaches its source${dangling.length ? ` (${dangling[0]} is missing)` : ''}`,
     )
+
+    // `sideEffects: false` is a promise about the emitted graph, and a bundler
+    // holds us to it: a module nobody takes a name from may be dropped, so
+    // anything that does work merely by being imported would disappear from a
+    // consumer's production build and nowhere else. What this refuses is a
+    // top-level statement that exists FOR its effect. A declaration whose
+    // initializer builds a value is not one — dropping the module drops the
+    // value with it, which is the whole point — so the shape is read from the
+    // syntax tree rather than matched on text, where an emitted line that
+    // merely LOOKS like a call would fail a check nobody could satisfy.
+    if (manifest.sideEffects === false) {
+      const effects = emitted(out).flatMap((file) => {
+        const parsed = ts.createSourceFile(
+          file,
+          readFileSync(file, 'utf8'),
+          ts.ScriptTarget.Latest,
+          true,
+          ts.ScriptKind.JS,
+        )
+        return parsed.statements
+          .filter((statement) => !DECLARATIONS.has(statement.kind))
+          .map((statement) => {
+            const { line } = parsed.getLineAndCharacterOfPosition(
+              statement.getStart(parsed),
+            )
+            return `${file.slice(out.length + 1)}:${line + 1}`
+          })
+      })
+      check(
+        effects.length === 0,
+        `nothing in the build runs at import time, as sideEffects claims${effects.length ? ` (${effects[0]})` : ''}`,
+      )
+    }
 
     // The consumer reaches the package the way `node_modules` does, and imports
     // it BY SPECIFIER so that Node resolves the `exports` map.

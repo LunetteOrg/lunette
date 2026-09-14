@@ -3173,6 +3173,15 @@ was the working record, and is written here because that document is retired
 to the built `.js` — per subpath, so `@lntt/scope` keeps its six and `@lntt/wire`
 its two. The frameworks stay optional peers.
 
+Both packages declare `sideEffects: false`, which is a promise the code keeps
+rather than a hint: nothing in the emitted graph does work at import time — the
+one global touch, a registered marker symbol, is idempotent and matters only to
+the module holding it. A module that ever needed an effect merely by being
+imported would be one a bundler is then allowed to drop, and the breakage would
+show up in a consumer's production build alone. The granularity a consumer
+actually gets is the SUBPATH: importing one host reaches none of the others,
+which `exports` delivers on its own.
+
 ONE format, and `require` names the same file the `import` condition names: the
 runtimes this package declares load ESM from `require`, so a CJS consumer is
 refused by nothing but a missing condition, and what a missing one produces is

@@ -23,6 +23,7 @@
   "homepage": "https://github.com/LunetteOrg/lunette/tree/main/packages/wire#readme",
   "bugs": "https://github.com/LunetteOrg/lunette/issues",
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "@lntt/source": "./src/index.ts",
