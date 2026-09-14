@@ -44,7 +44,7 @@ then the shared `app` and its four per-host entries (`express`, `hono`, `trpc`,
 DEMONSTRATIONS — the convention is at the end of this file. Still to return:
 `examples/cloudflare-workers/{bare,express,hono}` (only their
 `worker-configuration.d.ts` is here today). `examples/bare-express` does not
-come back at all — decision 50.
+come back at all — see [`examples/bare-express` is retired](docs/decisions/examples-bare-express-retired-examples-two.md).
 
 The old `@lntt/http` (the `pipe`-based "wire owns the server" posture) was
 superseded by the scope runtime and removed; if the own-the-loop posture is
@@ -89,7 +89,7 @@ the tracker when relevant — never from here.
   test names, runtime error messages, READMEs) and must contain no
   references to external repos or to the design's history. Conversation
   with the owner stays in Italian.
-- **CODE COMMENTS CITE NOTHING EXTERNAL.** No `§N`, no `decision N`, no
+- **CODE COMMENTS CITE NOTHING EXTERNAL.** No link to a decision file, no
   `#N`, no PR or discussion numbers, in any `.ts` file — comments, test
   names and runtime strings alike. A comment has to stand on its own where
   it is read: a reader with the file open cannot follow a pointer, and a
@@ -110,14 +110,15 @@ the tracker when relevant — never from here.
   the ErrorBoundary" — because that tells them what not to write. The test
   is whether the sentence would still be worth reading if the old version
   had never existed.
-- **Where citations DO belong**: `docs/decisions.md` (entries cite each
-  other as `decision N` in prose or `§N` compact), the other files under
-  `docs/`, READMEs, commit messages, PR descriptions and issues. There a
-  reader can follow the link, and the numbering is the document's own.
-  NEVER `#N` or `ADR #N` for a decision even there: on GitHub `#N`
-  autolinks to issue/PR N — a decision citation would point at an
-  unrelated thread. `#N` is reserved for actual issues, PRs and
-  discussions.
+- **Where citations DO belong**: the files under `docs/` (a decision cites
+  another as a LINK to its file, `[the returned/thrown
+  convention](./errors-returned-domain-thrown-infrastructure.md)`, with link
+  text that names the decision so the sentence still reads), READMEs, commit
+  messages, PR descriptions and issues. There a reader can follow the link. A
+  decision has NO NUMBER — it is identified by its file — so there is nothing
+  to cite one by; and NEVER `#N` or `ADR #N` for a decision, since on GitHub
+  `#N` autolinks to issue/PR N and would point at an unrelated thread. `#N` is
+  reserved for actual issues, PRs and discussions.
 - **Vocabulary**: chain · layer · bare/bound leaf · binder (`bind(record)`,
   apply = fixed deps, `.with` = per call, `.by` = per call keyed) · window
   · opener (window arg 1) · bridge (window arg 2) · bag · guard · seed —
@@ -144,7 +145,7 @@ the tracker when relevant — never from here.
   What a step needs of the transport is NOT a declared name: it is the ctx it
   ANNOTATES, refused by contravariance where the scope does not hold it. There
   is no vocabulary, no intent, no capability and no outcome — a scope hands
-  back what its leaf RETURNED, in its host's own shape (decisions 42 and 43).
+  back what its leaf RETURNED, in its host's own shape ([the outcome leaves the core](docs/decisions/outcome-leaves-core-scope-hands-back.md), and [a carrier is `__args` alone](docs/decisions/carrier-needs-no-vocabulary-at-all.md)).
 - **Tests**: vitest with typecheck (`*.test-d.ts` included via the
   `typecheck` block in each `vitest.config.ts`; `pnpm typecheck` runs
   `tsc --noEmit` and is the separate gate). Always verify by running:
@@ -224,6 +225,6 @@ every branch — and the project's `Priority` field says which of the ready
 ones comes first.
 
 The decision record (discarded alternatives and why) is
-**`docs/decisions.md`** — consult it BEFORE proposing API changes: many
-ideas already have a reasoned verdict. The persistent memory remains the
+**`docs/decisions/`**, one file per decision — consult it BEFORE proposing
+API changes: many ideas already have a reasoned verdict. The persistent memory remains the
 backup of the history.

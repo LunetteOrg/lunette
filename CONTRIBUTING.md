@@ -7,19 +7,19 @@ design does not yet dissolve.
 
 ## Before you propose anything
 
-**Read [`docs/decisions.md`](./docs/decisions.md) first.** It records 25
-decisions with the alternatives considered and why each was discarded.
-Many ideas already have a reasoned verdict; re-proposing one without
-engaging its recorded "why not" is the one move that wastes everyone's
-time. `grep Superseded docs/decisions.md` lists every API that was
-implemented and later withdrawn.
+**Read [the decision record](./docs/decisions) first.** Every decision is
+one file under `docs/decisions/`, carrying the alternatives considered and
+why each was discarded. Many ideas already have a reasoned verdict;
+re-proposing one without engaging its recorded "why not" is the one move
+that wastes everyone's time. `grep -ril superseded docs/decisions/` lists
+every API that was implemented and later withdrawn.
 
 ## How to engage
 
 | You want to… | Use |
 |---|---|
 | think out loud, ask, say "have you considered…" | [Discussions](https://github.com/LunetteOrg/lunette/discussions) |
-| disagree with a specific decision | **Challenge a decision** issue (cite the number) |
+| disagree with a specific decision | **Challenge a decision** issue (name the entry) |
 | ask for a new/changed API | **Propose an API change** issue (bring the real case) |
 | fix a bug, a typo, a test | a pull request |
 
@@ -91,6 +91,40 @@ explicitly:
 ## Accepting an outcome into the record
 
 When a discussion or issue resolves into a decision — adopted *or*
-rejected — it earns an entry in `docs/decisions.md` in the
+rejected — it earns a file of its own under `docs/decisions/`, in the
 **Decision · Alternatives · Why** format. The record is the memory of the
 project; an argument that is not written down will be had again.
+
+**One decision, one file**, named by a slug of its title:
+`errors-returned-domain-thrown-infrastructure.md`. It opens with YAML
+frontmatter, then an H1 repeating the title:
+
+```yaml
+---
+title: "Errors: returned = domain, thrown = infrastructure"
+area: leaves-errors-windows
+status: accepted
+---
+```
+
+- **`title`** — the decision in one line, the same sentence as the H1.
+- **`area`** — where it belongs, one of `core-shape`,
+  `keys-visibility-composition`, `extensibility`, `leaves-errors-windows`,
+  `resources-lifecycles`, `testing`, `meta-contract`, `verb-model`,
+  `scope-runtime`, `publication`.
+- **`status`** — `accepted`, or `superseded` once a later decision overturns
+  it. A superseded entry stays where it is and gains a note at the top
+  saying which decision replaced it and what the old shape cost.
+
+**Entries cite each other by LINK, never by number.** A decision has no
+number — its file is its identity — so a citation is a relative link whose
+text names the decision and reads as part of the sentence: `under [the
+returned/thrown convention](./errors-returned-domain-thrown-infrastructure.md)
+a throw means infrastructure`. From elsewhere in `docs/` the path is
+`../decisions/<slug>.md`; from a README that is read on GitHub or shipped to
+npm, the full `https://github.com/LunetteOrg/lunette/blob/main/…` URL. `#N`
+stays reserved for issues, PRs and discussions.
+
+There is deliberately **no index file and no immutability ritual**: the
+directory listing is the index, and git carries the history of who changed
+what and when, so an entry is edited in place rather than frozen.

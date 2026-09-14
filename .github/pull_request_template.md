@@ -16,6 +16,6 @@ Closes #
 - [ ] `pnpm test` and `pnpm typecheck` are green locally.
 - [ ] If it touches API surface or behaviour, the `*.test-d.ts` contract
       still holds (a broken test-d means the change is wrong, not the test).
-- [ ] If it settles a design question, `docs/decisions.md` gains/updates an
+- [ ] If it settles a design question, `docs/decisions/` gains/updates an
       entry in the **Decision · Alternatives · Why** format.
 - [ ] English everywhere checked in; no reference to project history.

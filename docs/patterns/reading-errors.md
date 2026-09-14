@@ -8,7 +8,7 @@ and the design rule behind its two different voices.
 The verbatim tsc output for every case below lives in the evidence
 record, [`collision-guard-dx.test-d.ts`](../../packages/wire/test/chain/collision-guard-dx.test-d.ts);
 the behaviour is pinned by the contract tests next to it. Rationale:
-[decisions §4, §27](../decisions.md); the location decision is
+[key collisions](../decisions/key-collisions-forbidden-two-levels.md) and [the single-arity `bind`](../decisions/bind-single-arity-binder-unit.md); the location decision is
 discussion #21.
 
 ## Field guide
@@ -20,7 +20,7 @@ discussion #21.
 | `'{ [requirement]: "⛔ fragment requirement not satisfied: env"; }'` at a mount | the host context does not satisfy the fragment's Seed — the key is missing (and required) **or present with the wrong type**; an absent *optional* seed key is never listed | provide the key upstream, or mount with a mapper: `use(frag, ctx => seed)` |
 | `Property 'mailer' is missing in type '{ db: Db; }' but required in type '{ mailer: { send: … }; }'` at a binder | the deps don't cover every leaf in the record (the binder's parameter is the intersection of all declared deps) | add the dep to the chain (point-free wiring) or to the applied bag |
 | `Property 'env' is missing in type '{ wrong: … }' but required in type '{ env: Env; }'` at a mount **with a mapper** | the mapper's return does not produce the fragment's Seed — this is the binder's voice, not a brand: the mapper has a structural surface, so plain assignability names the key *with its true shape* (richer than the no-mapper `[requirement]` recital) | fix the mapper's return |
-| `'{ [collision]: "⛔ numeric key not supported (it becomes a string at runtime): 42"; }'` | a numeric key — the runtime coerces `42` to `"42"`, so numbers are not keys (decision 30); arrays as patches trip this too | use the string form (`'42'`), or rethink the key: strings name, symbols give identity |
+| `'{ [collision]: "⛔ numeric key not supported (it becomes a string at runtime): 42"; }'` | a numeric key — the runtime coerces `42` to `"42"`, so numbers are not keys ([numeric keys are rejected at the type level](../decisions/numeric-keys-rejected-at-type-level.md)); arrays as patches trip this too | use the string form (`'42'`), or rethink the key: strings name, symbols give identity |
 | `'{ [collision]: "⛔ key already present in the context: (symbol key)"; }'` | the SAME symbol was provided twice (a symbol collides only with itself) | the diagnostic names the binding (`typeof theSym`) on its argument side — remove the reuse |
 | `{ override: "⛔ overriding key missing from the context: bd" }` and no verbs exist afterwards | `override` names a key that does not exist (typo) — this guard stops the chain | fix the name |
 | `'{ [collision]: "⛔ context degraded to any: the guard cannot check keys — restore a real type"; }'` (or the same message under `override:`) | the context type collapsed to `any` — an untyped seed (`lunette<any>()` via an untyped config import) or an untyped provider return (`JSON.parse`, an `any` API) one verb earlier | type the seed / the provider's return; the red line is where the `any` context is first USED — the degradation itself may sit one verb up |
@@ -31,10 +31,10 @@ discussion #21.
 | `'{ [requirement]: "⛔ fragment seed collapsed to never — give it a real type"; }'` at a mount | the fragment's seed type is `never` — a throw-only seed mapper, or a fragment declaration collapsed by an impossible intersection | give the seed a real type |
 | `'{ [collision]: "⛔ patch degraded to any: …"; }'` at `use(layer)` or a mount | the layer's contribution (or the fragment's Pub) is `any` — here the brand lands on the function/chain value, so the refusal is at the offending line itself | type the layer's `next(…)` payload / the fragment |
 | `ctx.db` shows `never` in a later verb | a collision upstream is still unfixed — the accumulated type is transiently wrong past the red line, by design | fix the collision; the build is already red there |
-| `'{ [collision]: "⛔ patch carries no nameable keys: mount the dynamic bag under a literal key"; }'` | the patch's return annotation is an index signature (`Record<string, …>`) — no nameable keys, so the guard could neither check collisions nor keep the chain honest downstream (decision 32) | exactly what it says: `provide('payments', (): Record<string, Client> => bag)`; if the key list is actually knowable, keep it literal (`as const`) and the guard checks it in full |
-| `Keys already present in the context: db` **thrown at boot** (no compile error) | a widened KEY slipped past the guard — a plain-`string` key carries no name for the check, so the runtime net is the floor (decisions §4) | if the key is knowable, keep it literal; if it is truly runtime data, consider the namespaced bag instead |
+| `'{ [collision]: "⛔ patch carries no nameable keys: mount the dynamic bag under a literal key"; }'` | the patch's return annotation is an index signature (`Record<string, …>`) — no nameable keys, so the guard could neither check collisions nor keep the chain honest downstream ([top-level widened patches are refused](../decisions/top-level-widened-patches-refused.md)) | exactly what it says: `provide('payments', (): Record<string, Client> => bag)`; if the key list is actually knowable, keep it literal (`as const`) and the guard checks it in full |
+| `Keys already present in the context: db` **thrown at boot** (no compile error) | a widened KEY slipped past the guard — a plain-`string` key carries no name for the check, so the runtime net is the floor ([key collisions are forbidden on two levels](../decisions/key-collisions-forbidden-two-levels.md)) | if the key is knowable, keep it literal; if it is truly runtime data, consider the namespaced bag instead |
 | `error TS2769: No overload matches this call` wrapping any of the above | the verbs are overloaded (patch \| keyed \| mount); every candidate is elaborated | scan for the elaboration carrying the `⛔` message or the real key — the other candidates are the other verb forms, discard them |
-| `TS2769` inside a helper generic over the chain (`<Ctx …>(chain: Lunette<Ctx, …>) => chain.provide(…)`), no collision anywhere | the guard cannot prove "no collision, for **every** Ctx" at the helper's definition — refused by design (decision 31) | extensions supply values, apps wire them: package the layers as a fragment (requirements in the Seed), or the adapter/window pair (#27/#28); a helper over a **concrete** chain type compiles fine |
+| `TS2769` inside a helper generic over the chain (`<Ctx …>(chain: Lunette<Ctx, …>) => chain.provide(…)`), no collision anywhere | the guard cannot prove "no collision, for **every** Ctx" at the helper's definition — refused by design ([extensions supply values; only the app extends the chain](../decisions/extensions-supply-values-only-app-extends.md)) | extensions supply values, apps wire them: package the layers as a fragment (requirements in the Seed), or the adapter/window pair (#27/#28); a helper over a **concrete** chain type compiles fine |
 
 ## The two voices
 
@@ -111,7 +111,7 @@ tsc refuses the definition. The old return-type guard deferred the same
 question to each call site; the argument-side guard cannot, and this is
 the one place the trade bites.
 
-It bites nothing that matters (decision 31): every real extension shape
+It bites nothing that matters ([extensions supply values](../decisions/extensions-supply-values-only-app-extends.md)): every real extension shape
 already avoids it. Dialects **consume** the chain (`run`/`build` through
 `pipe`) — untouched. Reusable bundles of layers are **fragments** —
 mounted on a concrete chain, requirements declared in the Seed, collision
