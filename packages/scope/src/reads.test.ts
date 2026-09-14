@@ -280,7 +280,7 @@ describe('Express `body`: the two worlds a Node request can be in', () => {
 
 // ── every key below is the CLIENT's ─────────────────────────────────────────
 // biome-ignore-start lint/suspicious/noProto: the deprecated accessor is what a client can send, and reading it back is how the test proves where the value landed
-// biome-ignore-start lint/complexity/useLiteralKeys: `__proto__` in brackets is a plain own key; written with a dot it is the prototype accessor
+// biome-ignore-start lint/complexity/useLiteralKeys: the keys below are read as a CLIENT wrote them, so they stay in brackets — `__proto__` with a dot is the prototype accessor and asserts something else
 describe('a client-chosen key cannot reach the prototype', () => {
   const readAll = rr.reactRouter({}).loader(
     scope(rr.reactRouterCarrier())

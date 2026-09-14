@@ -419,7 +419,7 @@ describe('the real overload set: TS2769 wraps, the message survives', () => {
     void lunette()
       .provide('db', () => 1)
       // @ts-expect-error — layer collision caught, parameters still typed
-      // biome-ignore lint/correctness/noUnusedFunctionParameters: the parameter is read by the assertion above, which is about how TypeScript PRINTS it
+      // biome-ignore lint/correctness/noUnusedFunctionParameters: the parameter has to be WRITTEN for the diagnostic quoted above to print it contextually typed — renaming or dropping it is a different diagnostic
       .use(async (ctx, next) => next({ db: 'x' }))
   })
 

@@ -1,17 +1,23 @@
 pre-commit:
   commands:
     biome:
+      # A SUBSET of what Biome handles, on purpose: the languages this repo
+      # actually has. A file type outside it is formatted by CI and not here,
+      # which is the arrangement working — the gate is CI, not the hook.
       glob: '*.{ts,tsx,js,mjs,cjs,json,jsonc}'
       run: pnpm biome check --write --no-errors-on-unmatched {staged_files}
       stage_fixed: true
 
 commit-msg:
   commands:
-    # Keep the message to what a reader of `git log` needs. The braces guard the
-    # case where every line matched: `grep -v` exits 1 when it prints nothing,
-    # which would abort the commit instead of emptying the message. Git drops
-    # the blank line a removed trailer leaves behind.
+    # Keep the message to what a reader of `git log` needs. A `Co-authored-by:`
+    # is matched only where it names the agent — a HUMAN co-author is credit,
+    # and deleting it silently would be the worst kind of tidiness.
+    #
+    # The braces guard the case where every line matched: `grep -v` exits 1 when
+    # it prints nothing, which would abort the commit instead of emptying the
+    # message. Git drops the blank line a removed trailer leaves behind.
     strip-attribution:
       run: |
-        { grep -ivE '^(Co-authored-by:|Claude-Session:|🤖 Generated with|https://claude\.ai/code/session_)' {1} || true; } > {1}.tmp
+        { grep -ivE '^(Co-authored-by:.*(claude|noreply@anthropic\.com)|Claude-Session:|🤖 Generated with|https://claude\.ai/code/session_)' {1} || true; } > {1}.tmp
         mv {1}.tmp {1}
