@@ -9,6 +9,11 @@ are cited from `docs/` or from a comment in `packages/`, and a prototype that a
 decision rests on is the evidence for that decision. They go when the citation
 goes.
 
+The `§N` citations inside these prototypes predate the decision record becoming
+a directory: a decision has no number now, so those sigils resolve to nothing.
+They are left as they are — a directory on its way out is not worth a sweep —
+and each goes with the prototype that carries it.
+
 Each retirement is now tracked by its own cleanup issue — the table's "retires
 when" column and the issue say the same thing; the issue is where it actually
 gets closed out.
