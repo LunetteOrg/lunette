@@ -23,11 +23,13 @@
 //      consumer may hold — `peerDependencies.typescript`. Everything else here
 //      runs on the compiler this repo pins, which is the newest one: a floor
 //      nothing compiles is a claim nobody checked;
-//   7. no BARE top-level statement stands in a shipped module, wherever the
-//      manifest says `sideEffects: false` — a floor under a claim a bundler
-//      acts on, in someone else's production build. It is a floor and not a
-//      proof: a declaration's initializer may call anything, and whether that
-//      call is pure is not decided here.
+//   7. no top-level statement stands for its effect alone in a shipped module,
+//      wherever the manifest says `sideEffects: false` — a floor under a claim
+//      a bundler acts on, in someone else's production build. A floor and not a
+//      proof: what a declaration does INSIDE itself is not read here;
+//   8. the build on disk is no older than the sources it comes from — `pnpm
+//      pack` compiles nothing, so this step grades whatever is there, and a
+//      stale one would pass for a package nobody built.
 //
 // What is NOT checked here, and why: the manifest's dependency ranges. `pnpm
 // pack` rewrites `workspace:` and `catalog:` before packing and aborts when it
@@ -42,6 +44,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  statSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -82,7 +85,13 @@ const ts = createRequire(import.meta.url)(
 // What may stand at the top level of a shipped module. A declaration binds a
 // name, so dropping the module drops what it bound; a statement that is not one
 // stands there for its effect alone. The type-only kinds are here because the
-// sources ship beside the build and are read by the same pass.
+// sources ship beside the build and are read by the same pass, and anything
+// AMBIENT passes wherever it appears — it has no runtime at all.
+//
+// A value `enum` or `namespace` is refused, and deliberately: each emits an
+// invoked function expression, the one shape where a declaration in the source
+// becomes a statement in the build. Nothing here uses one, so the alternative
+// is teaching this pass an idiom for a construct nobody writes.
 const DECLARATIONS = new Set([
   ts.SyntaxKind.ImportDeclaration,
   ts.SyntaxKind.ExportDeclaration,
@@ -101,10 +110,15 @@ const shipped = (dir) =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const here = join(dir, entry.name)
     if (entry.isDirectory()) return shipped(here)
-    return /\.(js|ts)$/.test(entry.name) && !entry.name.endsWith('.d.ts')
+    return /\.[cm]?[jt]sx?$/.test(entry.name) && !entry.name.endsWith('.d.ts')
       ? [here]
       : []
   })
+// An ambient declaration binds a name for the compiler alone.
+const ambient = (statement) =>
+  statement.modifiers?.some(
+    (modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword,
+  ) ?? false
 const license = readFileSync(join(root, 'LICENSE'), 'utf8')
 const work = mkdtempSync(join(tmpdir(), 'lntt-tarball-'))
 
@@ -155,6 +169,22 @@ try {
 
   for (const name of packages) {
     console.log(`\n@lntt/${name}`)
+    // `pnpm pack` reads whatever `dist` is on disk and never builds one, so a
+    // run reached without a build grades a tree nobody compiled — a stale
+    // `dist`, or one another process is writing. The timestamps say which.
+    const here = join(root, 'packages', name)
+    const newest = (files) =>
+      files.reduce((at, file) => Math.max(at, statSync(file).mtimeMs), 0)
+    const built = existsSync(join(here, 'dist'))
+    check(
+      built &&
+        newest(shipped(join(here, 'dist'))) >=
+          newest(shipped(join(here, 'src'))),
+      built
+        ? 'the build is at least as new as the sources it comes from'
+        : 'there is a build to check (run `pnpm build`)',
+    )
+
     const into = mkdtempSync(join(work, `pack-${name}-`))
 
     // The tarball is read off the directory rather than off stdout: pnpm writes
@@ -237,11 +267,11 @@ try {
     // so a module that did work merely by being imported would disappear from a
     // consumer's production build and nowhere else. What this refuses is a bare
     // top-level statement — one standing there for its effect, binding nothing.
-    // It is a FLOOR, not a proof: a declaration's initializer may call anything,
-    // and no check here decides whether that call is pure, so a `const x =
-    // install()` passes. Deciding purity means annotating every legitimate call
-    // and teaching this the emitter's own idioms, for a hazard the floor already
-    // catches in the shape it actually arrives in.
+    // It is a FLOOR, not a proof: nothing INSIDE a declaration is read, so a
+    // `const x = install()` passes, and so does a class whose static block runs
+    // anything. Deciding that would mean annotating every legitimate call this
+    // package already makes at module scope, for a hazard the floor catches in
+    // the shape it actually arrives in.
     if (manifest.sideEffects === false) {
       const bare = shipped(out).flatMap((file) => {
         const parsed = ts.createSourceFile(
@@ -252,7 +282,10 @@ try {
           file.endsWith('.ts') ? ts.ScriptKind.TS : ts.ScriptKind.JS,
         )
         return parsed.statements
-          .filter((statement) => !DECLARATIONS.has(statement.kind))
+          .filter(
+            (statement) =>
+              !DECLARATIONS.has(statement.kind) && !ambient(statement),
+          )
           .map((statement) => {
             const { line } = parsed.getLineAndCharacterOfPosition(
               statement.getStart(parsed),
@@ -262,7 +295,7 @@ try {
       })
       check(
         bare.length === 0,
-        `no shipped module opens with a statement standing there for its effect, under sideEffects${bare.length ? ` (${bare[0]})` : ''}`,
+        `no shipped module carries a top-level statement that stands there for its effect, under sideEffects${bare.length ? ` (${bare[0]})` : ''}`,
       )
     }
 

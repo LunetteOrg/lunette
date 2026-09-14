@@ -180,8 +180,10 @@ the tracker when relevant — never from here.
   `dist` (they import `@lntt/*` by NAME, so the built JavaScript executes), and
   packs and unpacks each tarball, loads every entry point BOTH ways (`import`
   and `require` name one file), typechecks the declarations on the pinned
-  compiler and on the floor one, and refuses a bare top-level statement in a
-  shipped module while `sideEffects: false` stands. TypeScript (pnpm `catalog:`) tracks
+  compiler and on the floor one, and — while `sideEffects: false` stands —
+  refuses a top-level statement that stands for its effect in a shipped module,
+  a value `enum` or `namespace` among them, and a build older than its sources.
+  TypeScript (pnpm `catalog:`) tracks
   the latest release and Node the current LTS — one number each, and CI runs
   exactly those; the floor a CONSUMER sees is lower and lives in
   `peerDependencies.typescript`.

@@ -3183,15 +3183,21 @@ actually gets is the SUBPATH: importing one host reaches none of the others,
 which `exports` delivers on its own.
 
 `verify:tarball` puts a FLOOR under that promise and not a proof: it reads every
-shipped module — the build and the sources beside it — and refuses a bare
-top-level statement, one standing there for its effect and binding nothing.
-What it does not decide is PURITY: a declaration's initializer may call
-anything, so `const x = install()` passes, and three legitimate call-initialized
-constants in the host mounts are the reason a stricter rule would cost more than
-it returns — every one of them would need annotating, and the check would have
-to learn the emitter's own idioms (an `enum` emits an invoked function
-expression that every bundler treats as pure). The floor catches the shape the
-hazard actually arrives in; the rest is a reading of the diff.
+shipped module — the build and the sources beside it — and refuses a top-level
+statement that stands there for its effect, binding nothing. What it does not
+read is the INSIDE of a declaration: `const x = install()` passes, and so does a
+class whose static block runs anything. Deciding that would mean annotating
+every legitimate call this package already makes at module scope — three of them
+in the host mounts — for a hazard the floor catches in the shape it actually
+arrives in.
+
+A value `enum` and a value `namespace` are refused by that floor, and the
+refusal is kept: each emits an invoked function expression, the one construct
+that turns a declaration in the source into a statement in the build. Nothing
+here uses one, and introducing one is a decision rather than an edit. The
+ambient forms pass, `declare enum` included — they have no runtime to speak of.
+This is not an erasability rule: the sources keep a parameter property in the
+chain, which is why the source path is a bundler's and not a stripping loader's.
 
 ONE format, and `require` names the same file the `import` condition names: the
 runtimes this package declares load ESM from `require`, so a CJS consumer is
