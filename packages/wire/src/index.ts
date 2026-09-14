@@ -9,8 +9,8 @@
 //     layers (private / public) with an optional acquire/release teardown.
 //   use/expose also accept a CHAIN (mount): only its Pub crosses the boundary
 //   override (explicit replacement) · run/build (deliver Pub) · seed (private)
-//   bind(record) → the binder: apply = fixed deps · .with(window) = per
-//     call · .by(key ⇒ window) = per call, window derived from the key
+//   bind(record) → the binder: apply = fixed deps · .with(lease) = per
+//     call · .by(key ⇒ lease) = per call, lease derived from the key
 //   layer (helper for reusable layers)
 //
 // 1. A real onion: the chain stays open for the app's whole lifetime; the
@@ -71,8 +71,8 @@ export type { BuiltOf, PubOf, SeedOf } from './chain.ts'
 export { lazy, lazyAsync, circular } from './lazy.ts'
 export type { Lazy } from './lazy.ts'
 
-export { window } from './window.ts'
-export type { With } from './window.ts'
+export { lease } from './lease.ts'
+export type { Lease } from './lease.ts'
 
 export { buildOnce } from './build-once.ts'
 export type { BuildOnce } from './build-once.ts'

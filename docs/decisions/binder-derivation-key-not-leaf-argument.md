@@ -6,28 +6,28 @@ status: accepted
 
 # `.by` on the binder: the derivation key is not a leaf argument
 
-**Decision.** `bind(record).by(toWindow)` covers windows DERIVED per call
+**Decision.** `bind(record).by(toLease)` covers leases DERIVED per call
 (per-tenant connection, idempotency guard, shard): every bound leaf gains
 ONE leading KEY argument — `monthly('acme', period)` — the binder passes
-it to `toWindow(key)`, opens the derived window, and calls the leaf with
+it to `toLease(key)`, opens the derived lease, and calls the leaf with
 its OWN arguments only. The leaf never sees the key: the key is wiring
 (WHICH world to open), not domain. When the domain needs it (the id in
 the query), the bridge closes over the key and hands it in through the
-deps (`(tenant) => window(opener(tenant), (conn) => ({ conn, tenant }))`).
+deps (`(tenant) => lease(opener(tenant), (conn) => ({ conn, tenant }))`).
 The key is a single parameter by design — a composite key is one object —
 so the runtime split is positional (first argument), with no
 `Function.length` inspection. `.with(w)` remains the degenerate fixed
 case (`.by` with a derivation that ignores the key).
 
 **Alternatives.**
-- (a) The old standalone `bindBy(toWindow, leaf)` (superseded):
-  `toWindow` mirrored the leaf's FULL argument list and the leaf received
+- (a) The old standalone `bindBy(toLease, leaf)` (superseded):
+  `toLease` mirrored the leaf's FULL argument list and the leaf received
   the key too. That polluted the domain signature with a wiring concern
   (a composite would thread the tenant through every call), and it forced
-  single-leaf — a record was untypeable, because one `toWindow` cannot
+  single-leaf — a record was untypeable, because one `toLease` cannot
   mirror heterogeneous argument lists.
 - (b) Variadic keys (bound args `[...Keys, ...Args]`): the runtime split
-  would need `toWindow.length` — a silent footgun with default and rest
+  would need `toLease.length` — a silent footgun with default and rest
   parameters. One key, positional, explicit.
 - (c) A curried bound form (`monthly('acme')('2026-06')`): split-free and
   more general, but a double call at every route call site.

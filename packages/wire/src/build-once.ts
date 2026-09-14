@@ -24,7 +24,7 @@ export interface BuildOnce<C> {
   // this per request must not pay for a seed that will be discarded, and the
   // signature must not promise a per-request seed it ignores. A seed that
   // varies per call is therefore never even computed — the per-call axis is the
-  // window, never a second app.
+  // lease, never a second app.
   // THROWS after `dispose`: a disposed handle has no app to hand back, and the
   // one it built is running on closed resources. Infrastructure, so thrown
   // rather than returned: a returned error is a domain outcome, and this is

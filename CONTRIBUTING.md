@@ -36,7 +36,7 @@ explicitly:
 
 1. **The type contract.** Every configuration error surfaces immediately,
    at the call site, at compile time (duplicate keys named, unsatisfied
-   requirements, branded leaves outside their window). The `*.test-d.ts`
+   requirements, branded leaves outside their lease). The `*.test-d.ts`
    files are the executable proof of this contract: **if a refactor breaks
    them, the refactor is wrong even when the runtime tests pass.**
 2. **Visibility lives in the verb.** `use`/`provide` private, `expose`
@@ -45,7 +45,7 @@ explicitly:
 3. **The error convention.** Returned error = domain (passes through);
    thrown error = infrastructure (reacts). This is the pivot of every
    boundary mechanism.
-4. **Leaves and windows.** Use cases are flat leaves; the window is
+4. **Leaves and leases.** Use cases are flat leaves; the lease is
    per call, never shared.
 5. **One way to do each thing (YAGNI).** New API only with a real case in
    hand. Conventions over features.
@@ -60,7 +60,7 @@ explicitly:
   names, runtime error messages, docs.
 - **Tests:** vitest with typecheck. Always verify by running `pnpm test`
   and `pnpm typecheck` (workspace root: `pnpm -r ...`); scope down with
-  `pnpm --filter @lntt/wire exec vitest run src/with.test.ts`. Never
+  `pnpm --filter @lntt/wire exec vitest run src/lease.test.ts`. Never
   declare green without having run.
 - **Lint and format: Biome** (`pnpm lint` to check, `pnpm lint:fix` to write),
   configured in `biome.jsonc` — two spaces, single quotes, no semicolons, 80
@@ -102,14 +102,14 @@ frontmatter, then an H1 repeating the title:
 ```yaml
 ---
 title: "Errors: returned = domain, thrown = infrastructure"
-area: leaves-errors-windows
+area: leaves-errors-leases
 status: accepted
 ---
 ```
 
 - **`title`** — the decision in one line, the same sentence as the H1.
 - **`area`** — where it belongs, one of `core-shape`,
-  `keys-visibility-composition`, `extensibility`, `leaves-errors-windows`,
+  `keys-visibility-composition`, `extensibility`, `leaves-errors-leases`,
   `resources-lifecycles`, `testing`, `meta-contract`, `verb-model`,
   `scope-runtime`, `publication`.
 - **`status`** — `accepted`, or `superseded` once a later decision overturns

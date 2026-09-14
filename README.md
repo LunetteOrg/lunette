@@ -32,8 +32,8 @@ shaped to dissolve that file.
 - **The error convention.** A *returned* error is domain (commit, ack, no
   retry); a *thrown* error is infrastructure (rollback, nack, retry). This
   single distinction is the pivot of transactions, retries and queues.
-- **Leaves and windows.** Use cases are flat functions
-  `(deps, ...args) => error | result`; a window (`With`) is a per-call
+- **Leaves and leases.** Use cases are flat functions
+  `(deps, ...args) => error | result`; a lease (`Lease`) is a per-call
   validity scope (transaction, span, timeout), never shared.
 
 ## The RFC body
@@ -67,7 +67,7 @@ non-negotiables.
 
 | package | what it is |
 |---|---|
-| [`@lntt/wire`](./packages/wire) | the core: the chain (`use`/`provide`/`expose`/`override`/`as`/`pipe`), two-sided composition (Seed), mounting with lexical scoping, leaves (`bind`), windows (`With`/`within`/`bindBy`), helpers (`layer`, `lazy`, `circular`). Test utilities at `@lntt/wire/testing` |
+| [`@lntt/wire`](./packages/wire) | the core: the chain (`use`/`provide`/`expose`/`override`/`as`/`pipe`), two-sided composition (Seed), mounting with lexical scoping, leaves (`bind`), leases (`Lease`/`lease`/`.with`/`.by`), helpers (`layer`, `lazy`, `circular`). Test utilities at `@lntt/wire/testing` |
 | [`@lntt/scope`](./packages/scope) | the host-agnostic scope runtime: one primitive (`.step`, a step wrapping the rest of the fold), `.extend` for the verbs a dialect contributes, and a scope that IS the function that runs it |
 | [`@lntt/cli`](./packages/cli) | command-line dialect — *planned* |
 | [`@lntt/listener`](./packages/listener) | event consumers over external buses (Redis, SQS, ...) — *planned* |

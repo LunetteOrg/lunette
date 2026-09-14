@@ -14,6 +14,6 @@ lunette<{ env: Env }>()
   .listen(redisEngine({ url }), seed)
 ```
 
-Each message runs in a per-call window, where wire's error convention maps
+Each message runs in a per-call lease, where wire's error convention maps
 onto delivery semantics: a returned domain error → ack (dead-letter with a
 reason), a thrown infrastructure error → nack (redelivery).

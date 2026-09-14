@@ -180,61 +180,63 @@ Errors follow the value convention: domain errors are **returned**
 (`return new OtpInvalid()`), infrastructure errors are **thrown**. This
 single distinction drives everything below.
 
-## Windows
+## Leases
 
-A **window** lends deps that are valid only inside a callback:
+A **lease** lends deps that are valid only inside a callback. The grant is
+bounded and the lender takes it back whatever happens — nothing is left for
+the borrower to return:
 
 ```ts
-type With<Deps> = <T>(use: (deps: Deps) => Promise<T>) => Promise<T>
+type Lease<Deps> = <T>(use: (deps: Deps) => Promise<T>) => Promise<T>
 ```
 
 Database transactions, tracing spans, locks, per-tenant connections — all
 the same shape. The binder's `.with` ties deps per call: every call opens
-the window, builds the deps inside it, closes:
+the lease, builds the deps inside it, closes:
 
 ```ts
-const inTx: With<Repos> = (use) => db.transaction((tx) => use(makeRepos(tx)))
+const inTx: Lease<Repos> = (use) => db.transaction((tx) => use(makeRepos(tx)))
 
 .expose('commands', ({ db }) => bind({ verifyOtp }).with(inTx))
 // each call = one transaction, invisible at the call site
 ```
 
-`window(opener, bridge)` builds a window from its two parts — the
+`lease(opener, bridge)` builds a lease from its two parts — the
 **opener** (callback-shaped; `db.transaction` already is) and the
 **bridge** (raw resource → the deps shape your leaves declare, mixing in
 boot values by closure):
 
 ```ts
-bind({ welcome }).with(window(db.transaction, (tx) => ({ db: tx, email, clock })))
+bind({ welcome }).with(lease(db.transaction, (tx) => ({ db: tx, email, clock })))
 ```
 
-`.by(toWindow)` derives the window from a **key**: every bound leaf gains
-one leading key argument (`monthly('acme', period)`), `toWindow(key)`
-picks the window (per-tenant connection, idempotency guard, shard), and
+`.by(toLease)` derives the lease from a **key**: every bound leaf gains
+one leading key argument (`monthly('acme', period)`), `toLease(key)`
+picks the lease (per-tenant connection, idempotency guard, shard), and
 the leaf runs with its **own** arguments only — the key is wiring, not
 domain. When the domain does need it (the id in the query), the bridge
 closes over the key and hands it in through the deps:
 
 ```ts
 const { report: monthly } = bind({ report }).by((tenant: string) =>
-  window((fn) => pool.withConnection(tenant, fn), (conn) => ({ conn, tenant })),
+  lease((fn) => pool.withConnection(tenant, fn), (conn) => ({ conn, tenant })),
 )
 await monthly('acme', '2026-06')   // opens acme's connection; report(deps, period)
 ```
 
 Semantics worth knowing:
 
-- the window is **per call**, never shared: three leaves bound to one
-  window do not share a transaction; each invocation opens and closes its
+- the lease is **per call**, never shared: three leaves bound to one
+  lease do not share a transaction; each invocation opens and closes its
   own.
-- a window may run `use` **0 times** (circuit breaker), **1** (normal) or
+- a lease may run `use` **0 times** (circuit breaker), **1** (normal) or
   **N** (retry). The error convention is the pivot: returned domain errors
   pass through (commit, no retry); thrown infrastructure errors make the
-  window react (rollback, retry).
-- **atomicity = one named window**: if two operations must be atomic
+  lease react (rollback, retry).
+- **atomicity = one named lease**: if two operations must be atomic
   together, compose them into one leaf and bind *that*; a sequence of
   bound leaves is a saga (each step commits its own).
-- windows whose extent is *smaller than the function* (a lock around a
+- leases whose extent is *smaller than the function* (a lock around a
   critical section) belong **in the deps**, applied inside the leaf where
   the arguments already are.
 
@@ -248,7 +250,7 @@ declare const atomic: unique symbol
 type Tx<D> = D & { readonly [atomic]: true }
 
 const verifyOtp = async (deps: Tx<Repos>, email: string, code: string) => { ... }
-const inTx: With<Tx<Repos>> = (use) =>
+const inTx: Lease<Tx<Repos>> = (use) =>
   db.transaction((tx) => use(makeRepos(tx) as Tx<Repos>))  // the one cast, here
 
 bind({ verifyOtp })(makeRepos(db))   // ❌ does not compile
@@ -322,15 +324,15 @@ import.meta.hot?.dispose(() => dispose())
 **Classes.** Conventions, not requirements: class instances are perfect
 context values (clients, errors); a class with constructor-injected deps
 is the OO spelling of `bind` (`expose('auth', (ctx) => new AuthService(ctx))`
-works today); under a window, per-call deps mean per-call instances.
+works today); under a lease, per-call deps mean per-call instances.
 
 **Events / CQRS.** The bus is a dep; emitting is calling a dep; an event
 handler is a bare leaf `(deps, event)`; subscribing is a layer (the onion
 gives subscribe/unsubscribe lifecycle); a consumer is a separate chain
-processing each message in a per-call window — where the error convention
+processing each message in a per-call lease — where the error convention
 maps directly onto ack/nack: returned domain error → ack (dead-letter with
 a reason), thrown infrastructure error → nack (redelivery). The
-transactional outbox is just a bridge: `window(db.transaction, (tx) =>
+transactional outbox is just a bridge: `lease(db.transaction, (tx) =>
 ({ db: tx, events: outboxEmitter(tx) }))` — commit makes the event
 durable, rollback evaporates it with the writes.
 
@@ -341,7 +343,7 @@ cannot carry each layer's evolving generics). The types guarantee the
 **user's world**, and the contract is one sentence: *every configuration
 error surfaces immediately, at the call site, at compile time* — duplicate
 keys are named, unsatisfied requirements (layer, fragment, seed) do not
-compile, branded leaves cannot be wired without their window, and
+compile, branded leaves cannot be wired without their lease, and
 inference never asks for annotations where the information already exists.
 The `*.test-d.ts` suite is the proof of that contract: if an internal
 refactor breaks it, the refactor is wrong even if the runtime tests pass.

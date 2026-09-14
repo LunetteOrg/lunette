@@ -1,7 +1,7 @@
 // The binder: applies a record of bare leaves to its deps — once, per
-// call through a window, or per call with the window derived from a key.
+// call through a lease, or per call with the lease derived from a key.
 
-import type { With } from './window.ts'
+import type { Lease } from './lease.ts'
 
 // THE BINDING: bind(record) takes the BARE LEAVES (flat use cases
 // `(deps, ...args) => error | result` that declare their deps in the
@@ -9,14 +9,14 @@ import type { With } from './window.ts'
 // partial application, waiting for the deps:
 //
 //   bind(record)(deps)         FIXED deps — a value, bound once
-//   bind(record).with(window)  deps PER CALL — every call opens the
-//                              window, builds the deps inside it, closes.
+//   bind(record).with(lease)   deps PER CALL — every call opens the
+//                              lease, builds the deps inside it, closes.
 //                              Transactionality is declared at the wiring;
 //                              the call site stays a plain function call.
-//   bind(record).by(toWindow)  deps PER CALL, window DERIVED — every bound
+//   bind(record).by(toLease)   deps PER CALL, lease DERIVED — every bound
 //                              leaf gains ONE leading KEY argument
-//                              (monthly('acme', period)); toWindow(key)
-//                              picks the window (tenant pool, idempotency
+//                              (monthly('acme', period)); toLease(key)
+//                              picks the lease (tenant pool, idempotency
 //                              guard, shard). The leaf NEVER sees the key:
 //                              the key is wiring, not domain — when the
 //                              domain needs it, the bridge closes over it
@@ -28,7 +28,7 @@ import type { With } from './window.ts'
 // parameter is the INTERSECTION of every leaf's declared deps: an unmet
 // requirement names the missing keys at the application. Composition rule
 // unchanged: decorate the exposed leaves, compose the bare ones (a
-// composite calls the bare leaf with its own deps → same window by
+// composite calls the bare leaf with its own deps → same lease by
 // construction).
 type Leaf = (deps: any, ...args: any[]) => unknown
 
@@ -41,7 +41,7 @@ type UnionToIntersection<U> = (
   : never
 
 // Everything the record's leaves ask for, as one object: the binder's
-// parameter and the window's lending contract.
+// parameter and the lease's lending contract.
 // `unknown extends D` is true only when D is `any` or `unknown` itself —
 // the two top-like types that would otherwise swallow the whole union
 // (any | X = any, unknown | X = unknown) and erase every other leaf's
@@ -77,7 +77,7 @@ type BoundPerCall<M> = {
   ) => Promise<Awaited<ReturnType<Bound<M>[K]>>>
 }
 
-// The bound record of the derived-window form: every leaf gains one
+// The bound record of the derived-lease form: every leaf gains one
 // leading KEY argument; the leaf itself receives only its own args.
 // Derived from BoundPerCall, not restated, so the two stay in lockstep.
 type BoundByKey<M, Key> = {
@@ -91,8 +91,8 @@ type BoundByKey<M, Key> = {
 // properties — the same house shape as Lazy<T> (a callable with
 // `created`). It must stay this stupid: no fluent surface beyond these.
 export type Binder<M> = ((deps: DepsOf<M>) => Bound<M>) & {
-  with: (window: With<DepsOf<M>>) => BoundPerCall<M>
-  by: <Key>(toWindow: (key: Key) => With<DepsOf<M>>) => BoundByKey<M, Key>
+  with: (lease: Lease<DepsOf<M>>) => BoundPerCall<M>
+  by: <Key>(toLease: (key: Key) => Lease<DepsOf<M>>) => BoundByKey<M, Key>
 }
 
 export const bind = <M extends Record<string, Leaf>>(record: M): Binder<M> => {
@@ -101,8 +101,8 @@ export const bind = <M extends Record<string, Leaf>>(record: M): Binder<M> => {
   // how each leaf's deps get produced varies.
   const mapEntries = <T>(project: (uc: Leaf) => T): Record<string, T> =>
     Object.fromEntries(entries.map(([name, uc]) => [name, project(uc)]))
-  // The bridge every per-call cadence opens a window with: close the
-  // leaf's own args over it, so the window only ever sees the deps.
+  // The bridge every per-call cadence opens a lease with: close the
+  // leaf's own args over it, so the lease only ever sees the deps.
   const bridge = (uc: Leaf, args: unknown[]) => async (deps: any) =>
     uc(deps, ...args)
   // The two casts are engine-internal: with M generic the
@@ -119,11 +119,11 @@ export const bind = <M extends Record<string, Leaf>>(record: M): Binder<M> => {
         (...args: unknown[]) =>
           w(bridge(uc, args)),
     ) as BoundPerCall<M>
-  binder.by = ((toWindow: (key: unknown) => With<object>) =>
+  binder.by = ((toLease: (key: unknown) => Lease<object>) =>
     mapEntries(
       (uc) =>
         (key: unknown, ...args: unknown[]) =>
-          toWindow(key)(bridge(uc, args)),
+          toLease(key)(bridge(uc, args)),
     )) as unknown as Binder<M>['by']
   return binder
 }

@@ -53,7 +53,7 @@ describe('buildOnce', () => {
 
     // The later seeds are not merely discarded: they are never computed. A host
     // that varies its seed per request is therefore ignored, by design — the
-    // per-call axis is the window, not a second app.
+    // per-call axis is the lease, not a second app.
     expect(seeded).toBe(1)
     await once.dispose()
   })

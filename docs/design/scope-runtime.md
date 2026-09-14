@@ -154,9 +154,9 @@ chains**, the scope one seeded by the first's `Pub`.
 
 ## Frictions examined and cleared (no (c) trigger surfaced)
 
-- **Who owns the call site.** A window presumes WE invoke `use`. Own-server
+- **Who owns the call site.** A lease presumes WE invoke `use`. Own-server
   (`@lntt/http`, worker): wire owns the loop, native fit. Guest with its own
-  onion: **RR7 v7 middleware IS `(args, next) => …`** — already a window
+  onion: **RR7 v7 middleware IS `(args, next) => …`** — already a lease
   opener; `next` is the innermost `use`, the Response rises through its
   return. So `mount`/`to*` are thin — the host's onion is *borrowed*, not
   duplicated. Open edge: frameworks whose middleware is NOT an onion
@@ -164,7 +164,7 @@ chains**, the scope one seeded by the first's `Pub`.
 - **Commit/rollback gated on HTTP outcome.** Maps onto the error convention
   with no new mechanism: a returned domain `4xx` commits (validation writes
   stand), a thrown infra `5xx` rolls back. A returned `4xx` that must NOT
-  commit would be the middleware a window cannot express — the (c) trigger —
+  commit would be the middleware a lease cannot express — the (c) trigger —
   but none appeared in the admin flow.
 - **`waitUntil`/deferred work.** Not a Response-up transform: a dep-DOWN
   handle in the `scope` namespace (`scope.waitUntil(...)`), used inside the
@@ -292,13 +292,13 @@ four real hosts). These are the verdicts the real packages implement.
   runtime — the type contract (principle 1) extended to the scope tier,
   mirroring wire's Seed-vs-Ctx mount check ([two-sided composition](../decisions/two-sided-composition-seed.md) and [what crosses a mount](../decisions/mount-only-public-surface-crosses-lexical.md)). Abstract handlers
   are testable with flat fakes, no app (principle 4).
-- **The seeding cadences collapse to two; the request window nests the
-  transaction window.** `mount` does first-request build-once EVERYWHERE
+- **The seeding cadences collapse to two; the request fold nests the
+  transaction lease.** `mount` does first-request build-once EVERYWHERE
   (Node, Bun/Elysia, Cloudflare Workers): `seedFrom(hostContext)` reads
   `process.env` on Node or `c.env` on a Worker, and the build is memoized per
   isolate (Node may warm it eagerly at boot — opt-in, not a separate cadence).
-  The second tier is per-request: the scope window (the guard/leaf fold). The
-  request window (outer) and a transaction window (inner) compose only through
+  The second tier is per-request: the scope fold (guard then leaf). That fold
+  (outer) and a transaction lease (inner) compose only through
   the error convention. This is [the collapse to two seeding cadences](../decisions/three-seeding-cadences-collapse-two-request.md).
 - **Per-handler model EVERYWHERE — no central registrar.** Each host has ONE
   function that consumes a scope, used with the host's NATIVE routing. This

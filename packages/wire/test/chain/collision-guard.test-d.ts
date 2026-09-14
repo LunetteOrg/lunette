@@ -352,7 +352,7 @@ describe('symbol keys are guarded in the patch form too', () => {
   })
 })
 
-// Extensions supply VALUES (adapters, windows, decorators, fragments); only
+// Extensions supply VALUES (adapters, leases, decorators, fragments); only
 // the app extends the chain, and always concretely. A
 // helper generic over the chain asks tsc to prove "no collision, for
 // EVERY Ctx" at the definition site — unprovable, since a caller's chain
@@ -360,7 +360,7 @@ describe('symbol keys are guarded in the patch form too', () => {
 // TS2769. That refusal is a guardrail, not a gap: the reusable form of
 // "add these layers" is a fragment (requirements in the Seed, collision
 // checked at the mount, on a concrete chain), and the package-level
-// patterns are the adapter/window pairs.
+// patterns are the adapter/lease pairs.
 describe('generic chain extension is refused by design', () => {
   it('a helper generic over the chain cannot call the guarded verbs', () => {
     function addRenderer<

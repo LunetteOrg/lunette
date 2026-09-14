@@ -28,6 +28,6 @@ state the rules; these documents show them at full length.
   it asks for, why the guards recite while the binder's typing works,
   and the rule for when a future check earns a brand.
 
-Planned (tracked in the GitHub issues): a windows deep-dive (0/1/N
+Planned (tracked in the GitHub issues): a leases deep-dive (0/1/N
 semantics, retry/breaker composition), the testing manual (issue #22),
 a migration guide from a hand-written composition root.

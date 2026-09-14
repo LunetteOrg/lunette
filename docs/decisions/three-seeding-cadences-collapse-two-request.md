@@ -1,10 +1,10 @@
 ---
-title: "Three seeding cadences collapse to two; the request window nests the transaction window"
+title: "Three seeding cadences collapse to two; the request fold nests the transaction lease"
 area: scope-runtime
 status: accepted
 ---
 
-# Three seeding cadences collapse to two; the request window nests the transaction window
+# Three seeding cadences collapse to two; the request fold nests the transaction lease
 
 **Decision.** The Seed of [two-sided composition](./two-sided-composition-seed.md) is read at cadences distinguished by
 lifetime. The exploration first framed three (boot-time, first-request-time,
@@ -23,15 +23,15 @@ but that is the same cadence triggered early — not a third one.
   context for the per-handler functions to read back. Distinct context keys
   let multiple chains coexist in one app. This generalizes the lazy
   memoized boot of [the per-request-env platforms](./per-request-env-platforms-get-lazy.md) (issue #12's concern) to every host.
-- **Tier 2 — per-request.** The scope window: the guard/leaf fold. Each
+- **Tier 2 — per-request.** The scope fold: guard then leaf. Each
   invocation gets a fresh cookie sink + enrichment bag; the built app is
   threaded read-only; the handler's requirement (`deps`) and the route
   params are reconciled against the chain's `Pub` and the host's route at
   the adapter — a missing dep or a wrong param is a compile error THERE.
   This mirrors wire's Seed-vs-Ctx mount check ([two-sided composition](./two-sided-composition-seed.md), and [what crosses a mount](./mount-only-public-surface-crosses-lexical.md)).
 
-**Window nesting.** The request window (outer) and a transaction window
-(inner — a wire `window()` / `.with`) are independent and compose ONLY
+**Nesting.** The request fold (outer) and a transaction lease
+(inner — a wire `lease()` / `.with`) are independent and compose ONLY
 through [the error convention](./errors-returned-domain-thrown-infrastructure.md): a RETURNED domain value means
 the inner transaction committed AND the outer scope emits its 2xx/4xx; a
 THROWN infrastructure error means the inner rolled back AND propagates as
@@ -47,13 +47,13 @@ you debug in postmortems).
 
 **Why.** One mechanism (first-seed-wins promise-memo per isolate) covers
 every host; the only thing that varies is where the seed is read from.
-Keeping the two windows composed by the error convention alone means the
-scope tier adds no new lifecycle concept — it reuses the pivot (decision
-14) the rest of the design already turns on.
+Keeping the two composed by the error convention alone means the
+scope tier adds no new lifecycle concept — it reuses the pivot of
+[the returned/thrown convention](./errors-returned-domain-thrown-infrastructure.md) the rest of the design already turns on.
 
 **Open follow-up.** Whether a SINGLE transaction should bracket the whole
 fold (multiple guards + the leaf) is unresolved. Principle 7 dictates an
-explicit named window a guard OPENS and later guards receive as an
+explicit named lease a guard OPENS and later guards receive as an
 enrichment, never an ambient join — left until a real case demands it
 (principle 5).
 
