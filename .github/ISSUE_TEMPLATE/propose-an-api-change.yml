@@ -35,5 +35,5 @@ body:
     attributes:
       label: Groundwork
       options:
-        - label: I checked docs/decisions.md and this is not a withdrawn API (`grep Superseded`) or one with an existing verdict.
+        - label: I checked docs/decisions/ and this is not a withdrawn API (`grep -ril superseded docs/decisions/`) or one with an existing verdict.
           required: true

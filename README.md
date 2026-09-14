@@ -41,9 +41,9 @@ shaped to dissolve that file.
 The substance of the proposal lives in the design record, not in this
 README:
 
-- **[`docs/decisions.md`](./docs/decisions.md)** — the heart of the RFC:
-  25 numbered decisions, each with the alternatives considered and *why
-  they were discarded*. The "why nots" are the point.
+- **[`docs/decisions/`](./docs/decisions)** — the heart of the RFC: one
+  file per decision, each with the alternatives considered and *why they
+  were discarded*. The "why nots" are the point.
 - **[`docs/`](./docs/)** — extended patterns (singletons & verticals,
   events & CQRS) and the docs index.
 - **[`TODO.md`](./TODO.md)** — open work as stories, each carrying its
@@ -54,7 +54,7 @@ README:
 - **Open-ended thoughts, questions, "have you considered…"** →
   [Discussions](https://github.com/LunetteOrg/lunette/discussions).
 - **Disagree with a specific decision?** Open a *Challenge a decision*
-  issue and cite its number from `decisions.md`. **Read the decision
+  issue and link the entry under `docs/decisions/`. **Read the decision
   first** — your objection may already have a recorded verdict.
 - **Want a new API or a changed signature?** Open a *Propose an API
   change* issue with the real case in hand (the design follows YAGNI:

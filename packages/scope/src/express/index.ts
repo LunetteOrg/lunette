@@ -367,11 +367,12 @@ export const express = <App extends object>(deps: App) => {
       // belongs to the handler and this error has nowhere left to go — it is
       // DROPPED, and dropped SILENTLY, because there is nowhere for it to be
       // dropped loudly: this package has no logger and invents no channel, so
-      // saying otherwise would be a comfort rather than a fact. The two
-      // alternatives are worse and both were measured: `next(err)` is the 500
-      // above, and rethrowing is the unhandled rejection that kills the
-      // process. Work that must survive the response does not belong in a
-      // step here.
+      // saying otherwise would be a comfort rather than a fact. Neither other
+      // ending is available — `next(err)` is the 500 above, on a request that
+      // was about to answer 200, and rethrowing is an unhandled rejection that
+      // ends the process. Work that must survive the response belongs to the
+      // host's own mechanism for it — `waitUntil` where the platform has one, a
+      // queue where it does not — and not to a step.
       //
       // `handOn` MARKS and forwards; it does not deduplicate. Calling
       // Express's `next` twice is Express's own business, and a wrapper that
@@ -396,7 +397,8 @@ export const express = <App extends object>(deps: App) => {
 
 // ── the read extensions ──────────────────────────────────────────────────────
 // PLAIN STEPS, not verbs: these ADD a ctx entry, and a verb is what may REPLACE
-// one (`@lntt/scope/guard`). The reasoning is written out in the Hono carrier.
+// one (`@lntt/scope/guard`). The line falls where the core's own gate already
+// is, so it is not a matter of taste.
 //
 // Express is its own family: `req` is a Node message, not a Fetch `Request`, so
 // the readers are handed the two shapes they really need — a `URLSearchParams`
@@ -593,10 +595,10 @@ export const body =
 
     // Summed WHILE ACCUMULATING, and the read is abandoned the moment it is
     // exceeded — a 5 GB body never sits in memory waiting for the last chunk.
-    // Simply RETURNING stops the `for await`, and that is all this does:
-    // `req.destroy()` was tried and rejected — it tears down the SOCKET the
-    // response has to go out on, and the client saw a hung-up connection
-    // instead of the 413. Leaving the socket alone means whatever the client
+    // Simply RETURNING stops the `for await`, and that is all this does.
+    // `req.destroy()` would tear the SOCKET down — the same socket the response
+    // has to go out on — so the client gets a hung-up connection instead of the
+    // 413 `onError` produced. Leaving the socket alone means whatever the client
     // still has in flight sits in the kernel's own receive buffer, bounded by
     // TCP flow control, never by this process's heap.
     const chunks: Buffer[] = []

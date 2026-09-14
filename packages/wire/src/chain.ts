@@ -739,6 +739,13 @@ export class Lunette<
     const argv = args as unknown[]
     const seed = (argv.length === 2 ? argv[0] : {}) as Bag
     const scope = (argv.length === 2 ? argv[1] : argv[0]) as Scope<Pub, T>
+    // A COPY, one level: a layer writing onto what it was handed would reach
+    // back out into the caller's own seed, which a host may well reuse for the
+    // next run. One level and no deeper — what the seed CONTAINS stays the
+    // caller's, and a seed carrying something that does not clone (a request, an
+    // abort signal) would make a deep copy either broken or a list of
+    // exceptions. Being a spread, it also means the seed is a plain container of
+    // its own data: a prototype is dropped and a getter flattened.
     return this.execute({ ...seed }, new Set(), scope)
   }
 

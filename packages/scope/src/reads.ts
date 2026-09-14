@@ -6,11 +6,10 @@
 // Hono has `c.req.queries()`, React Router has a Fetch `Request`, tRPC has no URL
 // at all. Four extractions, never one with a branch inside.
 //
-// WHAT IS SHARED IS THE ENTRY SHAPE, and that is the whole point of the slice.
-// The extraction is per host; everything DOWNSTREAM of it is not. A step
-// annotating `{ query: Query }` names no carrier, so it mounts wherever a
-// `query` entry was populated — which is the middle ground that does not exist
-// today, since the four hosts share no argument name.
+// WHAT IS SHARED IS THE ENTRY SHAPE. The extraction is per host; everything
+// DOWNSTREAM of it is not. A step annotating `{ query: Query }` names no
+// carrier, so it mounts under any of the four — wherever a `query` entry was
+// populated — which is what a step annotating `c` or `req` cannot do.
 //
 // The raw type is what the entry HOLDS before anyone validates it, and that is
 // its whole job: `ctx.query.page` is `string | string[]` and readable as it is.
@@ -29,18 +28,15 @@ export type Headers_ = Record<string, string>
 // the shape difference lives in the SCHEMA, the encoding at the wiring.
 export type Encoding = 'json' | 'form'
 
-// A CALLER WHO HAS NOT SAID WHICH ENCODING GETS `unknown`, and that is the
-// truthful answer rather than a narrowing lost. `unknown` IS the json branch, and
-// a union containing `unknown` is `unknown` — every time, by the shape of the
-// type lattice and not by anything this conditional does. Distributing or
-// tupling gives the same six answers (measured, both forms, literals and union),
-// so the plain one is written.
+// A CALLER WHO HAS NOT SAID WHICH ENCODING GETS `unknown`, and it is the type
+// lattice that says so, not this conditional: `unknown` IS the json branch, and
+// a union containing `unknown` is `unknown`. Distributing it or tupling it gives
+// the same answer — measured, both forms — so the plain one is written.
 //
-// The only way a generic caller could get something useful is for the json
-// branch to be narrower than `unknown` — a `JsonValue`, say. `unknown` is
-// deliberate: it is what the entry HOLDS before anyone validates it, and a type that
-// forces a validation is the point. Changing that is a design decision, not a
-// repair to this line.
+// A generic caller could only do better if the json branch were NARROWER than
+// `unknown` — a `JsonValue`, say. It is not, because the entry holds what it
+// holds before anyone validates it, and a type that forces the validation is
+// the point.
 export type BodyOf<E extends Encoding> = E extends 'json'
   ? unknown
   : Record<string, string | File>

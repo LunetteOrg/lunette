@@ -478,8 +478,8 @@ A guard reusable across carriers as a packaged unit was considered and closed:
 a shared prefix is already a scope VALUE kept and branched from twice — `const
 authBase = base.guard(...)`, then `authBase.step(leafA)` and
 `authBase.step(leafB)` — with no mechanism beyond what `.step`/`.guard` already
-are. The reasoning is decision 55 in [the decision
-record](https://github.com/LunetteOrg/lunette/blob/main/docs/decisions.md).
+are. The reasoning is [the scope VALUE as the reusable
+unit](https://github.com/LunetteOrg/lunette/blob/main/docs/decisions/reusable-sequence-steps-needs-no-packaging.md), in the decision record.
 
 ## Status
 

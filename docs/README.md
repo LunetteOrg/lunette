@@ -5,10 +5,11 @@ state the rules; these documents show them at full length.
 
 ## Design decisions
 
-- [decisions.md](./decisions.md) — the record of every significant
-  decision, the alternatives considered, and why they were discarded.
-  Read this before proposing an API change: your idea may already have a
-  verdict.
+- [`decisions/`](./decisions) — one file per decision: what was decided,
+  the alternatives considered, and why they were discarded. Read it before
+  proposing an API change: your idea may already have a verdict. Each file
+  declares its `area` and whether it is still `accepted`; entries cite each
+  other by link.
 
 ## Patterns
 

@@ -41,9 +41,9 @@ now keeps the HTTP kit from baking the Response assumption into the core.
 
 The kinds, and how much of the mechanism each exercises:
 
-| kind | host that hands over the invocation | deps DOWN | outcome codec (error convention §3) |
+| kind | host that hands over the invocation | deps DOWN | outcome codec (the [returned/thrown convention](../decisions/errors-returned-domain-thrown-infrastructure.md)) |
 |---|---|---|---|
-| **request** (#5) | RR7 / Express middleware (`(args, next)`) | ✅ | result→`2xx` · abort→whatever word the carrier coined (`redirect`, a 4xx status — §40) · invalid input→`422` · throw→`5xx` |
+| **request** (#5) | RR7 / Express middleware (`(args, next)`) | ✅ | result→`2xx` · abort→whatever word the carrier coined (`redirect`, a 4xx status — [the vocabulary a carrier owns](../decisions/carrier-owns-vocabulary-out-core-coins.md)) · invalid input→`422` · throw→`5xx` |
 | **message** (#10) | a bus consumer with a handshake (Kafka `eachMessage`, a queue worker) | ✅ | result→`ack` · abort→`ack + dead-letter` · throw→`nack` |
 | **fire-and-forget** | Node `EventEmitter` (`(payload) ⇒ void`) | ✅ | none — the degenerate kind |
 
@@ -131,7 +131,7 @@ chain (so the re-seed spike measured the heavier road).
 Two questions were resolved together. First, the scope tier needs **no
 third axis** on `Provided`: `guard` runs as a typed fold beside wire, not
 as a core onion return, so `Provided<All, Pub>` stays two-axis and the
-request-time Response channel reserved in decision 3 is never spent here.
+request-time Response channel reserved by [the opaque token `next` returns](../decisions/next-returns-opaque-token-mandatory.md) is never spent here.
 
 Second — and this REVERSED an earlier "everything is a dep, scope is a
 namespace inside `deps`" sketch — the handler settled on **two arguments,
@@ -179,7 +179,7 @@ the framework middleware registered once: it seeds the memoized build from
 the host context and stashes the built app there for the per-handler
 functions to read back. The handler is an abstract **scope** — it
 declares its input with ONE input verb, taken from its carrier
-(`.params(schema)` on HTTP, `.input(schema)` on tRPC — §40), and each guard/leaf is
+(`.params(schema)` on HTTP, `.input(schema)` on tRPC — [the vocabulary a carrier owns](../decisions/carrier-owns-vocabulary-out-core-coins.md)), and each guard/leaf is
 `(deps, ctx)`. The pack reconciles the handler's `deps` against the chain's
 `Pub` and its params against the route, at compile time, at the adapter.
 
@@ -255,7 +255,7 @@ Sparred out and then verified against the prototype (now `@lntt/scope` + `@lntt/
 four real hosts). These are the verdicts the real packages implement.
 
 - **ONE input contract, named by its carrier** (`.params` on HTTP, `.input` on
-  tRPC — the verb moved out of the core in §40, so one name no longer means
+  tRPC — the verb moved out of the core when [the carrier took over the vocabulary](../decisions/carrier-owns-vocabulary-out-core-coins.md), so one name no longer means
   route params on one host and the whole payload on another). A scope
   declares its input with a single Standard Schema
   ([standardschema.dev](https://standardschema.dev) v1 — zod, Valibot and
@@ -265,8 +265,8 @@ four real hosts). These are the verdicts the real packages implement.
   every guard and the leaf read as `ctx.params`; (b) the native validator each
   host registers (Hono's `sValidator`, tRPC's `.input`, our own RR7/Express/bus
   runtime validation); (c) runtime coercion + validation → a RETURNED **422
-  domain abort** on failure, never a throw (a bad input is a domain outcome,
-  decision 14). `.input` is reachable only as the FIRST call and fixes the
+  domain abort** on failure, never a throw (a bad input is a domain outcome, by
+  [the returned/thrown convention](../decisions/errors-returned-domain-thrown-infrastructure.md)). `.input` is reachable only as the FIRST call and fixes the
   schema once — "one input contract per scope", enforced at the type level.
   This REPLACES the earlier "params typed by per-guard annotation": one schema
   is the single source of truth, and it is the same object the native
@@ -290,7 +290,7 @@ four real hosts). These are the verdicts the real packages implement.
   `DepGuard`), and route **params** against the host's own route type. A
   missing dep or a wrong param name is a compile error AT the adapter, not at
   runtime — the type contract (principle 1) extended to the scope tier,
-  mirroring wire's Seed-vs-Ctx mount check (decisions 7/8). Abstract handlers
+  mirroring wire's Seed-vs-Ctx mount check ([two-sided composition](../decisions/two-sided-composition-seed.md) and [what crosses a mount](../decisions/mount-only-public-surface-crosses-lexical.md)). Abstract handlers
   are testable with flat fakes, no app (principle 4).
 - **The seeding cadences collapse to two; the request window nests the
   transaction window.** `mount` does first-request build-once EVERYWHERE
@@ -299,7 +299,7 @@ four real hosts). These are the verdicts the real packages implement.
   isolate (Node may warm it eagerly at boot — opt-in, not a separate cadence).
   The second tier is per-request: the scope window (the guard/leaf fold). The
   request window (outer) and a transaction window (inner) compose only through
-  the error convention. This is **decision 33**.
+  the error convention. This is [the collapse to two seeding cadences](../decisions/three-seeding-cadences-collapse-two-request.md).
 - **Per-handler model EVERYWHERE — no central registrar.** Each host has ONE
   function that consumes a scope, used with the host's NATIVE routing. This
   is what lets DIFFERENT CHAINS coexist in one app: each pack's `mount` stashes
@@ -352,7 +352,7 @@ four real hosts). These are the verdicts the real packages implement.
   `@standard-schema/spec` type-dep). `@lntt/integration` is ONE package with
   tree-shakable SUBPATHS — `@lntt/integration/hono`, `/express`,
   `/react-router`, `/trpc` — with optional peer deps per framework. The old
-  `@lntt/http` pipe-based pattern (decision 11) is retired/superseded. The
+  `@lntt/http` pipe-based pattern ([routes as data, engines swappable](../decisions/http-routes-data-engines-swappable-native.md)) is retired/superseded. The
   bus/listener is out of scope here — it goes to `@lntt/listener` (issue #10).
   Naming note: the Hono pack's `wire` method name is flagged for a later rename
   (it is ambiguous with the library name `@lntt/wire`) — an open naming choice,

@@ -91,7 +91,8 @@ export const reactRouter = <App extends object>(deps: App) => {
 
 // ── the read extensions ──────────────────────────────────────────────────────
 // PLAIN STEPS, not verbs: these ADD a ctx entry, and a verb is what may REPLACE
-// one (`@lntt/scope/guard`). The reasoning is written out in the Hono carrier;
+// one (`@lntt/scope/guard`). The line falls where the core's own gate already
+// is, so it is not a matter of taste;
 // these two are the SAME FAMILY — both read a Fetch `Request` — so what differs
 // is only where the request is found, and the readers themselves are shared.
 export type {

@@ -95,17 +95,13 @@ const toNext =
 // validated it, and `validate('input', schema, onError)` is how a scope says
 // what it reads of the result.
 //
-// THE URL IS RIGHT THERE, and that refusal is ADVISORY. A tRPC transport does
-// have a URL, and a step could parse one by hand off whatever the app put on its
-// context. What is declined is a typed convenience for a case that does not
-// exist in tRPC's own model: a procedure is addressed by its path in the router,
-// not by a query string, so a `query` entry would invite a shape the protocol
-// does not carry. An app that really has one puts it on its context and reads it
-// there — and `validate('input', schema, onError)` is the door for everything
-// the client actually sends.
-//
-// Conflating the two would be false safety: the first is a fact about the
-// transport, the second is a judgement about a design.
+// THERE IS NO `query` HERE EITHER, and this one is a judgement rather than a
+// fact: a tRPC transport does have a URL, and a step can parse one by hand off
+// whatever the app put on its context. What is not offered is a TYPED `query`
+// entry, because a procedure is addressed by its path in the router and not by a
+// query string — an entry would invite a shape the protocol does not carry.
+// Everything the client actually sends arrives as `input`, and
+// `validate('input', schema, onError)` is the door to it.
 
 // ── gate: the scope was written for THIS carrier ─────────────────────────────
 // `procedure` above has this for free — it names the args in a real parameter

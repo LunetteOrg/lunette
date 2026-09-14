@@ -6,15 +6,15 @@ body:
   - type: markdown
     attributes:
       value: |
-        The design record is `docs/decisions.md` — 25 numbered decisions,
+        The design record is `docs/decisions/` — one file per decision,
         each with the alternatives already considered and why they were
         discarded. Engage the recorded reasoning; do not restart from zero.
   - type: input
     id: decision
     attributes:
       label: Which decision
-      description: Number and title from docs/decisions.md (e.g. "14. Errors: returned = domain, thrown = infrastructure").
-      placeholder: "N. <title>"
+      description: The file name and title from docs/decisions/ (e.g. "errors-returned-domain-thrown-infrastructure.md — Errors: returned = domain, thrown = infrastructure").
+      placeholder: "<slug>.md — <title>"
     validations:
       required: true
   - type: textarea
