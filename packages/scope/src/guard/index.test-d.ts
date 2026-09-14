@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { describe, expectTypeOf, it } from 'vitest'
-import { scope } from '../index.ts'
-import { fail, guards, type StandardSchemaV1 } from './index.ts'
-import type { BodyOf } from '../reads.ts'
+import { scope } from '@lntt/scope'
+import { fail, guards, type StandardSchemaV1 } from '@lntt/scope/guard'
+import type { BodyOf } from '@lntt/scope/hono'
 
 // THE TYPE CONTRACT for the three verbs. NOTHING HERE RUNS: a `*.test-d.ts` is
 // typechecked and never executed, and the refusals sit under `@ts-expect-error`.

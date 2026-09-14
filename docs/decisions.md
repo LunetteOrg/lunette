@@ -545,12 +545,12 @@ wrong even if runtime tests pass.
 **Decision.** Scoped packages under the `lntt` org (`lunette` was taken
 unscoped on npm). The core is `@lntt/wire` — descriptive, with DI
 pedigree (wiring, autowire, google/wire); evocative single-word
-candidates were explored at length and set aside. Framework dialects ship
-as subpaths of `@lntt/http` (`./hono`, `./express`) with **optional**
-peer dependencies — importing the agnostic entry pulls in no framework.
+candidates were explored at length and set aside. Framework dialects ship as
+subpaths with **optional** peer dependencies — importing the agnostic entry
+pulls in no framework — carried by `@lntt/scope`, which owns the host mounts.
 Test utilities are a subpath of the core (`@lntt/wire/testing`), not a
-package. `exports` point at TypeScript sources for now; the build/dist
-question is deliberately deferred to publication.
+package. `exports` resolve to the build, with the commented sources shipped
+beside it and reachable through a declared condition (decision 56).
 
 ### 25. Events and CQRS need no new core concepts
 
@@ -2383,9 +2383,10 @@ the only part that knew about a host now lives in the caller. So a carrier-free
 extension on its own subpath, added with `.extend()`.
 
 ONE extension rather than two, with the **Standard Schema interface INLINED**.
-This package ships `.ts` sources with no build step, so an import a consumer has
-not installed fails in THEIR build — the bug fixed in #86 by adding
-`@types/express` to the peers. The spec is designed to be implemented
+A type import of a package the consumer has not installed fails in THEIR
+program — declarations are read by their compiler, where a missing module is an
+error we cannot catch here; the bug fixed in #86 by adding `@types/express` to
+the peers. The spec is designed to be implemented
 structurally and its version rides the property name (`~standard: { version: 1 }`),
 so drift is visible. It showed up immediately: the first copy added a
 `value?: undefined` to the failure branch and no real schema fitted any more. A
@@ -3160,3 +3161,177 @@ the builder already offers.
 was the working record, and is written here because that document is retired
 (decision 54) and this is the claim it held that lived nowhere else.
 
+
+---
+
+## Publication
+
+### 56. The build ships, the sources ship beside it, and one condition reaches them
+
+**Decision.** Each package builds to ESM JavaScript with declarations, and
+`exports` resolves `types` to the built `.d.ts` and both `import` and `require`
+to the built `.js` — per subpath, so `@lntt/scope` keeps its six and `@lntt/wire`
+its two. The frameworks stay optional peers.
+
+Both packages declare `sideEffects: false`, which is a promise the code keeps
+rather than a hint: nothing in the emitted graph does work at import time — the
+one global touch, a registered marker symbol, is idempotent and matters only to
+the module holding it. A module that ever needed an effect merely by being
+imported would be one a bundler is then allowed to drop, and the breakage would
+show up in a consumer's production build alone. The granularity a consumer
+actually gets is the SUBPATH: importing one host reaches none of the others,
+which `exports` delivers on its own.
+
+`verify:tarball` puts a FLOOR under that promise and not a proof: it reads every
+shipped module — the build and the sources beside it — and refuses a top-level
+statement that stands there for its effect, binding nothing. What it does not
+read is the INSIDE of a declaration: `const x = install()` passes, and so does a
+class whose static block runs anything. Deciding that would mean annotating
+every legitimate call this package already makes at module scope — three of them
+in the host mounts — for a hazard the floor catches in the shape it actually
+arrives in.
+
+A value `enum` and a value `namespace` are refused by that floor, and the
+refusal is kept: each emits an invoked function expression, the one construct
+that turns a declaration in the source into a statement in the build. Nothing
+here uses one, and introducing one is a decision rather than an edit. The
+ambient forms pass, `declare enum` included — they have no runtime to speak of.
+This is not an erasability rule: the sources keep a parameter property in the
+chain, which is why the source path is a bundler's and not a stripping loader's.
+
+ONE format, and `require` names the same file the `import` condition names: the
+runtimes this package declares load ESM from `require`, so a CJS consumer is
+refused by nothing but a missing condition, and what a missing one produces is
+`ERR_PACKAGE_PATH_NOT_EXPORTED` — an entry point that exists, reported as
+absent. The constraint that keeps this true is ours: a top-level await anywhere
+in the emitted graph makes `require` throw while `import` still passes, so
+`verify:tarball` loads every subpath BOTH ways.
+
+The sources ship too, through three mechanisms that only work together:
+`files: ["dist", "src", …]` puts the commented `.ts` inside `node_modules`;
+`declarationMap` + `sourceMap` make "go to definition" land on them rather than
+on a declaration; and a declared condition, `"@lntt/source"`, resolves to them
+for whoever asks. Nobody else meets it — `types`/`import` are what a consumer
+gets by default. Suites and fixtures are excluded from the tarball: a test is
+never the destination of a "go to definition".
+
+This workspace declares that condition itself, in two places — `customConditions`
+in `tsconfig.base.json` and `resolve.conditions` in `vitest.shared.ts` — so
+every package here imports `@lntt/*` BY NAME and reaches the sources. An edit
+answers without a build in between, and the condition published for others is
+exercised daily rather than merely declared. `LNTT_SOURCE=off` and the
+`tsconfig.verify.json` files drop it: the same suites and the same type contract,
+resolved the way a consumer resolves them, into `dist`.
+
+**Alternatives.** *Sources only*, with `exports` pointing at `.ts`. Measured
+against a scratch consumer outside the workspace, on TypeScript 7 with
+`module: nodenext` and nothing else: it does not compile. The sources import
+each other with explicit `.ts` specifiers, so every one of them is a `TS5097`
+in the consumer's program until they set `allowImportingTsExtensions`, and
+under node16/nodenext that flag then demands one of `noEmit`,
+`emitDeclarationOnly` or `rewriteRelativeImportExtensions` — three decisions
+about their build, to install a library.
+
+Set those, and it typechecks: the gates fire with their real messages and the
+emit is theirs alone. Then it does not RUN. From a real installation Node
+refuses outright — `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`, naming a file
+inside our package — because stripping types under `node_modules` is something
+it declines to do at any flag, and a `private constructor(private readonly …)`
+in the chain is syntax no stripping loader can erase anyway. So the source path
+is a BUNDLER's path, never a runtime's: a consumer on plain Node cannot use it,
+and one who tried would learn that at first boot, from a path they do not own.
+And the sources stand on ambient types (`Request`, `File`, `URLSearchParams`),
+so a narrowed `lib` is one more thing their config has to get right for our code
+rather than for theirs.
+
+What building does NOT remove is the half of the contract that is about
+CHECKING rather than compiling: `strictFunctionTypes` carries the ctx lock,
+being contravariance, so turning it off removes the refusal from `dist` exactly
+as from the sources. That prerequisite is stated in the README and belongs to
+every consumer.
+
+*`dist` only*, the shape hono and react-router ship. It costs the comments: in
+this library they carry the constraints, and a reader who follows a type into a
+`.d.ts` loses every one of them.
+
+*A second build in CJS*, so `require` reaches a format of its own. It buys
+nothing the one file does not already give on these runtimes, and it costs the
+hazard: two builds of one module are two copies in one process, and this library
+decides things by IDENTITY — a marker symbol, an `instanceof` — so the copies
+disagree silently rather than loudly. One file behind both conditions has one
+identity by construction.
+
+**Why.** The shape of `exports` is the package's public surface as much as the
+types are, and it is the one thing that cannot be corrected without a breaking
+change. Building moves the risk to where it is testable: declaration emit must
+not widen a conditional, because our gates ARE branded conditionals and a
+relaxed one turns a compile error into a silence in someone else's editor. That
+is what `pnpm verify` exists to catch — build, then the `*.test-d.ts` contract
+recompiled against the built declarations, every suite re-run through `exports`
+into `dist` — they reach `@lntt/*` by NAME, so the built JavaScript is what
+executes — and the tarballs packed, unpacked, imported entry point by entry
+point and compiled in a consumer's own program. That last step is a check, not
+a listing: a `files` list that drifted, a declaration map dangling over a source
+that did not ship, an ambient type the package leans on without declaring it —
+all of them pack successfully, and would reach the registry unnoticed.
+
+Prior art, read off the packages this repo installs: zod resolves `types`/`import`
+to built files and carries both `src` in `files` and a `"@zod/source"` condition;
+`@trpc/server` ships `files: ["dist", "src", …]`. None of them points a default
+export at a `.ts`.
+
+### 57. One compiler for the gates, one floor for the consumer, and both are run
+
+**Decision.** The gates run on TypeScript — the latest release, pinned by a pnpm
+`catalog:`, so no package pins its own copy and every file in the workspace is
+checked by the one the gate runs — and on Node `>= 24`, the current LTS. That is
+what CI runs, on one version per axis: no matrix, no support window.
+
+What a CONSUMER sees is a separate number and a lower one. `engines.node` is
+`>= 24`; `peerDependencies.typescript` is `>= 5.9`, the oldest compiler that
+reads the emitted declarations. Both floors are RUN: the pinned compiler over
+the workspace, the floor compiler over the PUBLISHED declarations — every
+subpath of both packages, `skipLibCheck` off — in `verify:tarball`, where it is
+installed under an alias so the pinned one keeps the bare name. A floor nothing
+compiles is a claim nobody checked, and `peerDependencies` is read as
+"required", not as "verified": a floor above what the declarations need turns
+every consumer on an older compiler away from something that works for them.
+
+Resolving the SOURCES through the `@lntt/source` condition asks more of a
+compiler than reading the declarations does. The sources are checked on the
+pinned one alone, and each README says so where it documents the condition.
+
+Neither range is capped. A floor is a promise and is verified; an open top is an
+invitation, and a break on a compiler or a runtime newer than these is a bug
+report. Raising either floor is a MAJOR, with no case-by-case judgement.
+
+Consequences that follow from decision 56 rather than from taste: the packages
+are ESM-only, and `rewriteRelativeImportExtensions` is what lets the sources
+keep their explicit `.ts` import extensions while the emitted JavaScript carries
+`.js`.
+
+**Alternatives.** *A range wider than anything run* — `>= 22` on Node, several
+TS majors, none of them exercised. Rejected on the rule that makes the rest
+cheap: we declare only what is verified, or a floor is a claim nobody checked.
+*The consumer's floor at the pinned compiler* — `>= 7` in `peerDependencies`
+too, one number for both roles. Simpler to state, and wrong in the field the
+package manager reads: the declarations compile on 5.9, so the only thing that
+floor produces is an unmet-peer warning telling a consumer to upgrade for
+something that already works. *Staying on TypeScript 5.x* —
+measured and unnecessary: 7.0.2 typechecks wire, scope, all six examples and the
+research prototypes with zero errors, `@ts-expect-error` directives included
+(one that stopped applying would itself be an error), `vitest --typecheck` runs
+on it, and its declaration emit carries the same types as 5.9.3's — byte for
+byte across wire, and in scope differing only in which quote character a string
+literal is printed with.
+
+**Why.** Nothing is published yet, so this is the one moment when raising a
+floor costs nobody a major. The compiler tracks the LATEST because it IS the
+contract — the gates are conditional types, only as good as the checker reading
+them — while the runtime tracks LTS, because a floor above it would refuse
+consumers for nothing. The compiler a CONSUMER holds follows the runtime's
+reasoning rather than the gate's: it does not read our conditional types, it
+reads what they emitted. Supporting three compilers would mean three CI runs
+and three ways a gate could behave differently, for consumers who do not exist.
+Dedicated builds for older TypeScript or Node can be added if a real case
+appears; until then, one number per axis is the whole policy.

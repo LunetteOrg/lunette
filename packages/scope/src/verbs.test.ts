@@ -7,7 +7,7 @@ import {
   type Scope,
   type State,
   type Surface,
-} from './index.ts'
+} from '@lntt/scope'
 
 // AN EXTENSION enriches the BUILDER, and only the builder. That is the whole
 // split, and it is visible in the runtime: `.step` appends to the fold,

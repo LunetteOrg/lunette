@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { bind, type With } from './index.ts'
+import { bind, type With } from '@lntt/wire'
 
 type OtpRepo = { consume: (code: string) => Promise<boolean> }
 

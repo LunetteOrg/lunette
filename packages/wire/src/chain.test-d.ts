@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { lunette } from './index.ts'
+import { lunette } from '@lntt/wire'
 
 type Env = { DATABASE_URL: string }
 

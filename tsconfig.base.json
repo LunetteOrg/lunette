@@ -25,6 +25,11 @@
     // steps stand on, `Request` and `File` by name and the rest through what
     // `request.formData()` hands back. A package targeting another runtime
     // overrides `types` in its own tsconfig.
-    "types": ["node"]
+    "types": ["node"],
+    // `@lntt/*` resolved BY NAME reaches the SOURCES, in this workspace only:
+    // the packages' own `exports` list this condition first, so an edit
+    // answers without a build in between. A `tsconfig.verify.json` drops it to
+    // reach `dist`, which is what a consumer gets.
+    "customConditions": ["@lntt/source"]
   }
 }

@@ -2,13 +2,22 @@ import http from 'node:http'
 import { describe, expect, it } from 'vitest'
 import expressLib from 'express'
 import type { Request, Response } from 'express'
-import request from 'supertest'
 import { Hono } from 'hono'
-import { scope } from './index.ts'
-import type { Cookies, Query, Headers_ } from './reads.ts'
-import * as ex from './express/index.ts'
-import * as ho from './hono/index.ts'
-import * as rr from './react-router/index.ts'
+import { scope } from '@lntt/scope'
+import type {
+  Cookies,
+  Query,
+  HeaderEntries as Headers_,
+} from '@lntt/scope/hono'
+import * as ex from '@lntt/scope/express'
+import * as ho from '@lntt/scope/hono'
+import * as rr from '@lntt/scope/react-router'
+import { served } from './fixture/served.ts'
+
+// This suite takes a LISTENING server, where the mount suite injects: what it
+// reads is what arrived over the wire — a `content-length` that disagrees with
+// the bytes, a chunked body that has none, an encoding the client chose — and
+// none of that exists in a request handed straight to the handler.
 
 // WHAT THE READ EXTENSIONS ARE FOR, in the half that has to run: the extraction
 // is per host, and everything DOWNSTREAM of it is not. The step below is written
@@ -57,7 +66,7 @@ describe('one step, written once, reads the same entries on every host', () => {
       ),
     )
 
-    const res = await request(app)
+    const res = await served(app)
       .get('/?page=2&tag=a&tag=b')
       .set('cookie', 'session=abc')
       .set('x-agent', 'probe')
@@ -248,7 +257,7 @@ describe('Express `body`: the two worlds a Node request can be in', () => {
     const app = expressLib()
     route(app)
 
-    const res = await request(app)
+    const res = await served(app)
       .post('/')
       .set('content-type', 'application/json')
       .send('{"a":1}')
@@ -260,7 +269,7 @@ describe('Express `body`: the two worlds a Node request can be in', () => {
     app.use(expressLib.json())
     route(app)
 
-    const res = await request(app).post('/').send({ a: 1 })
+    const res = await served(app).post('/').send({ a: 1 })
     expect(res.body).toEqual({ got: { a: 1 } })
   })
 
@@ -268,7 +277,7 @@ describe('Express `body`: the two worlds a Node request can be in', () => {
     const app = expressLib()
     route(app)
 
-    const res = await request(app)
+    const res = await served(app)
       .post('/')
       .set('content-type', 'application/json')
       .send('not json')
@@ -345,7 +354,7 @@ describe('Express `body`: a parsed body does not say what parsed it', () => {
       ),
     )
 
-    const res = await request(app).post('/').send({ a: 1 })
+    const res = await served(app).post('/').send({ a: 1 })
     expect(res.status).toBe(415)
     expect(res.body.issues[0].message).toContain('not form')
   })
@@ -366,7 +375,7 @@ describe('Express `body`: a parsed body does not say what parsed it', () => {
       ),
     )
 
-    const res = await request(app).post('/').type('form').send({ a: '1' })
+    const res = await served(app).post('/').type('form').send({ a: '1' })
     expect(res.body).toEqual({ got: { a: '1' } })
   })
 })
@@ -400,7 +409,7 @@ describe('Express `body`: what a mounted parser changes', () => {
   }
 
   it("an INVALID payload is Express's to report when its parser ran first", async () => {
-    const res = await request(routed(true))
+    const res = await served(routed(true))
       .post('/')
       .set('content-type', 'application/json')
       .send('nope')
@@ -410,7 +419,7 @@ describe('Express `body`: what a mounted parser changes', () => {
   })
 
   it("and is this `onError`'s when the stream was ours", async () => {
-    const res = await request(routed(false))
+    const res = await served(routed(false))
       .post('/')
       .set('content-type', 'application/json')
       .send('nope')
@@ -420,13 +429,13 @@ describe('Express `body`: what a mounted parser changes', () => {
   })
 
   it('an EMPTY body reaches the leaf as `{}` with a parser, and stops without one', async () => {
-    const withParser = await request(routed(true))
+    const withParser = await served(routed(true))
       .post('/')
       .set('content-type', 'application/json')
       .send('')
     expect(withParser.body).toEqual({ from: 'leaf', body: {} })
 
-    const without = await request(routed(false))
+    const without = await served(routed(false))
       .post('/')
       .set('content-type', 'application/json')
       .send('')
@@ -464,7 +473,7 @@ describe('Express `body`: what a pre-parsed body cannot carry', () => {
       ;(req as unknown as { body: unknown }).body = { title: 'only the fields' }
     })
 
-    const res = await request(app)
+    const res = await served(app)
       .post('/')
       .set('content-type', 'multipart/form-data; boundary=x')
       .send('--x--')
@@ -479,7 +488,7 @@ describe('Express `body`: what a pre-parsed body cannot carry', () => {
       req.headers['content-type'] = ''
     })
 
-    const res = await request(app)
+    const res = await served(app)
       .post('/')
       .set('content-type', 'text/plain')
       .send('x')
@@ -554,7 +563,7 @@ describe('Express `body`: a pre-parsed body may not be parsed at all', () => {
       ),
     )
 
-    const res = await request(app)
+    const res = await served(app)
       .post('/')
       .set('content-type', 'application/json')
       .send('{"a":1}')
@@ -577,7 +586,7 @@ describe('Express `body`: a pre-parsed body may not be parsed at all', () => {
       ),
     )
 
-    const res = await request(app)
+    const res = await served(app)
       .post('/')
       .set('content-type', 'application/json')
       .send('nope')
@@ -643,7 +652,7 @@ describe('Express `body`: a stream already read says so', () => {
         .json({ message: String((err as Error).message).slice(0, 40) }),
     )
 
-    const res = await request(app)
+    const res = await served(app)
       .post('/')
       .set('content-type', 'application/json')
       .send('{"a":1}')
@@ -671,7 +680,7 @@ describe('`body`: a size limit', () => {
     )
 
     const oversized = JSON.stringify({ a: 'x'.repeat(200_000) })
-    const res = await request(app)
+    const res = await served(app)
       .post('/')
       .set('content-type', 'application/json')
       .send(oversized)
@@ -699,13 +708,13 @@ describe('`body`: a size limit', () => {
       ),
     )
 
-    const tooBig = await request(app)
+    const tooBig = await served(app)
       .post('/')
       .set('content-type', 'application/json')
       .send({ a: 1, b: 2 })
     expect(tooBig.status).toBe(413)
 
-    const fits = await request(app)
+    const fits = await served(app)
       .post('/')
       .set('content-type', 'application/json')
       .send({ a: 1 })

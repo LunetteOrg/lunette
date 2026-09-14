@@ -13,7 +13,7 @@
 //   transaction.
 
 import { describe, expect, it } from 'vitest'
-import { lunette } from '../../src/index.ts'
+import { lunette } from '@lntt/wire'
 
 // ── fake infrastructure ─────────────────────────────────────────────────
 

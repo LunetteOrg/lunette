@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lunette } from '../../src/index.ts'
+import { lunette } from '@lntt/wire'
 
 describe('provide/expose teardown via the destroy argument', () => {
   it('expose(create, destroy): value is public and destroy runs on dispose', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { scope, type Next } from './index.ts'
+import { scope, type Next } from '@lntt/scope'
 
 // THE FOLD, on a scope with NO CARRIER — which is the half `shapes.test.ts`
 // cannot cover, since every one of its cases needs words to say. A bare

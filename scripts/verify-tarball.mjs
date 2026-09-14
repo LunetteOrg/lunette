@@ -1,0 +1,552 @@
+// What a consumer actually receives, checked on the tarball rather than on the
+// working tree: pack, unpack beside a scratch consumer, and put the published
+// package through the things a `dist` sitting in the repo can fake.
+//
+//   1. every target `exports` names EXISTS in the tarball — a `files` list that
+//      drifted publishes a package whose entry points resolve to nothing, and
+//      `pnpm pack` reports that as a success;
+//   2. every subpath RESOLVES AND LOADS by its specifier — both `import` and
+//      `require`, since one file answers to both conditions — from a process
+//      whose cwd is the consumer, which is the only way the `exports` map itself
+//      is exercised: importing the file path behind it passes with a map Node
+//      refuses (a target missing its `./` prefix, say);
+//   3. no suite rode along, compiled or otherwise;
+//   4. the LICENSE is in the tarball and is the one this repo grants;
+//   5. the DECLARATIONS typecheck in a consumer's program, with `skipLibCheck`
+//      OFF — the gates here run with it on, which hides everything that is
+//      wrong INSIDE a `.d.ts`: a member that vanished from an emitted file, or
+//      an ambient name the package uses and does not declare. Three consumers,
+//      because two things have to be found somewhere: the web globals the read
+//      steps stand on (the default `lib` carries them, `@types/node` is the
+//      other way), and nothing of Node's beyond them.
+//   6. the declarations typecheck on the OLDEST compiler the packages declare a
+//      consumer may hold — `peerDependencies.typescript`. Everything else here
+//      runs on the compiler this repo pins, which is the newest one: a floor
+//      nothing compiles is a claim nobody checked;
+//   7. no top-level statement stands for its effect alone in a shipped module,
+//      wherever the manifest says `sideEffects: false` — a floor under a claim
+//      a bundler acts on, in someone else's production build. A floor and not a
+//      proof: what a declaration does INSIDE itself is not read here;
+//   8. the build on disk is no older than the sources it comes from — `pnpm
+//      pack` compiles nothing, so this step grades whatever is there, and a
+//      stale one would pass for a package nobody built.
+//
+// What is NOT checked here, and why: the manifest's dependency ranges. `pnpm
+// pack` rewrites `workspace:` and `catalog:` before packing and aborts when it
+// cannot, so a published manifest carrying either is not reachable from this
+// path. The scratch consumer also installs nothing, so a package that grows a
+// real runtime `dependencies` will fail here until this script installs it.
+
+import { execFileSync } from 'node:child_process'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
+import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+// The compiler this repo pins, reached through the package that has it: the
+// scratch consumer installs nothing of its own.
+const tsc = join(
+  dirname(
+    execFileSync(
+      process.execPath,
+      [
+        '-e',
+        "const {createRequire}=require('node:module');process.stdout.write(createRequire(process.cwd()+'/').resolve('typescript'))",
+      ],
+      { cwd: join(root, 'packages', 'wire') },
+    ).toString(),
+  ),
+  'tsc.js',
+)
+// The compiler at the declared floor, installed under an alias so the pinned one
+// keeps the bare name. Its version is the floor `peerDependencies.typescript`
+// names: the two move together, and a missing alias FAILS rather than skips —
+// a check that quietly does not run is the floor going unverified again.
+const floorTsc = join(root, 'node_modules', 'typescript-5', 'lib', 'tsc.js')
+// The same install, used as a parser: what the package ships is read as a syntax
+// tree, so a line that merely LOOKS like a call cannot fail a check nobody could
+// satisfy.
+const ts = createRequire(import.meta.url)(
+  join(root, 'node_modules', 'typescript-5', 'lib', 'typescript.js'),
+)
+// What may stand at the top level of a shipped module. A declaration binds a
+// name, so dropping the module drops what it bound; a statement that is not one
+// stands there for its effect alone. The type-only kinds are here because the
+// sources ship beside the build and are read by the same pass, and anything
+// AMBIENT passes wherever it appears — it has no runtime at all.
+//
+// A value `enum` or `namespace` is refused, and deliberately: each emits an
+// invoked function expression, the one shape where a declaration in the source
+// becomes a statement in the build. Nothing here uses one, so the alternative
+// is teaching this pass an idiom for a construct nobody writes.
+const DECLARATIONS = new Set([
+  ts.SyntaxKind.ImportDeclaration,
+  ts.SyntaxKind.ExportDeclaration,
+  ts.SyntaxKind.ExportAssignment,
+  ts.SyntaxKind.FunctionDeclaration,
+  ts.SyntaxKind.ClassDeclaration,
+  ts.SyntaxKind.VariableStatement,
+  ts.SyntaxKind.InterfaceDeclaration,
+  ts.SyntaxKind.TypeAliasDeclaration,
+  ts.SyntaxKind.ModuleDeclaration,
+  ts.SyntaxKind.EmptyStatement,
+])
+// Everything the package ships that is code: the build, and the commented
+// sources beside it, which a consumer resolving `@lntt/source` compiles instead.
+const shipped = (dir) =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const here = join(dir, entry.name)
+    if (entry.isDirectory()) return shipped(here)
+    return /\.[cm]?[jt]sx?$/.test(entry.name) && !entry.name.endsWith('.d.ts')
+      ? [here]
+      : []
+  })
+// Every declaration in a build, wherever the emit put it.
+const declarations = (dir) =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const here = join(dir, entry.name)
+    if (entry.isDirectory()) return declarations(here)
+    return entry.name.endsWith('.d.ts') ? [here] : []
+  })
+// An ambient declaration binds a name for the compiler alone.
+const ambient = (statement) =>
+  statement.modifiers?.some(
+    (modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword,
+  ) ?? false
+const license = readFileSync(join(root, 'LICENSE'), 'utf8')
+const work = mkdtempSync(join(tmpdir(), 'lntt-tarball-'))
+
+let failures = 0
+const check = (ok, what) => {
+  console.log(`${ok ? '  ok  ' : ' FAIL '} ${what}`)
+  if (!ok) failures++
+}
+
+// Where a published package's subpath actually points, per condition. Only the
+// object form is a shape this repo publishes; anything else is a manifest to
+// look at rather than to check.
+const targetsOf = (exports_, name) => {
+  if (!exports_ || typeof exports_ !== 'object') {
+    throw new Error(`${name}: "exports" is missing or is not a map of subpaths`)
+  }
+  return Object.entries(exports_).map(([sub, conditions]) => {
+    // A subpath may also be a bare path — `"./package.json": "./package.json"`,
+    // which tools read to learn a dependency's version.
+    if (typeof conditions === 'string')
+      return { sub, conditions: { default: conditions }, importable: false }
+    if (typeof conditions !== 'object' || conditions === null) {
+      throw new Error(`${name}: subpath "${sub}" is not a condition map`)
+    }
+    return { sub, conditions, importable: true }
+  })
+}
+
+try {
+  const consumer = join(work, 'consumer')
+  mkdirSync(consumer, { recursive: true })
+  writeFileSync(
+    join(consumer, 'package.json'),
+    JSON.stringify({ type: 'module', dependencies: {} }),
+  )
+
+  const packages = readdirSync(join(root, 'packages')).filter((name) => {
+    const manifest = join(root, 'packages', name, 'package.json')
+    return (
+      existsSync(manifest) &&
+      JSON.parse(readFileSync(manifest, 'utf8')).private !== true
+    )
+  })
+  check(
+    packages.length > 0,
+    `there are publishable packages to check (${packages.join(', ') || 'none'})`,
+  )
+
+  for (const name of packages) {
+    console.log(`\n@lntt/${name}`)
+    // `pnpm pack` reads whatever `dist` is on disk and never builds one, so a
+    // run reached without a build grades a tree nobody compiled — a stale
+    // `dist`, or one another process is writing. The timestamps say which.
+    const here = join(root, 'packages', name)
+    const newest = (files) =>
+      files.reduce((at, file) => Math.max(at, statSync(file).mtimeMs), 0)
+    // Only what the build COMPILES counts: a suite is newer than `dist` all the
+    // time and says nothing about whether the build is current.
+    const compiled = shipped(join(here, 'src')).filter(
+      (file) =>
+        !/\.(test|test-d|bench)\.tsx?$/.test(file) &&
+        !file.includes('/fixture/'),
+    )
+    const built = existsSync(join(here, 'dist'))
+    check(
+      built && newest(shipped(join(here, 'dist'))) >= newest(compiled),
+      built
+        ? 'the build is at least as new as the sources it comes from'
+        : 'there is a build to check (run `pnpm build`)',
+    )
+
+    const into = mkdtempSync(join(work, `pack-${name}-`))
+
+    // The tarball is read off the directory rather than off stdout: pnpm writes
+    // diagnostics there too, and the last line is not reliably the path.
+    execFileSync('pnpm', ['pack', '--pack-destination', into], {
+      cwd: join(root, 'packages', name),
+    })
+    const tarballs = readdirSync(into).filter((f) => f.endsWith('.tgz'))
+    check(
+      tarballs.length === 1,
+      `pack produced one tarball (${tarballs.length})`,
+    )
+    const tarball = join(into, tarballs[0])
+
+    const out = join(work, `unpacked-${name}`)
+    mkdirSync(out, { recursive: true })
+    execFileSync('tar', ['xzf', tarball, '-C', out, '--strip-components', '1'])
+
+    const manifest = JSON.parse(readFileSync(join(out, 'package.json'), 'utf8'))
+    const listed = execFileSync('tar', ['tzf', tarball]).toString().split('\n')
+
+    for (const { sub, conditions } of targetsOf(
+      manifest.exports,
+      manifest.name,
+    )) {
+      // One file may answer to more than one condition, and it is the FILE that
+      // either shipped or did not.
+      for (const target of new Set(Object.values(conditions))) {
+        check(
+          existsSync(join(out, target)),
+          `${sub} → ${target} is in the tarball`,
+        )
+      }
+    }
+
+    check(
+      listed.some((f) => /(^|\/)LICENSE$/.test(f)) &&
+        readFileSync(join(out, 'LICENSE'), 'utf8') === license,
+      "the LICENSE in the tarball is this repository's",
+    )
+
+    const suites = listed.filter((f) =>
+      /\.(test|test-d|bench)\.(ts|js|d\.ts)$/.test(f),
+    )
+    check(
+      suites.length === 0,
+      `no suites in the tarball${suites.length ? ` (${suites[0]}…)` : ''}`,
+    )
+
+    // `exclude` in the build config keeps a file from being a ROOT, not from
+    // being emitted: a source that imports the test carrier drags it into
+    // `dist`, where `files` does not reach it.
+    const fixtures = listed.filter((f) => /(^|\/)fixture\//.test(f))
+    check(
+      fixtures.length === 0,
+      `no test fixture in the tarball${fixtures.length ? ` (${fixtures[0]})` : ''}`,
+    )
+
+    // Every source a declaration map points at, present. This is what "go to
+    // definition lands on the commented source" rests on, and `files` reaches
+    // the entry points by name while the maps reach everything behind them.
+    const dangling = listed
+      .filter((f) => f.endsWith('.d.ts.map'))
+      .flatMap((f) => {
+        const map = JSON.parse(
+          readFileSync(join(out, f.replace(/^package\//, '')), 'utf8'),
+        )
+        return map.sources.map((src) =>
+          resolve(dirname(join(out, f.replace(/^package\//, ''))), src),
+        )
+      })
+      .filter((src) => !existsSync(src))
+    check(
+      dangling.length === 0,
+      `every declaration map reaches its source${dangling.length ? ` (${dangling[0]} is missing)` : ''}`,
+    )
+
+    // `sideEffects: false` is a promise about what the package ships, and a
+    // bundler holds us to it: a module nobody takes a name from may be dropped,
+    // so a module that did work merely by being imported would disappear from a
+    // consumer's production build and nowhere else. What this refuses is a bare
+    // top-level statement — one standing there for its effect, binding nothing.
+    // It is a FLOOR, not a proof: nothing INSIDE a declaration is read, so a
+    // `const x = install()` passes, and so does a class whose static block runs
+    // anything. Deciding that would mean annotating every legitimate call this
+    // package already makes at module scope, for a hazard the floor catches in
+    // the shape it actually arrives in.
+    if (manifest.sideEffects === false) {
+      const bare = shipped(out).flatMap((file) => {
+        const parsed = ts.createSourceFile(
+          file,
+          readFileSync(file, 'utf8'),
+          ts.ScriptTarget.Latest,
+          true,
+          file.endsWith('.ts') ? ts.ScriptKind.TS : ts.ScriptKind.JS,
+        )
+        return parsed.statements
+          .filter(
+            (statement) =>
+              !DECLARATIONS.has(statement.kind) && !ambient(statement),
+          )
+          .map((statement) => {
+            const { line } = parsed.getLineAndCharacterOfPosition(
+              statement.getStart(parsed),
+            )
+            return `${file.slice(out.length + 1)}:${line + 1}`
+          })
+      })
+      check(
+        bare.length === 0,
+        `no shipped module carries a top-level statement that stands there for its effect, under sideEffects${bare.length ? ` (${bare[0]})` : ''}`,
+      )
+    }
+
+    // The consumer reaches the package the way `node_modules` does, and imports
+    // it BY SPECIFIER so that Node resolves the `exports` map.
+    mkdirSync(join(consumer, 'node_modules', '@lntt'), { recursive: true })
+    execFileSync('cp', [
+      '-R',
+      out,
+      join(consumer, 'node_modules', '@lntt', name),
+    ])
+
+    for (const { sub, importable } of targetsOf(
+      manifest.exports,
+      manifest.name,
+    )) {
+      if (!importable) continue
+      const specifier =
+        sub === '.' ? manifest.name : `${manifest.name}/${sub.slice(2)}`
+      try {
+        const exported = execFileSync(
+          process.execPath,
+          [
+            '--input-type=module',
+            '-e',
+            `import * as m from ${JSON.stringify(specifier)}; console.log(Object.keys(m).length)`,
+          ],
+          { cwd: consumer, stdio: ['ignore', 'pipe', 'pipe'] },
+        )
+          .toString()
+          .trim()
+        check(
+          Number(exported) > 0,
+          `${specifier} resolves and imports, and exports something`,
+        )
+      } catch (err) {
+        const why =
+          String(err.stderr ?? err.message)
+            .split('\n')
+            .find((l) => l.includes('Error')) ?? 'failed'
+        check(false, `${specifier} resolves and imports — ${why.trim()}`)
+      }
+
+      // The same file through `require`: the packages ship one format, and a
+      // CJS consumer reaches it because the runtime loads ESM from `require`.
+      // What breaks that is ours to keep out — a top-level await anywhere in
+      // the graph makes this throw while the `import` above still passes.
+      try {
+        const exported = execFileSync(
+          process.execPath,
+          [
+            '-e',
+            `console.log(Object.keys(require(${JSON.stringify(specifier)})).length)`,
+          ],
+          { cwd: consumer, stdio: ['ignore', 'pipe', 'pipe'] },
+        )
+          .toString()
+          .trim()
+        check(
+          Number(exported) > 0,
+          `${specifier} loads through require, and exports something`,
+        )
+      } catch (err) {
+        const why =
+          String(err.stderr ?? err.message)
+            .split('\n')
+            .find((l) => l.includes('Error')) ?? 'failed'
+        check(false, `${specifier} loads through require — ${why.trim()}`)
+      }
+    }
+  }
+
+  // The declarations, compiled the way a consumer compiles them. The optional
+  // peers come from the workspace: a consumer importing the express subpath has
+  // express, and the declarations say so — asking them to typecheck without it
+  // would be testing a program nobody writes.
+  const NL = '\n'
+  for (const peer of [
+    'express',
+    'hono',
+    '@trpc/server',
+    'react-router',
+    '@types/express',
+    '@types/express-serve-static-core',
+    '@types/node',
+  ]) {
+    const from = join(root, 'packages', 'scope', 'node_modules', peer)
+    if (!existsSync(from)) continue
+    const to = join(consumer, 'node_modules', peer)
+    mkdirSync(dirname(to), { recursive: true })
+    if (!existsSync(to)) symlinkSync(realpathSync(from), to)
+  }
+  const importsOf = (keep) =>
+    packages
+      .flatMap((name) => {
+        const manifest = JSON.parse(
+          readFileSync(
+            join(consumer, 'node_modules', '@lntt', name, 'package.json'),
+            'utf8',
+          ),
+        )
+        return targetsOf(manifest.exports, manifest.name)
+          .filter(({ importable }) => importable)
+          .map(({ sub }) =>
+            sub === '.' ? manifest.name : `${manifest.name}/${sub.slice(2)}`,
+          )
+          .filter(keep)
+      })
+      .map(
+        (specifier, i) =>
+          `import * as m${i} from ${JSON.stringify(specifier)}${NL}export const use${i} = m${i}`,
+      )
+      .join(NL)
+
+  // A subpath that mounts a framework brings that framework's declarations in
+  // with it, and those answer to their own author's config — react-router's
+  // want DOM, express's and tRPC's reference Node. Only the program that
+  // NARROWS the lib excludes them: what it proves is about ours, that the core
+  // and the guard need neither DOM nor Node's types, and a framework's
+  // declarations would answer for their author instead.
+  const mountsNothing = (s) => !/\/(express|hono|trpc|react-router)$/.test(s)
+
+  // A consumer with no @types/node ON DISK. `types: []` alone does not make one:
+  // it stops the automatic inclusion, while a peer's `/// <reference types="node" />`
+  // pulls the package in anyway — which is how a `Buffer` in an emitted `.d.ts`
+  // can pass a program that declared it wanted none.
+  const bare = join(work, 'bare-consumer')
+  mkdirSync(join(bare, 'node_modules', '@lntt'), { recursive: true })
+  writeFileSync(join(bare, 'package.json'), JSON.stringify({ type: 'module' }))
+  for (const name of packages) {
+    execFileSync('cp', [
+      '-R',
+      join(consumer, 'node_modules', '@lntt', name),
+      join(bare, 'node_modules', '@lntt', name),
+    ])
+  }
+
+  const base = {
+    target: 'ES2023',
+    module: 'nodenext',
+    moduleResolution: 'nodenext',
+    strict: true,
+    noEmit: true,
+    skipLibCheck: false,
+  }
+  const programs = [
+    ['the default lib', () => true, base],
+    [
+      'lib ES2023 + @types/node, no DOM',
+      mountsNothing,
+      { ...base, lib: ['ES2023'], types: ['node'] },
+    ],
+    // The one that can see a Node type leaking into a declaration: `types: []`
+    // keeps @types/node out of the program, so a `Buffer` or `NodeJS.*` in an
+    // emitted `.d.ts` has nowhere to come from.
+    //
+    // Reached by SPECIFIER it would cover the mount-free entry points alone,
+    // and the file where a Node type is likeliest to leak — the read steps,
+    // standing on `Request`, `File` and `URLSearchParams` — hangs off the host
+    // subpaths, which cannot enter a program with no framework on disk. So
+    // every other declaration the package ships is added BY PATH: no framework
+    // is pulled in, and ours is still asked to stand on the platform alone.
+    [
+      'the platform alone, no @types/node',
+      mountsNothing,
+      { ...base, types: [] },
+      bare,
+    ],
+    // The first program again, on the floor compiler: same entry points, same
+    // options, so the only thing that can make the two disagree is the compiler
+    // — which is the question this one asks.
+    [
+      'the floor compiler a consumer may hold, on the same program',
+      () => true,
+      base,
+      consumer,
+      floorTsc,
+    ],
+  ]
+  check(
+    existsSync(floorTsc),
+    'the floor compiler is installed to check the declarations against',
+  )
+  // Every declaration the package ships that no mount-free specifier reaches:
+  // a host's own `index.d.ts` is left out, since it names a framework.
+  const ownDeclarations = packages.flatMap((name) => {
+    const at = join(bare, 'node_modules', '@lntt', name, 'dist')
+    return declarations(at)
+      .filter((file) => mountsNothing(dirname(file)))
+      .map(
+        (file) =>
+          `node_modules/@lntt/${name}/dist/${file.slice(at.length + 1)}`,
+      )
+  })
+
+  for (const [
+    what,
+    keep,
+    compilerOptions,
+    where = consumer,
+    compiler = tsc,
+  ] of programs) {
+    if (!existsSync(compiler)) continue
+    writeFileSync(join(where, 'uses.ts'), importsOf(keep))
+    writeFileSync(
+      join(where, 'tsconfig.json'),
+      JSON.stringify({
+        compilerOptions,
+        include: ['uses.ts'],
+        ...(where === bare ? { files: ownDeclarations } : {}),
+      }),
+    )
+    try {
+      execFileSync(
+        process.execPath,
+        [compiler, '--noEmit', '-p', 'tsconfig.json'],
+        { cwd: where, stdio: ['ignore', 'pipe', 'pipe'] },
+      )
+      check(
+        true,
+        `the declarations typecheck on ${what}, with skipLibCheck off`,
+      )
+    } catch (err) {
+      const lines = String(err.stdout ?? '')
+        .split('\n')
+        .filter(Boolean)
+      check(
+        false,
+        `the declarations typecheck on ${what} — ${lines.length} errors, first: ${lines[0] ?? 'unknown'}`,
+      )
+    }
+  }
+} finally {
+  rmSync(work, { recursive: true, force: true })
+}
+
+console.log(
+  failures === 0
+    ? '\nthe tarballs are what they claim to be'
+    : `\n${failures} failed`,
+)
+process.exit(failures === 0 ? 0 : 1)

@@ -8,7 +8,7 @@
 //   0/1/N semantics: retry that does not fire on error values
 
 import { describe, expect, it } from 'vitest'
-import { bind, lunette, window, type With } from './index.ts'
+import { bind, lunette, window, type With } from '@lntt/wire'
 
 // ── the brand: "these deps live in a transaction" (a test pattern, not
 //    core API) ─────────────────────────────────────────────────────────────

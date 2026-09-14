@@ -1,11 +1,11 @@
 import { initTRPC } from '@trpc/server'
 import type { inferRouterOutputs } from '@trpc/server'
 import { describe, expectTypeOf, it } from 'vitest'
-import { scope, type Next } from '../index.ts'
-import { trpc } from './index.ts'
-import { fail, guards } from '../guard/index.ts'
+import { scope, type Next } from '@lntt/scope'
+import { trpc } from '@lntt/scope/trpc'
+import { fail, guards } from '@lntt/scope/guard'
 import { z } from 'zod'
-import { honoCarrier } from '../hono/index.ts'
+import { honoCarrier } from '@lntt/scope/hono'
 
 // THE TYPE CONTRACT for this carrier: what it claims is that the app's context
 // arrives TYPED at every step, with the type written nowhere — so the claim is

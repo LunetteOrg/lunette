@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { lunette } from './index.ts'
-import { test } from './testing.ts'
+import { lunette } from '@lntt/wire'
+import { test } from '@lntt/wire/testing'
 
 const chain = lunette<{ env: { url: string } }>()
   .provide(({ env }) => ({ db: { q: (): string => env.url } }))

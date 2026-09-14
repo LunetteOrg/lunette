@@ -10,7 +10,7 @@
 //   rejects a function that requires keys absent from the context.
 
 import { describe, expect, it } from 'vitest'
-import { lunette } from './index.ts'
+import { lunette } from '@lntt/wire'
 
 type Env = { DATABASE_URL: string }
 

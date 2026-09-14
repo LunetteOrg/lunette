@@ -3,7 +3,7 @@
 // cost of building+running a scope chain (seeded with the whole app Pub)
 // once per invocation.
 import { describe, it } from 'vitest'
-import { lunette } from '../../src/index.ts'
+import { lunette } from '@lntt/wire'
 
 interface Env {
   url: string

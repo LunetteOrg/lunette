@@ -170,8 +170,23 @@ the tracker when relevant — never from here.
   Note that `@ts-expect-error` suppresses the NEXT LINE and the formatter moves
   lines: the comment belongs immediately above the call or the argument the
   error lands on.
-- **No build step** for now: `exports` point at the `.ts` sources (the
-  build/dist decision is deferred to npm publication).
+- **Build**: `@lntt/wire` and `@lntt/scope` emit ESM + declarations
+  (`pnpm build`); `exports` resolve there, and the commented sources ship
+  beside the build. Inside this workspace `@lntt/*` is imported BY NAME and
+  the `@lntt/source` condition — `tsconfig.base.json` and `vitest.shared.ts`,
+  one place each — resolves it to the SOURCES, so no build stands between an
+  edit and its answer. `pnpm verify` is the other gate: it builds, recompiles the
+  type contract against the BUILT declarations, re-runs every suite through `exports` into
+  `dist` (they import `@lntt/*` by NAME, so the built JavaScript executes), and
+  packs and unpacks each tarball, loads every entry point BOTH ways (`import`
+  and `require` name one file), typechecks the declarations on the pinned
+  compiler and on the floor one, and — while `sideEffects: false` stands —
+  refuses a top-level statement that stands for its effect in a shipped module,
+  a value `enum` or `namespace` among them, and a build older than its sources.
+  TypeScript (pnpm `catalog:`) tracks
+  the latest release and Node the current LTS — one number each, and CI runs
+  exactly those; the floor a CONSUMER sees is lower and lives in
+  `peerDependencies.typescript`.
 - **Workflow with the owner**: discuss the design FIRST (he enjoys
   sparring and wants to understand deeply), implement ONLY on an explicit
   go. Present alternatives as choices, never decide silently. API renames

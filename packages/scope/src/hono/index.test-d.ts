@@ -1,11 +1,11 @@
 import { Hono } from 'hono'
 import { hc } from 'hono/client'
 import { describe, expectTypeOf, it } from 'vitest'
-import { scope, type Next } from '../index.ts'
-import { hono, honoCarrier, params } from './index.ts'
-import { guards } from '../guard/index.ts'
+import { scope, type Next } from '@lntt/scope'
+import { hono, honoCarrier, params } from '@lntt/scope/hono'
+import { guards } from '@lntt/scope/guard'
 import { z } from 'zod'
-import { expressCarrier } from '../express/index.ts'
+import { expressCarrier } from '@lntt/scope/express'
 
 // THE TYPE CONTRACT for the pattern and the route gate — both type-level, so no
 // runtime test could make them. NOTHING HERE RUNS.

@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { lunette, type Lunette } from '../../src/index.ts'
+import { lunette, type Lunette } from '@lntt/wire'
 // The real unmet-key computation and message types, imported so this
 // contract cannot drift from what the requirement message actually
 // names (type-only, not part of the public index.ts surface).

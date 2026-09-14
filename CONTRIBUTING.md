@@ -75,7 +75,18 @@ explicitly:
   call ends up on: put the comment immediately above the argument or the call
   the error lands on, not above the head of the chain. A misplaced one fails
   twice — the expected error is unsuppressed, and the suppression is unused.
-- **No build step for now:** `exports` point at the `.ts` sources.
+- **Build and verify:** `@lntt/wire` and `@lntt/scope` emit ESM +
+  declarations (`pnpm build`), and `exports` resolve there. Inside this
+  workspace `@lntt/*` is imported by NAME and the `@lntt/source` condition
+  resolves it to the sources, so no build stands between an edit and its
+  answer. `pnpm verify` builds, recompiles the type contract against the
+  built declarations, re-runs every suite through `exports` into `dist`, and
+  checks the tarballs a consumer would install.
+- **One version per axis:** TypeScript (pnpm `catalog:`) is pinned to the latest
+  release, Node to the current LTS, and CI runs exactly those. The floor a
+  CONSUMER sees is lower and separate — `peerDependencies.typescript` is the
+  oldest compiler that reads the emitted declarations, and `verify:tarball` runs
+  it over them. Raising either floor is a major.
 
 ## Accepting an outcome into the record
 

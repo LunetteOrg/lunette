@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lunette } from '../../src/index.ts'
+import { lunette } from '@lntt/wire'
 
 describe('runtime stress', () => {
   it('rejects at runtime two layers providing the same key', async () => {

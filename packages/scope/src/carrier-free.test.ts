@@ -3,11 +3,11 @@ import expressLib from 'express'
 import request from 'supertest'
 import { Hono } from 'hono'
 import { initTRPC } from '@trpc/server'
-import { scope, type Next } from './index.ts'
-import { express } from './express/index.ts'
-import { hono } from './hono/index.ts'
-import { reactRouter } from './react-router/index.ts'
-import { trpc } from './trpc/index.ts'
+import { scope, type Next } from '@lntt/scope'
+import { express } from '@lntt/scope/express'
+import { hono } from '@lntt/scope/hono'
+import { reactRouter } from '@lntt/scope/react-router'
+import { trpc } from '@lntt/scope/trpc'
 
 // A SCOPE WITH NO CARRIER MOUNTS ON EVERY HOST — the one portable shape there
 // is, and the only file that names all four mounts at once, which is why it is

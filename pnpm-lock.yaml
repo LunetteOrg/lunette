@@ -4,6 +4,12 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    typescript:
+      specifier: ^7.0.2
+      version: 7.0.2
+
 importers:
 
   .:
@@ -14,6 +20,12 @@ importers:
       lefthook:
         specifier: ^2.1.14
         version: 2.1.14
+      typescript-5:
+        specifier: npm:typescript@5.9.3
+        version: typescript@5.9.3
+      vite:
+        specifier: ^7.3.5
+        version: 7.3.5(@types/node@24.13.2)
 
   examples/app:
     dependencies:
@@ -25,8 +37,8 @@ importers:
         specifier: ^24.13.2
         version: 24.13.2
       typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
+        specifier: 'catalog:'
+        version: 7.0.2
       vitest:
         specifier: ^4.1.0
         version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
@@ -59,8 +71,8 @@ importers:
         specifier: ^7.2.2
         version: 7.2.2
       typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
+        specifier: 'catalog:'
+        version: 7.0.2
       vitest:
         specifier: ^4.1.0
         version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
@@ -84,8 +96,8 @@ importers:
         specifier: ^24.13.2
         version: 24.13.2
       typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
+        specifier: 'catalog:'
+        version: 7.0.2
       vitest:
         specifier: ^4.1.0
         version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
@@ -113,7 +125,7 @@ importers:
     devDependencies:
       '@react-router/dev':
         specifier: ^7.18.3
-        version: 7.18.3(@types/node@24.13.2)(react-router@7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(typescript@5.9.3)(vite@7.3.5(@types/node@24.13.2))
+        version: 7.18.3(@types/node@24.13.2)(react-router@7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(typescript@7.0.2)(vite@7.3.5(@types/node@24.13.2))
       '@types/node':
         specifier: ^24.13.2
         version: 24.13.2
@@ -124,8 +136,8 @@ importers:
         specifier: ^19.2.0
         version: 19.2.7(@types/react@19.2.18)
       typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
+        specifier: 'catalog:'
+        version: 7.0.2
       vitest:
         specifier: ^4.1.0
         version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
@@ -140,7 +152,7 @@ importers:
         version: link:../../packages/scope
       '@trpc/server':
         specifier: 11.18.0
-        version: 11.18.0(typescript@5.9.3)
+        version: 11.18.0(typescript@7.0.2)
       zod:
         specifier: ^4.5.4
         version: 4.5.4
@@ -149,8 +161,8 @@ importers:
         specifier: ^24.13.2
         version: 24.13.2
       typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
+        specifier: 'catalog:'
+        version: 7.0.2
       vitest:
         specifier: ^4.1.0
         version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
@@ -174,8 +186,8 @@ importers:
         specifier: ^24.13.2
         version: 24.13.2
       typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
+        specifier: 'catalog:'
+        version: 7.0.2
       vitest:
         specifier: ^4.1.0
         version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
@@ -188,9 +200,12 @@ importers:
 
   packages/scope:
     devDependencies:
+      '@lntt/scope':
+        specifier: workspace:*
+        version: 'link:'
       '@trpc/server':
         specifier: 11.18.0
-        version: 11.18.0(typescript@5.9.3)
+        version: 11.18.0(typescript@7.0.2)
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -209,6 +224,9 @@ importers:
       hono:
         specifier: 4.13.5
         version: 4.13.5
+      light-my-request:
+        specifier: ^6.6.0
+        version: 6.6.0
       react-router:
         specifier: 7.18.3
         version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -216,8 +234,8 @@ importers:
         specifier: ^7.2.2
         version: 7.2.2
       typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
+        specifier: 'catalog:'
+        version: 7.0.2
       vitest:
         specifier: ^4.1.0
         version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
@@ -227,12 +245,15 @@ importers:
 
   packages/wire:
     devDependencies:
+      '@lntt/wire':
+        specifier: workspace:*
+        version: 'link:'
       '@types/node':
         specifier: ^24.13.2
         version: 24.13.2
       typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
+        specifier: 'catalog:'
+        version: 7.0.2
       vitest:
         specifier: ^4.1.0
         version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
@@ -243,8 +264,8 @@ importers:
         specifier: ^24.13.2
         version: 24.13.2
       typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
+        specifier: 'catalog:'
+        version: 7.0.2
       vitest:
         specifier: ^4.1.0
         version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
@@ -255,8 +276,8 @@ importers:
         specifier: ^24.13.2
         version: 24.13.2
       typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
+        specifier: 'catalog:'
+        version: 7.0.2
       vitest:
         specifier: ^4.1.0
         version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
@@ -267,8 +288,8 @@ importers:
         specifier: ^24.13.2
         version: 24.13.2
       typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
+        specifier: 'catalog:'
+        version: 7.0.2
 
   research/terminal-step:
     devDependencies:
@@ -276,8 +297,8 @@ importers:
         specifier: ^24.13.2
         version: 24.13.2
       typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
+        specifier: 'catalog:'
+        version: 7.0.2
       vitest:
         specifier: ^4.1.0
         version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
@@ -292,7 +313,7 @@ importers:
         version: link:../../packages/wire
       '@trpc/server':
         specifier: 11.18.0
-        version: 11.18.0(typescript@5.9.3)
+        version: 11.18.0(typescript@7.0.2)
       express:
         specifier: 5.2.1
         version: 5.2.1
@@ -322,8 +343,8 @@ importers:
         specifier: ^7.2.2
         version: 7.2.2
       typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
+        specifier: 'catalog:'
+        version: 7.0.2
       vitest:
         specifier: ^4.1.0
         version: 4.1.11(@types/node@24.13.2)(vite@7.3.5(@types/node@24.13.2))
@@ -941,6 +962,126 @@ packages:
   '@types/supertest@7.2.1':
     resolution: {integrity: sha512-4CbBvoYVLHL7+yhbYrZET0vsvuyXTC05aRe7dNQkwMzm56auceoy6Yu3K50uZmwfHna1os3CMSgM/3QVkUtPTw==}
 
+  '@typescript/typescript-aix-ppc64@7.0.2':
+    resolution: {integrity: sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [ppc64]
+    os: [aix]
+
+  '@typescript/typescript-darwin-arm64@7.0.2':
+    resolution: {integrity: sha512-gowzar9MwS/aRWp6f3a4KUqzRjAZjOsmGNCM6LcTgXum+dBfgsBVMN+AgvOCCbguXyick6LJhpBszxMebJ8syA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@typescript/typescript-darwin-x64@7.0.2':
+    resolution: {integrity: sha512-SZ9xZInqApNlNGc9s0W1VSsktYSOe9cFqNOIqmN1Gs8SmkjKZYFt017G4VwPxASInODuAdbTW7sXiFUf893RgA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@typescript/typescript-freebsd-arm64@7.0.2':
+    resolution: {integrity: sha512-W5NH4y/J0plIIS5b2xvTEkU7JFxyqdMAOgf+Ilhl0vHQXKO5dZoxd+C/jEtq56c4F3wk71RB4BMRQ2XdI+bwYQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [freebsd]
+
+  '@typescript/typescript-freebsd-x64@7.0.2':
+    resolution: {integrity: sha512-UMGDx5sTpzNw3WiPebH7l90IWfJggEd+egHt/q6p7/Cm3zqoV7VxkGXt+3DxPIw8CcmvAB0j3sVVfbhX+M4Tpw==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [freebsd]
+
+  '@typescript/typescript-linux-arm64@7.0.2':
+    resolution: {integrity: sha512-Qh4eU4/y3yDjnfjjyPYihMj5/ODIlmt+Bzu17OI+fiSRDW57QmU5SiN63exPRNJPKUzcc1INa1NXdrJ+MqHjUQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@typescript/typescript-linux-arm@7.0.2':
+    resolution: {integrity: sha512-gffT3xPz9sR7j/YJExkyPntrI0P2EP9XbOyWzth2/Gs0RstK+90RBcO0ncXoXy/beYll1SXw846Nf2zdnEz0QQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm]
+    os: [linux]
+
+  '@typescript/typescript-linux-loong64@7.0.2':
+    resolution: {integrity: sha512-uEHck9i8hoAzXPiYRib1O7miOnz23SxIeVl6F4LXox+qov1K35jHcEW6VHKvZI+pyvl7fZEP4MCU5LYvIq1GuQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [loong64]
+    os: [linux]
+
+  '@typescript/typescript-linux-mips64el@7.0.2':
+    resolution: {integrity: sha512-R4KvAMnE43W5Qeqb0Ly56O3mWMWIAgsMyz36DCaycd5nbg/9kzm0liw3JocfRqyJY0KPmzFjbswozXyW0DnIYA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [mips64el]
+    os: [linux]
+
+  '@typescript/typescript-linux-ppc64@7.0.2':
+    resolution: {integrity: sha512-DORx5b3sd/4S7eayxm4FQv+A7CrkUIGRaHiwI8oiHTAI1fAPWhF4J0vAlkC8biAlHSVVwxMQ3tjZ2/DVbnQiiA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [ppc64]
+    os: [linux]
+
+  '@typescript/typescript-linux-riscv64@7.0.2':
+    resolution: {integrity: sha512-wf0jqEDOjrPRnKwYRyyJDRo11KMbvMFrU+q4zqKyChODBzvlkbhNQfKvLxQCcwTpdDaXSHZTVuh0JoCrKCUMHQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [riscv64]
+    os: [linux]
+
+  '@typescript/typescript-linux-s390x@7.0.2':
+    resolution: {integrity: sha512-IkwJc3L7yhytWd/ewjyxNDfOmswCm9GWMJT/ue/dU4aZNbwZeYAetq42VyLmsmSjvoX7z74X6ZaYCtzAr0EuGw==}
+    engines: {node: '>=16.20.0'}
+    cpu: [s390x]
+    os: [linux]
+
+  '@typescript/typescript-linux-x64@7.0.2':
+    resolution: {integrity: sha512-EYdf2cNg7rgCWJnxCdJ+F3V39O8ihb37eHAu1LK8oAFizgTQbPOK7zHHXbPt8rX24COqODXeI3sIf0fCXG7H/A==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [linux]
+
+  '@typescript/typescript-netbsd-arm64@7.0.2':
+    resolution: {integrity: sha512-+polYF4MF04aPpO5FTkHran9yUQDSXqy5GiSDKpsll5jy3l3+g9QLhpf39T+ePtefhXLOGrLl0QIjkQP6VnelA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [netbsd]
+
+  '@typescript/typescript-netbsd-x64@7.0.2':
+    resolution: {integrity: sha512-8YIT0EHM/3dq10ZOVF/A7pc/YSMtbcecct4rWtexrnSCHOPcpC2KTLXfTCR6vDpnSiY12heNb1GiN/wu+T/FyA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [netbsd]
+
+  '@typescript/typescript-openbsd-arm64@7.0.2':
+    resolution: {integrity: sha512-APT8+ClYnuYm1u9+kgGXoMj2VzWzcymwh2gNSQVySHfkRDGOTVkoWLjCmOQSaO+PoqQ57B0flRp9SA+7GnnkzQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [openbsd]
+
+  '@typescript/typescript-openbsd-x64@7.0.2':
+    resolution: {integrity: sha512-yX7s+Q0Dln0Dt9tEzZsAjXXR/+ytBM7AlglaqyeMPxQszJ1JhlJdZ6jLA+IzldHtflX81em7lDao1xXu+aRRkg==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [openbsd]
+
+  '@typescript/typescript-sunos-x64@7.0.2':
+    resolution: {integrity: sha512-dLJDGaLZ1D4HPQn62u1n8mBDkJREwMsAkCdkwd4Ieqw+x3TUyTsqY0YiBCtE6H6OzzgGk3iuZ3vFWRS+E8/d1g==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [sunos]
+
+  '@typescript/typescript-win32-arm64@7.0.2':
+    resolution: {integrity: sha512-Gyl1Vy6OsWesLzmq+EP0Fb7b4Nid5232AvcA2SFcdYreldpNtYFFofPjnt62y9hQy7VTaZp65ICJjuAQRaVcIQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@typescript/typescript-win32-x64@7.0.2':
+    resolution: {integrity: sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [win32]
+
   '@vitest/expect@4.1.11':
     resolution: {integrity: sha512-VX2x5vNJXET47KAFzwERI+KRMtTTCSWTfSMKsW7JsUsXV4psq++e3DvZpuTDOpHcxytiDs6p2nhVb2tVDiiUYw==}
 
@@ -1333,6 +1474,9 @@ packages:
     resolution: {integrity: sha512-Y9TL1dmpRlIdSp73SJ6bb+xAZ4s2SinGTK3pgC9PRWMSjMr2iOfowPGnlSOfAo5fu6S5rdiItsQDxeLEWCGk4g==}
     hasBin: true
 
+  light-my-request@6.6.0:
+    resolution: {integrity: sha512-CHYbu8RtboSIoVsHZ6Ye4cj4Aw/yg2oAFimlF7mNvfDV192LR7nDiKtSIfCuLT7KokPSTn/9kfVLm5OGN0A28A==}
+
   lodash@4.18.1:
     resolution: {integrity: sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==}
 
@@ -1445,6 +1589,9 @@ packages:
     resolution: {integrity: sha512-OpN0zzVdiaiAhxpuuj5efpIS4sY9j7bY6uR5mnj5yPzGkdkjNKSJeUThPb60Jw29QuAZgA4o+/iB49kFiaBX6g==}
     engines: {node: '>=14'}
     hasBin: true
+
+  process-warning@4.0.1:
+    resolution: {integrity: sha512-3c2LzQ3rY9d0hc1emcsHhfT9Jwz0cChib/QN89oME2R451w5fy3f0afAhERFZAwrbDU43wk12d0ORBpDVME50Q==}
 
   proxy-addr@2.0.7:
     resolution: {integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==}
@@ -1594,6 +1741,11 @@ packages:
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
+    hasBin: true
+
+  typescript@7.0.2:
+    resolution: {integrity: sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==}
+    engines: {node: '>=16.20.0'}
     hasBin: true
 
   undici-types@7.18.2:
@@ -2049,7 +2201,7 @@ snapshots:
     dependencies:
       '@noble/hashes': 1.8.0
 
-  '@react-router/dev@7.18.3(@types/node@24.13.2)(react-router@7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(typescript@5.9.3)(vite@7.3.5(@types/node@24.13.2))':
+  '@react-router/dev@7.18.3(@types/node@24.13.2)(react-router@7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(typescript@7.0.2)(vite@7.3.5(@types/node@24.13.2))':
     dependencies:
       '@babel/core': 7.29.7
       '@babel/generator': 7.29.8
@@ -2058,7 +2210,7 @@ snapshots:
       '@babel/preset-typescript': 7.29.7(@babel/core@7.29.7)
       '@babel/traverse': 7.29.8
       '@babel/types': 7.29.8
-      '@react-router/node': 7.18.3(react-router@7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(typescript@5.9.3)
+      '@react-router/node': 7.18.3(react-router@7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(typescript@7.0.2)
       '@remix-run/node-fetch-server': 0.13.3
       arg: 5.0.2
       babel-dead-code-elimination: 1.0.12
@@ -2078,11 +2230,11 @@ snapshots:
       react-router: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       semver: 7.8.5
       tinyglobby: 0.2.17
-      valibot: 1.4.2(typescript@5.9.3)
+      valibot: 1.4.2(typescript@7.0.2)
       vite: 7.3.5(@types/node@24.13.2)
       vite-node: 3.2.4(@types/node@24.13.2)
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 7.0.2
     transitivePeerDependencies:
       - '@types/node'
       - babel-plugin-macros
@@ -2098,12 +2250,12 @@ snapshots:
       - tsx
       - yaml
 
-  '@react-router/node@7.18.3(react-router@7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(typescript@5.9.3)':
+  '@react-router/node@7.18.3(react-router@7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(typescript@7.0.2)':
     dependencies:
       '@mjackson/node-fetch-server': 0.2.0
       react-router: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 7.0.2
 
   '@remix-run/node-fetch-server@0.13.3': {}
 
@@ -2184,9 +2336,9 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@trpc/server@11.18.0(typescript@5.9.3)':
+  '@trpc/server@11.18.0(typescript@7.0.2)':
     dependencies:
-      typescript: 5.9.3
+      typescript: 7.0.2
 
   '@types/body-parser@1.19.6':
     dependencies:
@@ -2261,6 +2413,66 @@ snapshots:
     dependencies:
       '@types/methods': 1.1.4
       '@types/superagent': 8.1.11
+
+  '@typescript/typescript-aix-ppc64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-darwin-arm64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-darwin-x64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-freebsd-arm64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-freebsd-x64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-arm64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-arm@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-loong64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-mips64el@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-ppc64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-riscv64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-s390x@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-x64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-netbsd-arm64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-netbsd-x64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-openbsd-arm64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-openbsd-x64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-sunos-x64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-win32-arm64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-win32-x64@7.0.2':
+    optional: true
 
   '@vitest/expect@4.1.11':
     dependencies:
@@ -2664,6 +2876,12 @@ snapshots:
       lefthook-windows-arm64: 2.1.14
       lefthook-windows-x64: 2.1.14
 
+  light-my-request@6.6.0:
+    dependencies:
+      cookie: 1.1.1
+      process-warning: 4.0.1
+      set-cookie-parser: 2.7.2
+
   lodash@4.18.1: {}
 
   lru-cache@5.1.1:
@@ -2745,6 +2963,8 @@ snapshots:
       source-map-js: 1.2.1
 
   prettier@3.9.6: {}
+
+  process-warning@4.0.1: {}
 
   proxy-addr@2.0.7:
     dependencies:
@@ -2943,6 +3163,29 @@ snapshots:
 
   typescript@5.9.3: {}
 
+  typescript@7.0.2:
+    optionalDependencies:
+      '@typescript/typescript-aix-ppc64': 7.0.2
+      '@typescript/typescript-darwin-arm64': 7.0.2
+      '@typescript/typescript-darwin-x64': 7.0.2
+      '@typescript/typescript-freebsd-arm64': 7.0.2
+      '@typescript/typescript-freebsd-x64': 7.0.2
+      '@typescript/typescript-linux-arm': 7.0.2
+      '@typescript/typescript-linux-arm64': 7.0.2
+      '@typescript/typescript-linux-loong64': 7.0.2
+      '@typescript/typescript-linux-mips64el': 7.0.2
+      '@typescript/typescript-linux-ppc64': 7.0.2
+      '@typescript/typescript-linux-riscv64': 7.0.2
+      '@typescript/typescript-linux-s390x': 7.0.2
+      '@typescript/typescript-linux-x64': 7.0.2
+      '@typescript/typescript-netbsd-arm64': 7.0.2
+      '@typescript/typescript-netbsd-x64': 7.0.2
+      '@typescript/typescript-openbsd-arm64': 7.0.2
+      '@typescript/typescript-openbsd-x64': 7.0.2
+      '@typescript/typescript-sunos-x64': 7.0.2
+      '@typescript/typescript-win32-arm64': 7.0.2
+      '@typescript/typescript-win32-x64': 7.0.2
+
   undici-types@7.18.2: {}
 
   unpipe@1.0.0: {}
@@ -2953,9 +3196,9 @@ snapshots:
       escalade: 3.2.0
       picocolors: 1.1.1
 
-  valibot@1.4.2(typescript@5.9.3):
+  valibot@1.4.2(typescript@7.0.2):
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 7.0.2
 
   vary@1.1.2: {}
 
