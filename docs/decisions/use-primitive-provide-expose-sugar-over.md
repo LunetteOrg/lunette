@@ -65,7 +65,7 @@ prior art: Effect's `Layer.scoped` + `acquireRelease` and `provide` vs
   (`Provided<All, Pub, R>`) *if/when* the request-time axis lands
   (TODO story 2) — and that Response is itself speculative (the HTTP
   dialect owns the per-request onion; request scope is planned as a
-  window, not as a core-onion return).
+  lease, not as a core-onion return).
 - "No lifecycle API: it is just try/finally" softens to: the `destroy`
   argument is the acquire/release **sugar** over that try/finally; the raw
   `use` onion stays the full-control mechanism. It is sugar, not a new

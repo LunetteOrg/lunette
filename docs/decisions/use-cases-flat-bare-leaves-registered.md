@@ -1,6 +1,6 @@
 ---
 title: "Use cases are flat bare leaves, registered with `bind`"
-area: leaves-errors-windows
+area: leaves-errors-leases
 status: accepted
 ---
 
@@ -26,5 +26,5 @@ implemented, then removed (one-word `bind` registration made it
 redundant; the direct call `useCase(deps, args)` stays free).
 
 **Updated by [the single-arity `bind`](./bind-single-arity-binder-unit.md).** `bind` is now single-arity: `bind(record)` returns the
-binder; applying it ties fixed deps, `.with(window)` ties them per call.
+binder; applying it ties fixed deps, `.with(lease)` ties them per call.
 The bare-leaf shape is untouched — only the registration spelling moved.

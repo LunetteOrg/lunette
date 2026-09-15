@@ -1,6 +1,6 @@
 ---
 title: "Errors: returned = domain, thrown = infrastructure"
-area: leaves-errors-windows
+area: leaves-errors-leases
 status: accepted
 ---
 

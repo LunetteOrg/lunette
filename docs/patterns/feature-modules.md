@@ -17,9 +17,9 @@ boundary; composition as step ORDER:
 
 ```ts
 export const accessModule = lunette<AccessSeed>()
-  // a PRIVATE named step: the transaction window, next to the publics
+  // a PRIVATE named step: the transaction lease, next to the publics
   .provide('verifyTx', (ctx) =>
-    window(ctx.db.transaction.bind(ctx.db), toTxRepos(ctx)),
+    lease(ctx.db.transaction.bind(ctx.db), toTxRepos(ctx)),
   )
   .expose((ctx) => bind({ requestCode })({ otpRepo: ctx.otpRepo, mailer: ctx.mailer }))
   .expose((ctx) => bind({ findUserByEmail, getUserById })({ userRepo: ctx.userRepo }))
@@ -37,7 +37,7 @@ The same module is often written as a single expose returning one bag:
 ```ts
 lunette<Seed>().expose('access', (ctx) => ({
   ...bind({ requestCode })({ … }),
-  ...bind({ verifyCode }).with(window(…)),   // window built inline
+  ...bind({ verifyCode }).with(lease(…)),   // lease built inline
 }))
 ```
 
@@ -170,7 +170,7 @@ along exactly that line:
 
 - **Keyed** (`provide('mailer', …)`, `provide('verifyTx', …)`) names ONE
   value — and the things that deserve a single name are the things whose
-  execution has effects: resources, windows, expensive derivations.
+  execution has effects: resources, leases, expensive derivations.
   Substituted in a test, they never run.
 - **Patch** (the vocabulary step, `.expose(bind({ … }))`) births many
   keys at once — pure wiring, free to execute (method extractions and
@@ -188,5 +188,5 @@ it).
 A trivial module — two leaves, no composition, uniform visibility — loses
 nothing in the object form, and `expose('profile', (ctx) => ({ … }))`
 also spells the namespace without `.as()`. The steps earn their keep as
-the module grows: a composition edge, a window, mixed visibility — each
+the module grows: a composition edge, a lease, mixed visibility — each
 is a reason to switch.

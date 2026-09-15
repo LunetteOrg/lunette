@@ -14,7 +14,7 @@ chain's singletons (a db pool, a client) must exist once, and a second build
 would open a second pool and orphan the first. `ensure` takes the seed as a
 THUNK, evaluated only on the build that actually happens; the seed is read once
 and never again. A seed that varies per call is therefore not "ignored" — it is
-never computed. Multiplicity per tenant is expressed with a WINDOW (per call,
+never computed. Multiplicity per tenant is expressed with a LEASE (per call,
 principle 4), never with a second app; a genuinely different env means a
 different handle (which is how tests get a second app).
 
@@ -27,7 +27,7 @@ times byte-identical). Rejected on "one way to do each thing" — and the copies
 had already drifted into the examples. (c) Key the memo by seed, so a changed
 env yields a new app. Rejected: it needs a key function for an arbitrary seed
 object, and it multiplies lifecycles (N pools, and a `dispose` that must close
-them all) to serve a case the window already covers. (d) Fail fast when a
+them all) to serve a case the lease already covers. (d) Fail fast when a
 different seed arrives after the build. Rejected for now: comparing seeds needs
 either referential identity or a caller-supplied key, and with the thunk the
 later seeds are not even computed, so there is nothing to compare.

@@ -9,13 +9,13 @@ status: accepted
 **Decision.** `bind(record)` takes the bare leaves and returns **the
 binder** — the record's partial application, a plain function with one
 property (the house shape of `Lazy<T>`). Applying it ties FIXED deps
-(`bind({ requestOtp })(ctx)`); `.with(window)` ties deps PER CALL
-(`bind({ verifyCode }).with(window(db.transaction, bridge))`). The
+(`bind({ requestOtp })(ctx)`); `.with(lease)` ties deps PER CALL
+(`bind({ verifyCode }).with(lease(db.transaction, bridge))`). The
 binder's parameter is the intersection of every leaf's declared deps; the
 binder is shaped like a provider, so `.expose(bind({ getAuthor }))` wires
 a record point-free, and it is a first-class kit (one record, many
-worlds). `within` is renamed **`window`** — the noun the vocabulary
-already used; the old name stuttered against `.with` in the inline form.
+worlds). `within` is renamed **`lease`** — the noun the vocabulary
+uses; the old name stuttered against `.with` in the inline form.
 `bindBy` was initially left unchanged here; [`.by` on the binder](./binder-derivation-key-not-leaf-argument.md) then absorbed it
 into the binder as `.by`.
 
@@ -30,8 +30,8 @@ into the binder as `.by`.
 - (b) The curried form behind a dot (`bind.later(record)`), two-arity
   forms untouched: safe, zero breakage, but taxes the hot path with the
   longer name.
-- (c) Naked curried + naked immediate, window moved to a dot
-  (`bind.with(window, record)`): the best ergonomics, but keeps the arity
+- (c) Naked curried + naked immediate, the lease moved to a dot
+  (`bind.with(lease, record)`): the best ergonomics, but keeps the arity
   hole of (a) — rejected on principle 1.
 - (d) A separate helper (`leaves`/`bound`/`wired`, proved userland-viable
   in a prototype): a new verb to teach what `bind` already
@@ -40,8 +40,9 @@ into the binder as `.by`.
   statement, Effect's `with*` combinators, the HOF `withX` convention; the
   JS "copy-with-changes" `.with` lives on instances, not verbs). The
   stutter was `within`'s fault, so the HELPER was renamed, not the
-  property; `bind.per` / `bind.via` were the runners-up. `window` shadows
-  the DOM global — accepted: composition roots are server code.
+  property; `bind.per` / `bind.via` were the runners-up. The helper is
+  spelled `lease`, not `window`, which would have shadowed a browser
+  global ([the lending contract is a lease](./lease-names-the-lending-contract.md)).
 
 **Why.** One arity, one meaning, NO dispatch — the terminal point of the
 until-now implicit principle "dispatch by KIND of the first argument,
@@ -56,7 +57,7 @@ as one statement per wiring step. The migration was paid pre-publication
 **Consequences.**
 - The dot marks the CADENCE: an applied binder is the value cadence
   (sync passthrough); `.with` and `bindBy` are per-invocation (always
-  `Promise`, fresh window per call). Grepping `.with(` approximates the
+  `Promise`, fresh lease per call). Grepping `.with(` approximates the
   map of the codebase's transactional boundaries.
 - Requirement errors carry AGGREGATE blame: the missing keys are named at
   the application, but not which leaf wants them (the old two-arity form
@@ -64,6 +65,6 @@ as one statement per wiring step. The migration was paid pre-publication
 - Forgetting to APPLY the binder is kind-visible (spreading a binder
   contributes no leaves, so the Pub never lies) but surfaces where the
   record is demanded, not at the spread.
-- The window-Deps inference crutch (the intersection giving TS a second
+- The lease-Deps inference crutch (the intersection giving TS a second
   source) is no longer needed: `.with`'s parameter is fully determined by
   the record, so inline bridges get contextual typing.

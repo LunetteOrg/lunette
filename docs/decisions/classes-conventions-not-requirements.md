@@ -8,7 +8,7 @@ status: accepted
 
 **Decision.** Class instances are first-class context values; a class
 with constructor-injected deps is the OO spelling of `bind`
-(`expose('auth', (ctx) => new AuthService(ctx))`); under a window,
+(`expose('auth', (ctx) => new AuthService(ctx))`); under a lease,
 per-call deps mean per-call instances. Flat functions remain the
 documented default (lighter composition, no `this` extraction hazard,
 per-record granularity).

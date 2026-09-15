@@ -34,7 +34,7 @@ discussion #21.
 | `'{ [collision]: "⛔ patch carries no nameable keys: mount the dynamic bag under a literal key"; }'` | the patch's return annotation is an index signature (`Record<string, …>`) — no nameable keys, so the guard could neither check collisions nor keep the chain honest downstream ([top-level widened patches are refused](../decisions/top-level-widened-patches-refused.md)) | exactly what it says: `provide('payments', (): Record<string, Client> => bag)`; if the key list is actually knowable, keep it literal (`as const`) and the guard checks it in full |
 | `Keys already present in the context: db` **thrown at boot** (no compile error) | a widened KEY slipped past the guard — a plain-`string` key carries no name for the check, so the runtime net is the floor ([key collisions are forbidden on two levels](../decisions/key-collisions-forbidden-two-levels.md)) | if the key is knowable, keep it literal; if it is truly runtime data, consider the namespaced bag instead |
 | `error TS2769: No overload matches this call` wrapping any of the above | the verbs are overloaded (patch \| keyed \| mount); every candidate is elaborated | scan for the elaboration carrying the `⛔` message or the real key — the other candidates are the other verb forms, discard them |
-| `TS2769` inside a helper generic over the chain (`<Ctx …>(chain: Lunette<Ctx, …>) => chain.provide(…)`), no collision anywhere | the guard cannot prove "no collision, for **every** Ctx" at the helper's definition — refused by design ([extensions supply values; only the app extends the chain](../decisions/extensions-supply-values-only-app-extends.md)) | extensions supply values, apps wire them: package the layers as a fragment (requirements in the Seed), or the adapter/window pair (#27/#28); a helper over a **concrete** chain type compiles fine |
+| `TS2769` inside a helper generic over the chain (`<Ctx …>(chain: Lunette<Ctx, …>) => chain.provide(…)`), no collision anywhere | the guard cannot prove "no collision, for **every** Ctx" at the helper's definition — refused by design ([extensions supply values; only the app extends the chain](../decisions/extensions-supply-values-only-app-extends.md)) | extensions supply values, apps wire them: package the layers as a fragment (requirements in the Seed), or the adapter/lease pair (#27/#28); a helper over a **concrete** chain type compiles fine |
 
 ## The two voices
 
@@ -116,7 +116,7 @@ already avoids it. Dialects **consume** the chain (`run`/`build` through
 `pipe`) — untouched. Reusable bundles of layers are **fragments** —
 mounted on a concrete chain, requirements declared in the Seed, collision
 checked at the mount. Packages ship **values** (an adapter to `provide`,
-a window builder for `.with` — issues #27/#28) and the app does the
+a lease builder for `.with` — issues #27/#28) and the app does the
 wiring, always on a concrete chain where the guard resolves. Even the
 helper above is fine the moment its parameter names a concrete chain type
 (`chain: typeof appChain`). What the refusal forecloses is only the

@@ -9,7 +9,7 @@ status: accepted
 **Decision.** Nothing extends the chain through a generic parameter. The
 three extension shapes each have their lane: a **dialect** consumes the
 chain (`run`/`build` behind `pipe`) and owns its own verbs' signatures;
-a **package** ships values — an adapter to `provide`, a window builder
+a **package** ships values — an adapter to `provide`, a lease builder
 for `.with`, a decorator for `bind` (the #27/#28 shapes) — and the app
 does the wiring; a reusable bundle of layers is a **fragment**, mounted
 on a concrete chain with its requirements declared in the Seed. A helper

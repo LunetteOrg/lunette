@@ -60,7 +60,7 @@ the tracker when relevant — never from here.
 1. **The type contract**: the engine is guaranteed by tests, the types
    guarantee the user's world — every configuration error surfaces
    IMMEDIATELY, at the call site, at compile time (duplicate keys named,
-   unsatisfied requirements, branded leaves outside their window).
+   unsatisfied requirements, branded leaves outside their lease).
    The `*.test-d.ts` files are the proof of that contract: if a refactor
    breaks them, the refactor is wrong even if the runtime tests pass.
 2. **Visibility lives in the verb**: `use`/`provide` are private, `expose`
@@ -70,10 +70,10 @@ the tracker when relevant — never from here.
 3. **The error convention is the pivot of everything**: a RETURNED error =
    domain (passes through: commit, no retry, ack); a THROWN error =
    infrastructure (reacts: rollback, retry, nack).
-4. **Leaves and windows**: use cases are flat leaves `(deps, ...args) =>
+4. **Leaves and leases**: use cases are flat leaves `(deps, ...args) =>
    error | result`. Compose the BARE ones, decorate the EXPOSED ones
-   (bind). The window (`With`) is PER CALL, never shared; atomicity = one
-   named window (a composed leaf).
+   (bind). The lease (`Lease`) is PER CALL, never shared; atomicity = one
+   named lease (a composed leaf).
 5. **One way to do each thing**: new API only with a real case in hand
    (YAGNI). Prefer conventions over features: namespace = the patch's
    shape, alias = a provide, mocking = the seed.
@@ -121,8 +121,8 @@ the tracker when relevant — never from here.
   `#N` autolinks to issue/PR N and would point at an unrelated thread. `#N` is
   reserved for actual issues, PRs and discussions.
 - **Vocabulary**: chain · layer · bare/bound leaf · binder (`bind(record)`,
-  apply = fixed deps, `.with` = per call, `.by` = per call keyed) · window
-  · opener (window arg 1) · bridge (window arg 2) · bag · guard · seed —
+  apply = fixed deps, `.with` = per call, `.by` = per call keyed) · lease
+  · opener (lease arg 1) · bridge (lease arg 2) · bag · guard · seed —
   and, for the scope runtime, a lexicon of its own: scope (`scope()`
   agnostic, `scope(carrier)` chooses one) · scope execution (one run) · scope
   execution parameters (the second argument — what belongs to THIS run;
@@ -153,7 +153,7 @@ the tracker when relevant — never from here.
   `pnpm test` and `pnpm typecheck` (monorepo root: `pnpm -r ...`). Never
   declare green without having run. To scope down:
   - one package: `pnpm --filter @lntt/wire test` / `... typecheck`
-  - one file: `pnpm --filter @lntt/wire exec vitest run src/with.test.ts`
+  - one file: `pnpm --filter @lntt/wire exec vitest run src/lease.test.ts`
   - one case: append `-t "name fragment"` to the file command
 - **A MOUNT IS TESTED WHERE A STEP FAILS**, not only where it succeeds.
   A mount is the one place the library hands control to a framework, and

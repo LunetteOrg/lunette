@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { bind, type With } from '@lntt/wire'
+import { bind, type Lease } from '@lntt/wire'
 
 type OtpRepo = { consume: (code: string) => Promise<boolean> }
 
@@ -70,16 +70,16 @@ describe('bind (types)', () => {
     bind(ctx, { requestOtp })
   })
 
-  it('a window is not a record: the naked verb rejects it outright', () => {
-    const win: With<{ otpRepo: OtpRepo }> = (use) =>
+  it('a lease is not a record: the naked verb rejects it outright', () => {
+    const lent: Lease<{ otpRepo: OtpRepo }> = (use) =>
       use({ otpRepo: { consume: async () => true } })
 
-    // per-call binding goes through .with — the window cannot reach the
+    // per-call binding goes through .with — the lease cannot reach the
     // naked verb by mistake (a function has no string index signature)
-    // @ts-expect-error — bind wants a record of leaves, not a window
-    bind(win)
+    // @ts-expect-error — bind wants a record of leaves, not a lease
+    bind(lent)
 
-    bind({ requestOtp }).with(win)
+    bind({ requestOtp }).with(lent)
   })
 
   it('a bare leaf without braces is rejected at the call', () => {

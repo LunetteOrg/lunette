@@ -1,14 +1,14 @@
-// The WINDOW (With) and the per-call BINDING (binder.with) — a guided
+// The LEASE (Lease) and the per-call BINDING (binder.with) — a guided
 // progression:
 //   step 0: the manual line
-//   step 1: the named window + bind(record).with(window)
-//   a further step: window(opener, bridge)
-//   .by: the window derived from a key argument
-//   a facility in the deps: intra-function windows (lock)
+//   step 1: the named lease + bind(record).with(lease)
+//   a further step: lease(opener, bridge)
+//   .by: the lease derived from a key argument
+//   a facility in the deps: intra-function leases (lock)
 //   0/1/N semantics: retry that does not fire on error values
 
 import { describe, expect, it } from 'vitest'
-import { bind, lunette, window, type With } from '@lntt/wire'
+import { bind, lease, lunette, type Lease } from '@lntt/wire'
 
 // ── the brand: "these deps live in a transaction" (a test pattern, not
 //    core API) ─────────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ const verifyOtp = async (
 }
 
 describe('step 0 — the manual line', () => {
-  it('open the window, build the deps, call', async () => {
+  it('open the lease, build the deps, call', async () => {
     const db = createDb()
 
     const result = await db.transaction((tx) =>
@@ -80,10 +80,10 @@ describe('step 0 — the manual line', () => {
   })
 })
 
-describe('step 1 — the named window + binder.with', () => {
-  it('bind(record).with(window): every call opens its own transaction', async () => {
+describe('step 1 — the named lease + binder.with', () => {
+  it('bind(record).with(lease): every call opens its own transaction', async () => {
     const db = createDb()
-    const inTx: With<{ db: Tx<DbHandle> }> = (use) =>
+    const inTx: Lease<{ db: Tx<DbHandle> }> = (use) =>
       db.transaction((tx) => use({ db: tx as Tx<DbHandle> }))
 
     const commands = bind({ verifyOtp }).with(inTx)
@@ -102,12 +102,12 @@ describe('step 1 — the named window + binder.with', () => {
   })
 })
 
-describe('a further step — window(opener, bridge)', () => {
-  it('identical to the hand-written window', async () => {
+describe('a further step — lease(opener, bridge)', () => {
+  it('identical to the hand-written lease', async () => {
     const db = createDb()
 
     const commands = bind({ verifyOtp }).with(
-      window(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle> })),
+      lease(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle> })),
       //     └── opener ──┘  └────────── bridge ─────────┘
     )
 
@@ -118,7 +118,7 @@ describe('a further step — window(opener, bridge)', () => {
     expect(db.txCount).toBe(1)
   })
 
-  it('the bridge mixes window and boot (the "other" dependencies)', async () => {
+  it('the bridge mixes lease and boot (the "other" dependencies)', async () => {
     const db = createDb()
     const sent: string[] = []
     const email = { send: async (to: string) => void sent.push(to) }
@@ -133,11 +133,11 @@ describe('a further step — window(opener, bridge)', () => {
     }
 
     const commands = bind({ welcome }).with(
-      window(db.transaction, (tx: DbHandle) => ({
+      lease(db.transaction, (tx: DbHandle) => ({
         db: tx as Tx<DbHandle>,
         email,
       })),
-      //                          from the window ↑    from the boot ↑ (closure)
+      //                          from the lease ↑    from the boot ↑ (closure)
     )
 
     expect(await commands.welcome('a@b.c')).toBe('sent')
@@ -145,7 +145,7 @@ describe('a further step — window(opener, bridge)', () => {
   })
 })
 
-describe('one window, three leaves — the window is PER CALL', () => {
+describe('one lease, three leaves — the lease is PER CALL', () => {
   it('every invocation opens ITS own transaction and closes it on return', async () => {
     const db = createDb()
     const a = async ({ db: h }: { db: Tx<DbHandle> }) => `a:${h.mode}`
@@ -153,7 +153,7 @@ describe('one window, three leaves — the window is PER CALL', () => {
     const c = async ({ db: h }: { db: Tx<DbHandle> }) => `c:${h.mode}`
 
     const ops = bind({ a, b, c }).with(
-      window(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle> })),
+      lease(db.transaction, (tx: DbHandle) => ({ db: tx as Tx<DbHandle> })),
     )
 
     expect(db.txCount).toBe(0) // binding opens NOTHING
@@ -173,7 +173,7 @@ describe('one window, three leaves — the window is PER CALL', () => {
 })
 
 describe('one record, HETEROGENEOUS deps — each leaf asks for its subset', () => {
-  it('the window serves the intersection; each leaf destructures its part', async () => {
+  it('the lease serves the intersection; each leaf destructures its part', async () => {
     const db = createDb()
     const sent: string[] = []
     const email = { send: async (to: string) => void sent.push(to) }
@@ -188,7 +188,7 @@ describe('one record, HETEROGENEOUS deps — each leaf asks for its subset', () 
     }
 
     const ops = bind({ onlyDb, both }).with(
-      window(db.transaction, (tx: DbHandle) => ({
+      lease(db.transaction, (tx: DbHandle) => ({
         db: tx as Tx<DbHandle>,
         email,
       })),
@@ -200,7 +200,7 @@ describe('one record, HETEROGENEOUS deps — each leaf asks for its subset', () 
   })
 })
 
-describe('.by — the window derived from a key argument', () => {
+describe('.by — the lease derived from a key argument', () => {
   const opened: string[] = []
   const pool = {
     withConnection: async <T>(
@@ -212,7 +212,7 @@ describe('.by — the window derived from a key argument', () => {
     },
   }
 
-  it('the key selects the window; the leaf never sees it', async () => {
+  it('the key selects the lease; the leaf never sees it', async () => {
     opened.length = 0
 
     // pure domain signature: period only. The tenant is WIRING — and when
@@ -223,7 +223,7 @@ describe('.by — the window derived from a key argument', () => {
     ) => `report:${conn.tenant}:${period}`
 
     const { report: monthly } = bind({ report }).by((tenantId: string) =>
-      window(
+      lease(
         (fn) => pool.withConnection(tenantId, fn),
         (conn: { tenant: string }) => ({ conn }),
       ),
@@ -245,7 +245,7 @@ describe('.by — the window derived from a key argument', () => {
       `find:${conn.tenant}:${id}`
 
     const queries = bind({ count, find }).by((tenant: string) =>
-      window(
+      lease(
         (fn) => pool.withConnection(tenant, fn),
         (conn: { tenant: string }) => ({ conn }),
       ),
@@ -257,7 +257,7 @@ describe('.by — the window derived from a key argument', () => {
   })
 })
 
-describe('intra-function windows — the facility in the deps', () => {
+describe('intra-function leases — the facility in the deps', () => {
   it('the lock wraps ONLY the critical section, the key comes from the args', async () => {
     const events: string[] = []
     const withLock = async <T>(key: string, go: () => Promise<T>) => {
@@ -288,9 +288,10 @@ describe('intra-function windows — the facility in the deps', () => {
   })
 })
 
-describe('0/1/N semantics — the window may re-execute', () => {
-  // retry as a window: re-executes on EXCEPTION, lends the attempt number
-  const retry3: With<{ attempt: number }> = async (use) => {
+describe('0/1/N semantics — the lease may run `use` 0, 1 or N times', () => {
+  // retry as a lease: a fresh grant per attempt on EXCEPTION, lending the
+  // attempt number
+  const retry3: Lease<{ attempt: number }> = async (use) => {
     for (let attempt = 1; ; attempt += 1) {
       try {
         return await use({ attempt })
@@ -333,7 +334,7 @@ describe('in the chain — separate provide/expose, no umbrella', () => {
       .expose('queries', ({ db }) => bind({ whereAmI })({ db }))
       .expose('commands', ({ db }) =>
         bind({ verifyOtp }).with(
-          window(db.transaction, (tx: DbHandle) => ({
+          lease(db.transaction, (tx: DbHandle) => ({
             db: tx as Tx<DbHandle>,
           })),
         ),

@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { bind, window, type With } from '@lntt/wire'
+import { bind, lease, type Lease } from '@lntt/wire'
 
 declare const atomic: unique symbol
 type Tx<D> = D & { readonly [atomic]: true }
@@ -12,12 +12,12 @@ type DbHandle = {
 declare const db: DbHandle & {
   transaction: <T>(fn: (tx: DbHandle) => Promise<T>) => Promise<T>
 }
-declare const inTx: With<{ db: Tx<DbHandle> }>
-declare const inTxWithEmail: With<{
+declare const inTx: Lease<{ db: Tx<DbHandle> }>
+declare const inTxWithEmail: Lease<{
   db: Tx<DbHandle>
   email: { send: (to: string) => Promise<void> }
 }>
-declare const emailOnly: With<{
+declare const emailOnly: Lease<{
   email: { send: (to: string) => Promise<void> }
 }>
 
@@ -27,12 +27,12 @@ const verifyOtp = async ({ db: h }: { db: Tx<DbHandle> }, email: string) => ({
   on: h.mode,
 })
 
-describe('With/bind (types)', () => {
+describe('Lease/bind (types)', () => {
   it('the brand in the type blocks wiring outside a transaction', () => {
     // @ts-expect-error — verifyOtp demands Tx<DbHandle>: fixed deps are not enough
     bind({ verifyOtp })({ db })
 
-    bind({ verifyOtp }).with(inTx) // the transactional window is the only way
+    bind({ verifyOtp }).with(inTx) // the transactional lease is the only way
     bind({ whereAmI }).with(inTx) // a Tx<DbHandle> IS a DbHandle: allowed
   })
 
@@ -42,8 +42,8 @@ describe('With/bind (types)', () => {
     const fixed = bind({ sync })({ db })
     expectTypeOf(fixed.sync).toEqualTypeOf<(n: number) => number>()
 
-    const win: With<{ db: DbHandle }> = (use) => use({ db })
-    const perCall = bind({ sync }).with(win)
+    const lent: Lease<{ db: DbHandle }> = (use) => use({ db })
+    const perCall = bind({ sync }).with(lent)
     expectTypeOf(perCall.sync).toEqualTypeOf<(n: number) => Promise<number>>()
   })
 
@@ -52,13 +52,13 @@ describe('With/bind (types)', () => {
     const placeOrder = async (deps: { db: Tx<DbHandle> }, email: string) =>
       verifyOtp(deps, email)
 
-    // @ts-expect-error — the composite too is wired only with the window
+    // @ts-expect-error — the composite too is wired only with the lease
     bind({ placeOrder })({ db })
 
     bind({ placeOrder }).with(inTx)
   })
 
-  it('a heterogeneous record demands the INTERSECTION from the window', () => {
+  it('a heterogeneous record demands the INTERSECTION from the lease', () => {
     const onlyDb = async ({ db: h }: { db: Tx<DbHandle> }) => h.mode
     const both = async (
       _deps: {
@@ -68,19 +68,19 @@ describe('With/bind (types)', () => {
       _to: string,
     ) => 'ok' as const
 
-    // a window lending only db does not cover `both`
-    // @ts-expect-error — the record's deps include email: this window lends too little
+    // a lease lending only db does not cover `both`
+    // @ts-expect-error — the record's deps include email: this lease lends too little
     bind({ onlyDb, both }).with(inTx)
 
     bind({ onlyDb, both }).with(inTxWithEmail)
   })
 
-  it('window() infers Raw from the bridge and Deps from its return', () => {
-    const w = window(db.transaction, (tx: DbHandle) => ({
+  it('lease() infers Raw from the bridge and Deps from its return', () => {
+    const l = lease(db.transaction, (tx: DbHandle) => ({
       db: tx as Tx<DbHandle>,
     }))
 
-    expectTypeOf(w).toEqualTypeOf<With<{ db: Tx<DbHandle> }>>()
+    expectTypeOf(l).toEqualTypeOf<Lease<{ db: Tx<DbHandle> }>>()
   })
 
   it('.by: the key is typed on the bound call, absent from the leaf', () => {
@@ -88,19 +88,19 @@ describe('With/bind (types)', () => {
       `${h.mode}:${period}`
 
     const { report: monthly } = bind({ report }).by((_tenant: string) =>
-      window(db.transaction, (tx: DbHandle) => ({ db: tx })),
+      lease(db.transaction, (tx: DbHandle) => ({ db: tx })),
     )
 
-    // key first (its type comes from toWindow), then the leaf's own args
+    // key first (its type comes from toLease), then the leaf's own args
     expectTypeOf(monthly).toEqualTypeOf<
       (key: string, period: string) => Promise<string>
     >()
 
-    // @ts-expect-error — the key must match toWindow's parameter type
+    // @ts-expect-error — the key must match toLease's parameter type
     monthly(42, '2026-06')
 
-    // the derived window must still lend the record's deps intersection
-    // (lending MORE is fine — With is covariant enough for width)
+    // the derived lease must still lend the record's deps intersection
+    // (lending MORE is fine — Lease is covariant enough for width)
     bind({ whereAmI }).by((_tenant: string) => inTxWithEmail)
 
     // @ts-expect-error — this recipe does not lend the db the leaf declares

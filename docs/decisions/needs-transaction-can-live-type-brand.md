@@ -1,6 +1,6 @@
 ---
 title: '"Needs a transaction" can live in the type (brand pattern)'
-area: leaves-errors-windows
+area: leaves-errors-leases
 status: accepted
 ---
 
